@@ -1,0 +1,18 @@
+# Copyright Dokimasia B.V. 2026
+# SPDX-License-Identifier: MIT
+
+# The settings of dokimi-go, which ergon init merges into .golangci.yml.
+
+linters:
+  settings:
+    gosec:
+      excludes:
+        # A fault of a double takes its random numbers from a seeded source that the test passes,
+        # so a seeded run repeats its faults. A cryptographic source cannot repeat a run.
+        - G404
+
+formatters:
+  settings:
+    # The packages of dokimi-go form an import group of their own.
+    gci:
+      sections: [standard, default, prefix(go.dokimi.dev/dokimi-go)]

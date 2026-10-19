@@ -1,0 +1,94 @@
+# Managed by ergon init. Add repository settings to .ergon/local/.github/workflows/security.yml and run ergon init sync.
+#
+# The security checks: the review of the dependencies that a pull request changes, the weekly
+# OpenSSF Scorecard of a public repository, and the CodeQL analysis of each language that a
+# producer of ergon init contributes, which calls codeql.yml. ergon init renders this workflow only
+# when the key code-security of the section github of .ergon.yaml is true, because a private
+# repository needs GitHub Code Security for the analysis and the review.
+
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+
+  # A scheduled run has no event payload with the visibility of the repository, so this job queries
+  # the API of GitHub. The Scorecard runs only in a public repository.
+  visibility:
+    name: Visibility
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      private: ${{ steps.visibility.outputs.private }}
+    steps:
+      - name: Find whether the repository is private
+        id: visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          private="$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)"
+          echo "private=$private" >> "$GITHUB_OUTPUT"
+
+  # Scorecard publishes its results only from a job whose steps are actions of its allow list, in a
+  # workflow without defaults or environment variables at its top level.
+  scorecard:
+    name: Scorecard
+    needs: visibility
+    if: needs.visibility.outputs.private == 'false'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: scorecard.sarif
+
+  codeql-go:
+    name: "CodeQL (Go)"
+    uses: ./.github/workflows/codeql.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      language: go
+      build-mode: autobuild
+      files: go.work
+      timeout: 30
