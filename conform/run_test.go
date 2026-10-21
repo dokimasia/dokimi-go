@@ -15,12 +15,12 @@ import (
 
 // An application runs each check of a suite as a test of its own, once it
 // finds no problem in the checks and the options.
-func TestVerify(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Parallel()
 
 	suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keeps()}}
 
-	t.Run("Verify", func(t *testing.T) {
+	t.Run("Run", func(t *testing.T) {
 		t.Parallel()
 
 		t.Run("applies each check to a subject of the factory", func(t *testing.T) {
@@ -30,7 +30,7 @@ func TestVerify(t *testing.T) {
 			t.Cleanup(func() {
 				assert.Equal(t, built.Load(), int32(1), "the application builds one subject for the check")
 			})
-			conform.Verify(t, suite, func(*conform.Handle[Store]) Store {
+			conform.Run(t, suite, func(*conform.Handle[Store]) Store {
 				built.Add(1)
 				return newMemory()
 			})
@@ -49,7 +49,7 @@ func TestVerify(t *testing.T) {
 			t.Cleanup(func() {
 				assert.Equal(t, applied.Load(), int32(1), "the application does not falsify a check of the suite")
 			})
-			conform.Verify(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
 		})
 
 		t.Run("runs each check as a parallel test", func(t *testing.T) {
@@ -60,14 +60,14 @@ func TestVerify(t *testing.T) {
 			c.Apply = func(h *conform.Handle[Store]) {
 				assert.True(h, returned.Load(), "the check runs once the test of the application returns")
 			}
-			conform.Verify(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
 			returned.Store(true)
 		})
 
 		t.Run("runs each check as a test named by its identity", func(t *testing.T) {
 			t.Parallel()
 
-			a := application(func(t conform.T) { conform.Verify(t, suite, newStore) })
+			a := application(func(t conform.T) { conform.Run(t, suite, newStore) })
 			assert.Equal(t, a.tests, []string{"Store.Get/keeps-the-value"},
 				"the application runs one test for the check")
 		})
@@ -76,18 +76,13 @@ func TestVerify(t *testing.T) {
 			t.Parallel()
 
 			if os.Getenv(childEnv) == t.Name() {
-				conform.Verify(t, suite, forget)
+				conform.Run(t, suite, forget)
 				return
 			}
 			assert.Contains(t, childOutput(t), "--- FAIL: "+t.Name()+"/Store.Get/keeps-the-value",
 				"the test of the check fails")
 		})
 
-		broken := func(change func(c *conform.Check[Store])) conform.Suite[Store] {
-			c := keeps()
-			change(&c)
-			return conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}
-		}
 		tests := []struct {
 			name       string
 			giveSuite  conform.Suite[Store]
@@ -119,7 +114,7 @@ func TestVerify(t *testing.T) {
 				name:       "reports two checks with one identity",
 				giveSuite:  suite,
 				giveOpts:   []conform.Option[Store]{conform.With(keeps())},
-				wantErrors: []string{"two checks of RunStore have the identity Store.Get/keeps-the-value"},
+				wantErrors: []string{"two checks of RunStoreSuite have the identity Store.Get/keeps-the-value"},
 			},
 			{
 				name:      "reports an excusal that matches no check",
@@ -127,8 +122,8 @@ func TestVerify(t *testing.T) {
 				giveOpts: []conform.Option[Store]{
 					conform.Excuse(storePut.Check("keeps-the-value"), "the store keeps no values"),
 				},
-				wantErrors: []string{"the excusal of Store.Put/keeps-the-value matches no check of RunStore. " +
-					"The checks of RunStore are:\n\tStore.Get/keeps-the-value"},
+				wantErrors: []string{"the excusal of Store.Put/keeps-the-value matches no check of RunStoreSuite. " +
+					"The checks of RunStoreSuite are:\n\tStore.Get/keeps-the-value"},
 			},
 			{
 				name:      "reports an excusal in a run without checks",
@@ -136,8 +131,8 @@ func TestVerify(t *testing.T) {
 				giveOpts: []conform.Option[Store]{
 					conform.Excuse(storeGet.Check("keeps-the-value"), "the store keeps no values"),
 				},
-				wantErrors: []string{"the excusal of Store.Get/keeps-the-value matches no check of RunStore. " +
-					"RunStore has no checks."},
+				wantErrors: []string{"the excusal of Store.Get/keeps-the-value matches no check of RunStoreSuite. " +
+					"RunStoreSuite has no checks."},
 			},
 			{
 				name:       "reports an excusal without a reason",
@@ -158,7 +153,7 @@ func TestVerify(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				a := application(func(t conform.T) { conform.Verify(t, tt.giveSuite, newStore, tt.giveOpts...) })
+				a := application(func(t conform.T) { conform.Run(t, tt.giveSuite, newStore, tt.giveOpts...) })
 				assert.Equal(t, a.errors, tt.wantErrors, "the application reports each problem")
 				assert.Empty(t, a.tests, "the application runs no check")
 			})

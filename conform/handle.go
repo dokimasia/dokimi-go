@@ -28,7 +28,7 @@ type seat interface{ assert.TB }
 // [assert.Clocked].
 //
 // A failure on the handle fails the seat of the check. The seat is the test
-// of the check under [Verify].
+// of the check under [Run] and [Falsify].
 type Handle[S any] struct {
 	seat
 
@@ -139,7 +139,7 @@ func (h *Handle[S]) Advance(d time.Duration) {
 	if !h.clockRead.Load() {
 		h.Fatalf("%[1]s advances a clock that the subject never read. "+
 			"Build the subject on the clock of the handle:\n"+
-			"\tRun%[2]sOn(t, func(h *conform.Handle[%[3]v]) %[3]v { … h.Clock() … })",
+			"\tRun%[2]sSuiteFromHandle(t, func(h *conform.Handle[%[3]v]) %[3]v { … h.Clock() … })",
 			h.check.ID, h.check.ID.declaration(), reflect.TypeFor[S]())
 		return
 	}

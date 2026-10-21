@@ -19,24 +19,19 @@ type T interface {
 	Run(name string, f func(t *testing.T)) bool
 }
 
-// Verify applies each check of the suite, and each check that opts add, to a
+// Run applies each check of the suite, and each check that opts add, to a
 // fresh subject of newSubject.
 //
-// Verify reports every problem of the checks and the options on t, and stops
-// t when it finds one. Otherwise it runs each check as a parallel test of t,
+// Run reports every problem of the checks and the options on t, and stops t
+// when it finds one. Otherwise it runs each check as a parallel test of t,
 // named by the identity of the check. The test of an excused check skips with
 // the reason of the excusal. The test of a check that opts add falsifies the
 // check before it applies the check to the subject.
-func Verify[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
+func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	cfg := configure(opts)
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
-	if found := problems("Run"+suite.Declaration, checks, cfg.excusals); len(found) > 0 {
-		for _, problem := range found {
-			t.Errorf("%s", problem)
-		}
-		t.FailNow()
-	}
+	stopAt(t, problems("Run"+suite.Declaration+"Suite", checks, cfg.excusals))
 	excused := make(map[ID[S]]string, len(cfg.excusals))
 	for _, e := range cfg.excusals {
 		excused[e.id] = e.reason
@@ -53,6 +48,17 @@ func Verify[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ..
 			}
 			c.run(t, newSubject, cfg)
 		})
+	}
+}
+
+// stopAt reports each problem on t, and stops t when it finds one.
+func stopAt(t T, found []string) {
+	t.Helper()
+	for _, problem := range found {
+		t.Errorf("%s", problem)
+	}
+	if len(found) > 0 {
+		t.FailNow()
 	}
 }
 

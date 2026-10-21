@@ -47,7 +47,7 @@ func TestSuite(t *testing.T) {
 				assert.Equal(t, applied.Load(), int32(2),
 					"the application applies the check to its defect and to the subject")
 			})
-			conform.Verify(t, empty, newStore, conform.With(c))
+			conform.Run(t, empty, newStore, conform.With(c))
 		})
 	})
 
@@ -63,7 +63,7 @@ func TestSuite(t *testing.T) {
 			t.Cleanup(func() {
 				assert.Equal(t, applied.Load(), int32(0), "the application does not apply an excused check")
 			})
-			conform.Verify(t, empty, newStore, conform.With(c),
+			conform.Run(t, empty, newStore, conform.With(c),
 				conform.Excuse(storeGet.Check("keeps-the-value"), "the store keeps no values"))
 		})
 
@@ -71,7 +71,7 @@ func TestSuite(t *testing.T) {
 			t.Parallel()
 
 			if os.Getenv(childEnv) == t.Name() {
-				conform.Verify(t, empty, newStore, conform.With(keeps()),
+				conform.Run(t, empty, newStore, conform.With(keeps()),
 					conform.Excuse(storeGet.Check("keeps-the-value"), "the store keeps no values"))
 				return
 			}

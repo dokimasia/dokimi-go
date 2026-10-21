@@ -225,7 +225,8 @@ func TestHandle(t *testing.T) {
 			assert.Equal(t, r.Message(),
 				"Store.Get/keeps-the-value advances a clock that the subject never read. "+
 					"Build the subject on the clock of the handle:\n"+
-					"\tRunStoreOn(t, func(h *conform.Handle[conform_test.Store]) conform_test.Store { … h.Clock() … })",
+					"\tRunStoreSuiteFromHandle(t, func(h *conform.Handle[conform_test.Store]) conform_test.Store "+
+					"{ … h.Clock() … })",
 				"the message contains the call that builds the subject on the clock")
 		})
 

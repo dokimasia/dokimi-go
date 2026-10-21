@@ -6,9 +6,10 @@
 //
 // A [Suite] contains the checks of one declaration. A [Check] has an
 // identity, a statement, a function that applies the check through its
-// [Handle], and a function that returns its planted defect. [Verify] applies
-// every check of a suite to a subject of the consumer. Each check runs as a
-// test of its own, named by its identity.
+// [Handle], and a function that returns its planted defect. [Run] applies
+// every check of a suite to a subject of the consumer, and [Falsify] applies
+// every check to its planted defect. Each check runs as a test of its own,
+// named by its identity.
 //
 // A generated suite declares the application of its declaration, and a
 // consumer adds checks of its own through [With]:
@@ -16,7 +17,7 @@
 //	func TestInMemory(t *testing.T) {
 //		t.Parallel()
 //
-//		storetest.RunStore(t, storetest.NewInMemory, conform.With(keepsTheValue()))
+//		storetest.RunStoreSuite(t, storetest.NewInMemory, conform.With(keepsTheValue()))
 //	}
 //
 // The options of an application also excuse a check through [Excuse], and

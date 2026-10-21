@@ -94,6 +94,13 @@ func keeps() conform.Check[Store] {
 // newStore is the factory of the subjects of the specs.
 func newStore(*conform.Handle[Store]) Store { return newMemory() }
 
+// broken returns a suite of Store with the check of keeps after change.
+func broken(change func(c *conform.Check[Store])) conform.Suite[Store] {
+	c := keeps()
+	change(&c)
+	return conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}
+}
+
 // forget is a factory of forgetful subjects, on which keeps fails.
 func forget(*conform.Handle[Store]) Store { return forgetful{} }
 
