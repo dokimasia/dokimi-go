@@ -30,7 +30,7 @@ type Check[S any] struct {
 // Run ignores the checks and the excusals that the options add.
 func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	tb.Helper()
-	c.run(tb, newSubject, configure(opts), formRun)
+	c.run(tb, newSubject, configure(opts))
 }
 
 // Falsify applies the check on tb to its planted defect. It fails tb unless
@@ -39,23 +39,21 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 // opts.
 func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 	tb.Helper()
-	c.falsify(tb, configure(opts), formRun)
+	c.falsify(tb, configure(opts))
 }
 
-// run applies the check on tb to a subject of source, for an application of
-// the form form.
-func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S], form string) {
+// run applies the check on tb to a subject of source.
+func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S]) {
 	tb.Helper()
-	c.Apply(newHandle(tb, &c, source, cfg, form))
+	c.Apply(newHandle(tb, &c, source, cfg))
 }
 
-// falsify applies the check on tb to its planted defect, for an application
-// of the form form.
-func (c Check[S]) falsify(tb assert.TB, cfg *config[S], form string) {
+// falsify applies the check on tb to its planted defect.
+func (c Check[S]) falsify(tb assert.TB, cfg *config[S]) {
 	tb.Helper()
 	var h *Handle[S]
 	failures := assert.Rejects(tb, "the planted defect of "+string(c.ID)+" fails the check", func(seat assert.TB) {
-		h = newHandle(seat, &c, c.Defect, cfg, form)
+		h = newHandle(seat, &c, c.Defect, cfg)
 		c.Apply(h)
 	})
 	if len(failures) > 0 {

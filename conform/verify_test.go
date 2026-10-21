@@ -164,29 +164,4 @@ func TestVerify(t *testing.T) {
 			})
 		}
 	})
-
-	t.Run("Control", func(t *testing.T) {
-		t.Parallel()
-
-		t.Run("applies each check to a control of the factory", func(t *testing.T) {
-			t.Parallel()
-
-			var built atomic.Int32
-			t.Cleanup(func() {
-				assert.Equal(t, built.Load(), int32(1), "the application builds one control for the check")
-			})
-			conform.Control(t, suite, func(*conform.Handle[Store]) Store {
-				built.Add(1)
-				return newMemory()
-			})
-		})
-
-		t.Run("reports its problems as problems of the control", func(t *testing.T) {
-			t.Parallel()
-
-			a := application(func(t conform.T) { conform.Control(t, suite, newStore, conform.With(keeps())) })
-			want := []string{"two checks of ControlStore have the identity Store.Get/keeps-the-value"}
-			assert.Equal(t, a.errors, want, "the problem contains the name of the application to the control")
-		})
-	})
 }

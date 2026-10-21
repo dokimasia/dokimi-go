@@ -28,7 +28,7 @@ type seat interface{ assert.TB }
 // [assert.Clocked].
 //
 // A failure on the handle fails the seat of the check. The seat is the test
-// of the check under [Verify] and [Control].
+// of the check under [Verify].
 type Handle[S any] struct {
 	seat
 
@@ -41,7 +41,6 @@ type Handle[S any] struct {
 	// subject is the subject of the check once built is true. mu guards
 	// both.
 	subject S
-	form    string
 	mu      sync.Mutex
 	built   bool
 
@@ -49,10 +48,10 @@ type Handle[S any] struct {
 	clockRead atomic.Bool
 }
 
-// newHandle returns the handle of the check c on tb, for an application of
-// the form form. source builds the subjects of the check.
-func newHandle[S any](tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S], form string) *Handle[S] {
-	return &Handle[S]{seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin), form: form}
+// newHandle returns the handle of the check c on tb. source builds the
+// subjects of the check.
+func newHandle[S any](tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S]) *Handle[S] {
+	return &Handle[S]{seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin)}
 }
 
 // Subject returns the subject of the check. The first call builds the
@@ -140,8 +139,8 @@ func (h *Handle[S]) Advance(d time.Duration) {
 	if !h.clockRead.Load() {
 		h.Fatalf("%[1]s advances a clock that the subject never read. "+
 			"Build the subject on the clock of the handle:\n"+
-			"\t%[2]s%[3]sOn(t, func(h *conform.Handle[%[4]v]) %[4]v { … h.Clock() … })",
-			h.check.ID, h.form, h.check.ID.declaration(), reflect.TypeFor[S]())
+			"\tRun%[2]sOn(t, func(h *conform.Handle[%[3]v]) %[3]v { … h.Clock() … })",
+			h.check.ID, h.check.ID.declaration(), reflect.TypeFor[S]())
 		return
 	}
 	h.clock.Advance(d)

@@ -10,13 +10,6 @@ import (
 	"testing"
 )
 
-// The forms of an application. The name of a generated function of a suite
-// starts with its form, such as RunStore and ControlStoreOn.
-const (
-	formRun     = "Run"
-	formControl = "Control"
-)
-
 // T is the test of an application. *testing.T implements it. FailNow must
 // not return.
 type T interface {
@@ -36,24 +29,9 @@ type T interface {
 // check before it applies the check to the subject.
 func Verify[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
-	apply(t, formRun, suite, newSubject, opts)
-}
-
-// Control applies the same checks as [Verify] to a fresh control of
-// newControl. A control is a correct implementation that differs from the
-// subject.
-func Control[S any](t T, suite Suite[S], newControl func(h *Handle[S]) S, opts ...Option[S]) {
-	t.Helper()
-	apply(t, formControl, suite, newControl, opts)
-}
-
-// apply applies the checks of the suite and of opts to the subjects of
-// source, for an application of the form form.
-func apply[S any](t T, form string, suite Suite[S], source func(h *Handle[S]) S, opts []Option[S]) {
-	t.Helper()
 	cfg := configure(opts)
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
-	if found := problems(form+suite.Declaration, checks, cfg.excusals); len(found) > 0 {
+	if found := problems("Run"+suite.Declaration, checks, cfg.excusals); len(found) > 0 {
 		for _, problem := range found {
 			t.Errorf("%s", problem)
 		}
@@ -71,9 +49,9 @@ func apply[S any](t T, form string, suite Suite[S], source func(h *Handle[S]) S,
 				t.Skipf("%s is excused: %s", c.ID, reason)
 			}
 			if i >= len(suite.Checks) {
-				c.falsify(t, cfg, form)
+				c.falsify(t, cfg)
 			}
-			c.run(t, source, cfg, form)
+			c.run(t, newSubject, cfg)
 		})
 	}
 }

@@ -7,11 +7,10 @@
 // A [Suite] contains the checks of one declaration. A [Check] has an
 // identity, a statement, a function that applies the check through its
 // [Handle], and a function that returns its planted defect. [Verify] applies
-// every check of a suite to a subject of the consumer, and [Control] applies
-// every check to a control. Each check runs as a test of its own, named by
-// its identity.
+// every check of a suite to a subject of the consumer. Each check runs as a
+// test of its own, named by its identity.
 //
-// A generated suite declares both applications for its declaration, and a
+// A generated suite declares the application of its declaration, and a
 // consumer adds checks of its own through [With]:
 //
 //	func TestInMemory(t *testing.T) {
