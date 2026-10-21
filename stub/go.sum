@@ -1,2 +1,4 @@
 go.dokimi.dev/assert v0.3.1 h1:K3ObzCWbh4ixCqUqjyyCv885gBP+HVogTisNt4m2rgY=
 go.dokimi.dev/assert v0.3.1/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
+go.dokimi.dev/fault v0.0.0-20261021111534-26a7a38e2dd3 h1:xDO8791ncYzXH95o43a27vGg/K1EbgCL2J+gNIbRze4=
+go.dokimi.dev/fault v0.0.0-20261021111534-26a7a38e2dd3/go.mod h1:SdYxq+OSYZUgVY/JR7ypu23Bx41cYd3mTPXe15ual0c=
