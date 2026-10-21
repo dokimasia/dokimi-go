@@ -14,10 +14,12 @@ import (
 )
 
 // fake is a double of Store.Get as a generated double writes it: the stub of
-// the method, a function, and a method that answers through stub.Answer.
+// the method, a function, the default results, and a method that answers
+// through stub.Answer.
 type fake struct {
-	on *stub.MethodStub[call]
-	fn func(key string) error
+	on       *stub.MethodStub[call]
+	fn       func(key string) error
+	defaults func() ret
 }
 
 // newFake returns a fake that reports to tb.
@@ -25,22 +27,31 @@ func newFake(tb assert.TB) *fake {
 	return &fake{on: stub.NewMethodStub[call](tb, getName)}
 }
 
-// Get answers the call of key.
-func (f *fake) Get(key string) error {
+// Get answers the call of key with the value and the error of the results.
+func (f *fake) Get(key string) (string, error) {
 	a := arms()
 	if f.fn != nil {
 		a.Invoke = func() ret { return ret{Err: f.fn(key)} }
 	}
-	return stub.Answer(f.on, &call{Key: key}, a).Err
+	a.Default = f.defaults
+	r := stub.Answer(f.on, &call{Key: key}, a)
+	return r.Value, r.Err
 }
 
 // subject returns the subject of Get on f.
 func (f *fake) subject() stub.Subject[call, ret] {
 	return stub.Subject[call, ret]{
-		Stub:   f.on,
-		Call:   func() { _ = f.Get("k") },
-		Fails:  func() error { return f.Get("k") },
-		Result: func() ret { return ret{Err: f.Get("k")} },
+		Stub: f.on,
+		Call: func() { _, _ = f.Get("k") },
+		Fails: func() error {
+			_, err := f.Get("k")
+			return err
+		},
+		Result: func() ret {
+			value, err := f.Get("k")
+			return ret{Value: value, Err: err}
+		},
+		Default: f.defaults,
 		Override: func(mark func()) {
 			f.fn = func(string) error {
 				mark()
@@ -67,6 +78,16 @@ func TestBehaviour(t *testing.T) {
 			t.Parallel()
 
 			stub.Behaviour(t, "Get", subject)
+		})
+
+		t.Run("passes a double whose unconfigured call answers its default results", func(t *testing.T) {
+			t.Parallel()
+
+			stub.Behaviour(t, "Get", func(tb assert.TB) stub.Subject[call, ret] {
+				f := newFake(tb)
+				f.defaults = func() ret { return ret{Value: "default"} }
+				return f.subject()
+			})
 		})
 
 		t.Run("leaves out the checks of the results and the faults of a method without them", func(t *testing.T) {
@@ -124,7 +145,7 @@ func TestBehaviour(t *testing.T) {
 				},
 			},
 			{
-				name: "fails the check of the zero results for a double that answers a value",
+				name: "fails the check of the default results for a double that answers a value",
 				give: func(tb assert.TB) stub.Subject[call, ret] {
 					s := subject(tb)
 					result := s.Result
@@ -135,7 +156,16 @@ func TestBehaviour(t *testing.T) {
 					}
 					return s
 				},
-				want: []string{"answers_with_the_zero_value_when_unconfigured"},
+				want: []string{"answers_with_the_default_results_when_unconfigured"},
+			},
+			{
+				name: "fails the check of the default results for a double that ignores its default results",
+				give: func(tb assert.TB) stub.Subject[call, ret] {
+					s := subject(tb)
+					s.Default = func() ret { return ret{Value: "default"} }
+					return s
+				},
+				want: []string{"answers_with_the_default_results_when_unconfigured"},
 			},
 			{
 				name: "fails the check of the function for a double that ignores the function",

@@ -26,6 +26,9 @@ type Subject[C, R any] struct {
 	Fails func() error
 	// Result calls the method and returns its results.
 	Result func() R
+	// Default returns the results that an unconfigured call answers, and is
+	// nil where they are the zero results.
+	Default func() R
 	// Override sets a function of the method that calls mark and returns the
 	// zero results.
 	Override func(mark func())
@@ -39,10 +42,11 @@ type Subject[C, R any] struct {
 // name of the method in each message.
 //
 // The checks cover the recording of a call, the expected counts of calls,
-// strict mode, the zero results of an unconfigured call, the function of the
-// method and the faults of a method that can fail. A check that the method
-// answers its fixed result needs a value that differs from the zero results.
-// A generated test writes that check with a sample of the results.
+// strict mode, the default results of an unconfigured call, the function of
+// the method and the faults of a method that can fail. A check that the
+// method answers its fixed result needs a value that differs from the
+// default results. A generated test writes that check with a sample of the
+// results.
 func Behaviour[C, R any](t *testing.T, name string, newSubject func(tb assert.TB) Subject[C, R]) {
 	t.Helper()
 
@@ -95,15 +99,14 @@ func behaviourAnswers[C, R any](t *testing.T, name string, newSubject func(tb as
 
 	probe := newSubject(t)
 	if probe.Result != nil {
-		t.Run("answers with the zero value when unconfigured", func(t *testing.T) {
+		t.Run("answers with the default results when unconfigured", func(t *testing.T) {
 			t.Parallel()
+			s := newSubject(t)
 			var want R
-			assert.Equal(
-				t,
-				newSubject(t).Result(),
-				want,
-				"an unconfigured call of "+name+" answers with the zero value",
-			)
+			if s.Default != nil {
+				want = s.Default()
+			}
+			assert.Equal(t, s.Result(), want, "an unconfigured call of "+name+" answers with its default results")
 		})
 	}
 	if probe.Override != nil {

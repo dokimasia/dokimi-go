@@ -23,7 +23,7 @@ func instance(tb assert.TB, options ...func(stub.Configurable)) stub.Instance[ca
 	for _, apply := range options {
 		apply(f.on)
 	}
-	return stub.Instance[call]{Stub: f.on, Call: func() { _ = f.Get("k") }, Reset: f.on.Reset}
+	return stub.Instance[call]{Stub: f.on, Call: func() { _, _ = f.Get("k") }, Reset: f.on.Reset}
 }
 
 // doubleOf returns the constructors of a double whose options each reach the
