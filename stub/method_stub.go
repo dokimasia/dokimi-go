@@ -9,7 +9,7 @@ import (
 
 	"go.dokimi.dev/assert"
 
-	"go.dokimi.dev/dokimi-go/fault"
+	"go.dokimi.dev/fault"
 )
 
 // MethodStub is the runtime of one method of a generated double. It records

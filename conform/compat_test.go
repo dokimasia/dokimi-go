@@ -6,7 +6,7 @@ package conform_test
 import (
 	"testing"
 
-	"go.dokimi.dev/dokimi-go/conform"
+	"go.dokimi.dev/conform"
 )
 
 // The witness of major version 1 exists, so a generated suite compiles

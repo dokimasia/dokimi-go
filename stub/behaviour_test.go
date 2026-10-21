@@ -10,7 +10,7 @@ import (
 
 	"go.dokimi.dev/assert"
 
-	"go.dokimi.dev/dokimi-go/stub"
+	"go.dokimi.dev/stub"
 )
 
 // fake is a double of Store.Get as a generated double writes it: the stub of

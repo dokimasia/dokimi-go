@@ -11,7 +11,7 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 
-	"go.dokimi.dev/dokimi-go/fault"
+	"go.dokimi.dev/fault"
 )
 
 // call is the call of the cases, which a predicate reads.

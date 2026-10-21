@@ -17,7 +17,7 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 
-	"go.dokimi.dev/dokimi-go/conform"
+	"go.dokimi.dev/conform"
 )
 
 // keyOf is the type of the key of a value that a spec puts in the context of

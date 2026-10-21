@@ -13,6 +13,6 @@ linters:
 
 formatters:
   settings:
-    # The packages of dokimi-go form an import group of their own.
+    # The modules of dokimi-go form an import group of their own.
     gci:
-      sections: [standard, default, prefix(go.dokimi.dev/dokimi-go)]
+      sections: [standard, default, "prefix(go.dokimi.dev/conform,go.dokimi.dev/fault,go.dokimi.dev/stub)"]

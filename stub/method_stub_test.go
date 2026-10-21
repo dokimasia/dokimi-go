@@ -11,8 +11,8 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 
-	"go.dokimi.dev/dokimi-go/fault"
-	"go.dokimi.dev/dokimi-go/stub"
+	"go.dokimi.dev/fault"
+	"go.dokimi.dev/stub"
 )
 
 // A method stub records the calls of a method, arms faults, sleeps a latency,

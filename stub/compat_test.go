@@ -6,7 +6,7 @@ package stub_test
 import (
 	"testing"
 
-	"go.dokimi.dev/dokimi-go/stub"
+	"go.dokimi.dev/stub"
 )
 
 // The witness of major version 1 exists, so a generated double compiles

@@ -277,9 +277,9 @@ formatters:
     golines:
       max-len: 120
       reformat-tags: false
-    # The packages of dokimi-go form an import group of their own.
+    # The modules of dokimi-go form an import group of their own.
     gci:
-      sections: [standard, default, prefix(go.dokimi.dev/dokimi-go)]
+      sections: [standard, default, "prefix(go.dokimi.dev/conform,go.dokimi.dev/fault,go.dokimi.dev/stub)"]
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

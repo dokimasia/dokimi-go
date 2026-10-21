@@ -38,6 +38,6 @@
 //
 // # Dependency position
 //
-// The package imports go.dokimi.dev/assert, the package fault of this module
-// and the Go stdlib, testing and testing/synctest among it.
+// The package imports go.dokimi.dev/assert, go.dokimi.dev/fault and the Go
+// stdlib, testing and testing/synctest among it.
 package stub
