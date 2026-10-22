@@ -19,11 +19,16 @@ type RecordedCall[T any] struct {
 }
 
 // Recorder is a log of the values of type T that a test records, such as the
-// calls of a method of a double. It is safe for concurrent use.
+// calls of a method of a double.
 //
 //	rec := stub.NewRecorder[PutCall]()
 //	rec.Record(PutCall{Key: "a", Value: "1"})
 //	calls := rec.Calls()
+//
+// # Concurrency
+//
+// A Recorder is safe for concurrent use, except [Recorder.BenchMode], which a
+// test calls before any goroutine records.
 type Recorder[T any] struct {
 	clock   assert.Clock
 	gate    *Gate
@@ -48,8 +53,8 @@ func (r *Recorder[T]) WithClock(clk assert.Clock) *Recorder[T] {
 	return r
 }
 
-// now returns the instant of the clock of the recorder. The caller holds the
-// mutex.
+// now returns the instant of the clock of the recorder. The caller locks the
+// mutex first.
 func (r *Recorder[T]) now() time.Time {
 	if r.clock == nil {
 		return time.Now()
@@ -244,8 +249,8 @@ func (r *Recorder[T]) OnRecord(fn func(T)) {
 	r.hooks = append(r.hooks, fn)
 }
 
-// Gate holds each [Recorder.Record] of its recorder until a test releases
-// it, so a test can order the calls of goroutines.
+// Gate blocks each [Recorder.Record] of its recorder until a test releases
+// it. A test orders the calls of goroutines with it.
 type Gate struct {
 	ch chan struct{}
 }

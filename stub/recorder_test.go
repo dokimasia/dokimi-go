@@ -132,7 +132,7 @@ func TestRecorder(t *testing.T) {
 			assert.Equal(t, rec.LastCall(t), "last", "the latest value is the last")
 		})
 
-		t.Run("stops the test of an empty recorder", func(t *testing.T) {
+		t.Run("fails on an empty recorder", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -145,7 +145,17 @@ func TestRecorder(t *testing.T) {
 	t.Run("Reset", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("clears the log and keeps the hooks", func(t *testing.T) {
+		t.Run("clears the log", func(t *testing.T) {
+			t.Parallel()
+
+			rec := stub.NewRecorder[int]()
+			rec.Record(1)
+			rec.Reset()
+			rec.Record(2)
+			assert.Equal(t, rec.Calls(), []int{2}, "the log has the value after the reset alone")
+		})
+
+		t.Run("keeps the hooks", func(t *testing.T) {
 			t.Parallel()
 
 			rec := stub.NewRecorder[int]()
@@ -154,8 +164,7 @@ func TestRecorder(t *testing.T) {
 			rec.Record(1)
 			rec.Reset()
 			rec.Record(2)
-			expect.Equal(t, rec.Calls(), []int{2}, "the log has the value after the reset alone")
-			expect.Equal(t, seen, 2, "the hook runs before and after the reset")
+			assert.Equal(t, seen, 2, "the hook runs before and after the reset")
 		})
 	})
 
@@ -176,11 +185,11 @@ func TestRecorder(t *testing.T) {
 			want string
 		}{
 			{
-				name: "stops the test of an empty recorder",
+				name: "fails on an empty recorder",
 				want: "once: the recorder has 0 calls, and the test expects 1",
 			},
 			{
-				name: "stops the test of a recorder with two values", give: []string{"a", "b"},
+				name: "fails on a recorder with two values", give: []string{"a", "b"},
 				want: "once: the recorder has 2 calls, and the test expects 1",
 			},
 		}
@@ -217,7 +226,7 @@ func TestRecorder(t *testing.T) {
 			)
 		})
 
-		t.Run("stops the test of another count", func(t *testing.T) {
+		t.Run("fails on another count", func(t *testing.T) {
 			t.Parallel()
 
 			rec := stub.NewRecorder[int]()
@@ -241,7 +250,7 @@ func TestRecorder(t *testing.T) {
 			assert.False(t, r.Failed(), "an empty recorder has no calls")
 		})
 
-		t.Run("stops the test of a recorder with a value", func(t *testing.T) {
+		t.Run("fails on a recorder with a value", func(t *testing.T) {
 			t.Parallel()
 
 			rec := stub.NewRecorder[string]()
@@ -351,7 +360,7 @@ func TestRecorder(t *testing.T) {
 			})
 		})
 
-		t.Run("stops the test where the values do not arrive in time", func(t *testing.T) {
+		t.Run("fails where the values do not arrive in time", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder().WithClock(assert.NewControlled(origin))
@@ -378,7 +387,7 @@ func TestRecorder(t *testing.T) {
 			})
 		})
 
-		t.Run("stops the test where no accepted value arrives in time", func(t *testing.T) {
+		t.Run("fails where no accepted value arrives in time", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder().WithClock(assert.NewControlled(origin))
@@ -408,21 +417,21 @@ func TestRecorder(t *testing.T) {
 		t.Parallel()
 
 		tests := []struct {
-			name  string
-			bench bool
+			name      string
+			giveBench bool
 		}{
 			{name: "reports false by default"},
-			{name: "reports true after BenchMode", bench: true},
+			{name: "reports true after BenchMode", giveBench: true},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
 				rec := stub.NewRecorder[string]()
-				if tt.bench {
+				if tt.giveBench {
 					rec.BenchMode()
 				}
-				assert.Equal(t, rec.IsBenchMode(), tt.bench, "the mode is the mode that the test set")
+				assert.Equal(t, rec.IsBenchMode(), tt.giveBench, "the mode is the mode that the test set")
 			})
 		}
 	})
@@ -430,16 +439,16 @@ func TestRecorder(t *testing.T) {
 	t.Run("NewGate", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("holds each recording until Release", func(t *testing.T) {
+		t.Run("blocks each recording until Release", func(t *testing.T) {
 			t.Parallel()
 
 			synctest.Test(t, func(t *testing.T) {
 				rec := stub.NewRecorder[string]()
 				gate := rec.NewGate()
 				var wg sync.WaitGroup
-				wg.Go(func() { rec.Record("held") })
+				wg.Go(func() { rec.Record("gated") })
 				synctest.Wait()
-				expect.Equal(t, rec.CallCount(), 0, "the gate holds the recording")
+				expect.Equal(t, rec.CallCount(), 0, "the gate blocks the recording")
 				gate.Release()
 				wg.Wait()
 				expect.Equal(t, rec.CallCount(), 1, "the release lets the recording through")
@@ -456,7 +465,7 @@ func TestRecorder(t *testing.T) {
 				wg.Go(func() { rec.Record(1) })
 				wg.Go(func() { rec.Record(2) })
 				synctest.Wait()
-				expect.Equal(t, rec.CallCount(), 0, "the gate holds both recordings")
+				expect.Equal(t, rec.CallCount(), 0, "the gate blocks both recordings")
 				gate.ReleaseOne()
 				synctest.Wait()
 				expect.Equal(t, rec.CallCount(), 1, "one release lets one recording through")

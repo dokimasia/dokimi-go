@@ -3,10 +3,10 @@
 
 package stub
 
-// Arms are the ways that a double answers one call of a method, which
-// [Answer] tries in order. C is the type of the calls of the method, and R is
-// the type of its results, which a generated double declares for each method
-// because Go has no type of a tuple.
+// Arms are the sources of the results of one call of a method, which [Answer]
+// tries in order. C is the type of the calls of the method, and R is the type
+// of its results, which a generated double declares for each method because
+// Go has no type of a tuple.
 type Arms[C, R any] struct {
 	// Invoke calls the function of the method, and is nil where the test set
 	// none. Answer tells an unset function from a function that returns the
@@ -24,12 +24,12 @@ type Arms[C, R any] struct {
 	// It is nil for a method without an error result.
 	Fault func(err error) R
 	// Stamp copies the results onto the recorded call, so the log contains
-	// what the double answered.
+	// the results of each call.
 	Stamp func(call *C, result R)
 }
 
-// Answer answers one call of the method of s and records it. It returns the
-// results of the first arm that applies:
+// Answer returns the results of one call of the method of s, and records the
+// call. The results are those of the first arm that applies:
 //
 //  1. The fault that the test armed, where it fires.
 //  2. The function of the method.
@@ -43,7 +43,7 @@ type Arms[C, R any] struct {
 // method without an error result stops the test through
 // [MethodStub.FailUnfaultable]. A call that the test did not configure
 // stops the test in strict mode through [MethodStub.FailUnexpectedCall], and
-// still answers with the default or the zero results.
+// still returns the default or the zero results.
 func Answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R]) R {
 	s.SleepLatency()
 

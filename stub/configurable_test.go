@@ -11,8 +11,8 @@ import (
 	"go.dokimi.dev/stub"
 )
 
-// The setters of Configurable without a return value reach the state that the
-// chaining setters of a method stub reach.
+// The setters of Configurable without a return value set the state that the
+// chaining setters of a method stub set.
 func TestConfigurable(t *testing.T) {
 	t.Parallel()
 
@@ -30,7 +30,7 @@ func TestConfigurable(t *testing.T) {
 				t,
 				s.Clock(),
 				assert.Clock(clk),
-				"SetClock reaches the state of WithClock",
+				"SetClock sets the clock that WithClock sets",
 				assert.ByIdentity(),
 			)
 		})

@@ -78,7 +78,8 @@ func (g *Group) BenchMode() {
 	}
 }
 
-// Reset resets each member, and keeps the configuration of its answers.
+// Reset resets each member. Each member keeps the configuration of its
+// results.
 func (g *Group) Reset() {
 	for _, m := range g.members {
 		m.Reset()

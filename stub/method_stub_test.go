@@ -23,7 +23,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("NewMethodStub", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("returns a stub with the name and the TB", func(t *testing.T) {
+		t.Run("returns an empty stub that reports to the TB", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -128,7 +128,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("FaultsWithProbability", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("draws from the source of WithRandSource", func(t *testing.T) {
+		t.Run("takes its random numbers from the source of WithRandSource", func(t *testing.T) {
 			t.Parallel()
 
 			s := stub.NewMethodStub[call](nil, getName)
@@ -152,7 +152,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("FaultsUntil", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires until the clock reaches the deadline", func(t *testing.T) {
+		t.Run("fires while the clock is before the deadline", func(t *testing.T) {
 			t.Parallel()
 
 			clk := assert.NewControlled(origin)
@@ -186,7 +186,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("WithClock", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("sets the clock of the stub and of its recorder", func(t *testing.T) {
+		t.Run("sets the clock of the stub", func(t *testing.T) {
 			t.Parallel()
 
 			clk := assert.NewControlled(origin)
@@ -195,8 +195,14 @@ func TestMethodStub(t *testing.T) {
 			got := s.WithClock(clk)
 			expect.Equal(t, got, s, "WithClock returns the stub", assert.ByIdentity())
 			expect.Equal(t, s.Clock(), assert.Clock(clk), "the stub has the clock", assert.ByIdentity())
+		})
+
+		t.Run("stamps each call with the instant of the clock", func(t *testing.T) {
+			t.Parallel()
+
+			s := stub.NewMethodStub[call](nil, getName).WithClock(assert.NewControlled(origin))
 			_ = get(s, "a")
-			expect.Equal(t, s.Timestamped()[0].At, origin, "the recorder stamps the instant of the clock")
+			assert.Equal(t, s.Timestamped()[0].At, origin, "the recorder stamps the instant of the clock")
 		})
 	})
 
@@ -265,7 +271,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("FailUnexpectedCall", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("stops the test in strict mode with the method and the call", func(t *testing.T) {
+		t.Run("fails an unexpected call in strict mode", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -277,12 +283,12 @@ func TestMethodStub(t *testing.T) {
 		})
 
 		tests := []struct {
-			name   string
-			strict bool
-			tb     bool
+			name       string
+			giveStrict bool
+			giveTB     bool
 		}{
-			{name: "does nothing in lenient mode", tb: true},
-			{name: "does nothing without a TB", strict: true},
+			{name: "does nothing in lenient mode", giveTB: true},
+			{name: "does nothing without a TB", giveStrict: true},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -290,11 +296,11 @@ func TestMethodStub(t *testing.T) {
 
 				r := assert.NewRecorder()
 				var tb assert.TB
-				if tt.tb {
+				if tt.giveTB {
 					tb = r
 				}
 				s := stub.NewMethodStub[call](tb, getName)
-				if tt.strict {
+				if tt.giveStrict {
 					s.Strict()
 				}
 				s.FailUnexpectedCall(call{})
@@ -306,7 +312,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("FailUnfaultable", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("stops the test with the method, the error and the call", func(t *testing.T) {
+		t.Run("fails a fault on a method without an error result", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -331,21 +337,21 @@ func TestMethodStub(t *testing.T) {
 		t.Parallel()
 
 		tests := []struct {
-			name    string
-			times   int
-			atLeast int
-			calls   int
-			want    string
+			name        string
+			giveTimes   int
+			giveAtLeast int
+			giveCalls   int
+			wantMessage string
 		}{
-			{name: "passes a count that Times expects", times: 2, calls: 2},
+			{name: "passes a count that Times expects", giveTimes: 2, giveCalls: 2},
 			{
-				name: "reports a count that Times does not expect", times: 3, calls: 1,
-				want: "Store.Get: the count of calls is 1, and the test expects 3",
+				name: "reports a count that Times does not expect", giveTimes: 3, giveCalls: 1,
+				wantMessage: "Store.Get: the count of calls is 1, and the test expects 3",
 			},
-			{name: "passes a count at the minimum of TimesAtLeast", atLeast: 2, calls: 2},
+			{name: "passes a count at the minimum of TimesAtLeast", giveAtLeast: 2, giveCalls: 2},
 			{
-				name: "reports a count below the minimum of TimesAtLeast", atLeast: 5, calls: 1,
-				want: "Store.Get: the count of calls is 1, and the test expects at least 5",
+				name: "reports a count below the minimum of TimesAtLeast", giveAtLeast: 5, giveCalls: 1,
+				wantMessage: "Store.Get: the count of calls is 1, and the test expects at least 5",
 			},
 		}
 		for _, tt := range tests {
@@ -354,17 +360,18 @@ func TestMethodStub(t *testing.T) {
 
 				r := assert.NewRecorder()
 				s := stub.NewMethodStub[call](r, getName)
-				if tt.times > 0 {
-					expect.Equal(t, s.Times(tt.times), s, "Times returns the stub", assert.ByIdentity())
+				if tt.giveTimes > 0 {
+					expect.Equal(t, s.Times(tt.giveTimes), s, "Times returns the stub", assert.ByIdentity())
 				}
-				if tt.atLeast > 0 {
-					expect.Equal(t, s.TimesAtLeast(tt.atLeast), s, "TimesAtLeast returns the stub", assert.ByIdentity())
+				if tt.giveAtLeast > 0 {
+					expect.Equal(t, s.TimesAtLeast(tt.giveAtLeast), s, "TimesAtLeast returns the stub",
+						assert.ByIdentity())
 				}
-				for range tt.calls {
+				for range tt.giveCalls {
 					_ = get(s, "a")
 				}
 				s.Verify()
-				expect.Equal(t, r.Message(), tt.want, "the check reports the count where it differs")
+				expect.Equal(t, r.Message(), tt.wantMessage, "the check reports the count where it differs")
 			})
 		}
 
@@ -380,20 +387,35 @@ func TestMethodStub(t *testing.T) {
 	t.Run("Reset", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("clears the calls, the fault counter and the expected counts", func(t *testing.T) {
+		t.Run("clears the calls", func(t *testing.T) {
+			t.Parallel()
+
+			s := stub.NewMethodStub[call](nil, getName)
+			_ = get(s, "a")
+			s.Reset()
+			assert.Equal(t, s.CallCount(), 0, "the reset clears the calls")
+		})
+
+		t.Run("rewinds the counter of the fault", func(t *testing.T) {
+			t.Parallel()
+
+			s := stub.NewMethodStub[call](nil, getName)
+			s.Faults(errTest, 2)
+			_ = get(s, "a")
+			s.Reset()
+			assert.Equal(t, fired(s, 1), []bool{false}, "the first call after the reset is the first of the count")
+		})
+
+		t.Run("clears the expected counts", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
 			s := stub.NewMethodStub[call](r, getName)
-			s.Faults(errTest, 2)
 			s.Times(5)
 			s.TimesAtLeast(5)
-			_ = get(s, "a")
 			s.Reset()
-			expect.Equal(t, s.CallCount(), 0, "the reset clears the calls")
-			expect.Equal(t, fired(s, 1), []bool{false}, "the reset rewinds the counter of the fault")
 			s.Verify()
-			expect.False(t, r.Failed(), "the reset clears the expected counts")
+			assert.False(t, r.Failed(), "the check after the reset expects no count")
 		})
 
 		t.Run("keeps a stub without a fault", func(t *testing.T) {

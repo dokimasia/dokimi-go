@@ -48,8 +48,8 @@ func NewMethodStub[C any](tb assert.TB, name string) *MethodStub[C] {
 }
 
 // Strict turns strict mode on. In strict mode, [MethodStub.FailUnexpectedCall]
-// stops the test, and a double calls it for a call that no fault, function or
-// fixed result answers.
+// stops the test, and a double calls it for a call without a fault, a function
+// or a fixed result.
 func (s *MethodStub[C]) Strict() {
 	s.strict = true
 }
@@ -97,8 +97,8 @@ func (s *MethodStub[C]) FaultsWithProbability(p float64, err error) *MethodStub[
 	return s
 }
 
-// FaultsUntil arms a fault that fires with err until the clock of the stub
-// reaches deadline, and returns the stub.
+// FaultsUntil arms a fault that fires with err while the clock of the stub is
+// before deadline, and returns the stub.
 func (s *MethodStub[C]) FaultsUntil(deadline time.Time, err error) *MethodStub[C] {
 	s.fault = fault.NewWindowedFault[C](err, deadline)
 	return s
@@ -129,8 +129,8 @@ func (s *MethodStub[C]) WithRandSource(src rand.Source) *MethodStub[C] {
 }
 
 // Latency sets the time that each call sleeps on the clock of the stub before
-// the double answers it, and returns the stub. A latency of zero sleeps not
-// at all, which is the default.
+// the double returns its results, and returns the stub. A latency of zero
+// sleeps not at all, which is the default.
 func (s *MethodStub[C]) Latency(d time.Duration) *MethodStub[C] {
 	s.latency = d
 	return s
@@ -168,8 +168,8 @@ func (s *MethodStub[C]) ShouldFaultFor(call C) (bool, error) {
 }
 
 // FailUnexpectedCall stops the test in strict mode, with the name of the
-// method and the call. A double calls it for a call that no fault, function
-// or fixed result answers.
+// method and the call. A double calls it for a call without a fault, a
+// function or a fixed result.
 func (s *MethodStub[C]) FailUnexpectedCall(call C) {
 	if s.strict && s.tb != nil {
 		s.tb.Fatalf("%s: strict mode refuses the call, because the test configured no answer\n  call: %+v",
@@ -220,7 +220,7 @@ func (s *MethodStub[C]) Verify() {
 }
 
 // Reset clears the recorded calls, rewinds the counters of the fault and
-// clears the expected counts. It keeps the configuration of the answers: the
+// clears the expected counts. It keeps the configuration of the results: the
 // function, the fixed result and the fault itself.
 func (s *MethodStub[C]) Reset() {
 	s.Recorder.Reset()

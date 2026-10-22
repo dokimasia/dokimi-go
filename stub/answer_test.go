@@ -26,49 +26,50 @@ func TestAnswer(t *testing.T) {
 		defaults := func() ret { return ret{Value: "default"} }
 		tests := []struct {
 			name         string
-			fault        bool
-			invoke       func() ret
-			fallback     *ret
+			giveFault    bool
+			giveInvoke   func() ret
+			giveFallback *ret
 			giveDefaults func() ret
 			wantValue    string
 			wantErr      error
 		}{
 			{
-				name: "prefers an injected fault over a Func override", fault: true, invoke: override,
-				fallback: fallback, giveDefaults: defaults, wantErr: errTest,
+				name: "prefers an injected fault over a Func override", giveFault: true, giveInvoke: override,
+				giveFallback: fallback, giveDefaults: defaults, wantErr: errTest,
 			},
 			{
-				name: "prefers a Func override over a Returns fallback", invoke: override, fallback: fallback,
+				name: "prefers a Func override over a Returns fallback", giveInvoke: override, giveFallback: fallback,
 				giveDefaults: defaults, wantValue: "override",
 			},
 			{
-				name: "prefers a Returns fallback over the default results", fallback: fallback, giveDefaults: defaults,
-				wantValue: "fallback",
+				name: "prefers a Returns fallback over the default results", giveFallback: fallback,
+				giveDefaults: defaults, wantValue: "fallback",
 			},
 			{
-				name: "answers with the default results when nothing is configured", giveDefaults: defaults,
+				name: "returns the default results without a configuration", giveDefaults: defaults,
 				wantValue: "default",
 			},
-			{name: "answers with the zero value when nothing is configured and no default exists"},
+			{name: "returns the zero results without default results"},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
 				s := stub.NewMethodStub[call](t, getName)
-				if tt.fault {
+				if tt.giveFault {
 					s.Faults(errTest, 1)
 				}
 				a := arms()
-				a.Invoke, a.Fallback, a.Default = tt.invoke, tt.fallback, tt.giveDefaults
+				a.Invoke, a.Fallback, a.Default = tt.giveInvoke, tt.giveFallback, tt.giveDefaults
 				got := stub.Answer(s, &call{Key: "k"}, a)
-				expect.Equal(t, got, ret{Value: tt.wantValue, Err: tt.wantErr}, "the first arm that applies answers")
+				expect.Equal(t, got, ret{Value: tt.wantValue, Err: tt.wantErr},
+					"the results are the results of the first arm that applies")
 				expect.Equal(t, s.AssertCalledOnce(t, "the arm records the call"), call{Key: "k", Err: tt.wantErr},
 					"the recorded call has the stamped error")
 			})
 		}
 
-		t.Run("stops the test for a fault on a method without an error result", func(t *testing.T) {
+		t.Run("fails a fault on a method without an error result", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -78,10 +79,10 @@ func TestAnswer(t *testing.T) {
 			a.Fault, a.Fallback = nil, &ret{Value: "fallback"}
 			got := stub.Answer(s, &call{}, a)
 			expect.True(t, r.Failed(), "a fault that the method cannot report stops the test")
-			expect.Equal(t, got.Value, "fallback", "the call still answers with its fixed result")
+			expect.Equal(t, got.Value, "fallback", "the call still returns its fixed result")
 		})
 
-		t.Run("passes a method without an error result and without a fault", func(t *testing.T) {
+		t.Run("passes an unfaulted method without an error result", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -89,11 +90,11 @@ func TestAnswer(t *testing.T) {
 			a := arms()
 			a.Fault, a.Fallback = nil, &ret{Value: "fallback"}
 			got := stub.Answer(s, &call{}, a)
-			expect.False(t, r.Failed(), "a method that cannot fail and has no fault reports nothing")
-			expect.Equal(t, got.Value, "fallback", "the call answers with its fixed result")
+			expect.False(t, r.Failed(), "a method that cannot fail without a fault reports nothing")
+			expect.Equal(t, got.Value, "fallback", "the call returns its fixed result")
 		})
 
-		t.Run("stops the test for an unconfigured call in strict mode", func(t *testing.T) {
+		t.Run("fails an unconfigured call in strict mode", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -103,7 +104,7 @@ func TestAnswer(t *testing.T) {
 			assert.True(t, r.Failed(), "strict mode refuses an unconfigured call")
 		})
 
-		t.Run("stops the test for an unconfigured call with default results in strict mode", func(t *testing.T) {
+		t.Run("fails an unconfigured call with default results in strict mode", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -113,7 +114,7 @@ func TestAnswer(t *testing.T) {
 			a.Default = func() ret { return ret{Value: "default"} }
 			got := stub.Answer(s, &call{}, a)
 			expect.True(t, r.Failed(), "strict mode refuses an unconfigured call that has default results")
-			expect.Equal(t, got.Value, "default", "the refused call still answers with its default results")
+			expect.Equal(t, got.Value, "default", "the refused call still returns its default results")
 		})
 
 		t.Run("records a call without a stamp", func(t *testing.T) {

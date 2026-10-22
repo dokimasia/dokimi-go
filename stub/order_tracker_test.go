@@ -21,19 +21,19 @@ func TestOrderTracker(t *testing.T) {
 		t.Parallel()
 
 		tests := []struct {
-			name   string
-			strict bool
+			name       string
+			giveStrict bool
 		}{
-			{name: "marks the method as called in strict mode", strict: true},
+			{name: "marks the method as called in strict mode", giveStrict: true},
 			{name: "marks nothing in lenient mode"},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				o := stub.NewOrderTracker(t, tt.strict)
+				o := stub.NewOrderTracker(t, tt.giveStrict)
 				o.Record("Open")
-				assert.Equal(t, o.Called("Open"), tt.strict, "a strict tracker marks the call")
+				assert.Equal(t, o.Called("Open"), tt.giveStrict, "a strict tracker marks the call")
 			})
 		}
 	})
@@ -51,7 +51,7 @@ func TestOrderTracker(t *testing.T) {
 			assert.False(t, r.Failed(), "Read follows Open")
 		})
 
-		t.Run("stops the test for a call before its prerequisite", func(t *testing.T) {
+		t.Run("fails a call before its prerequisite", func(t *testing.T) {
 			t.Parallel()
 
 			r := assert.NewRecorder()
@@ -61,12 +61,12 @@ func TestOrderTracker(t *testing.T) {
 		})
 
 		tests := []struct {
-			name   string
-			strict bool
-			tb     bool
+			name       string
+			giveStrict bool
+			giveTB     bool
 		}{
-			{name: "checks nothing in lenient mode", tb: true},
-			{name: "checks nothing without a TB", strict: true},
+			{name: "checks nothing in lenient mode", giveTB: true},
+			{name: "checks nothing without a TB", giveStrict: true},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -74,10 +74,10 @@ func TestOrderTracker(t *testing.T) {
 
 				r := assert.NewRecorder()
 				var tb assert.TB
-				if tt.tb {
+				if tt.giveTB {
 					tb = r
 				}
-				stub.NewOrderTracker(tb, tt.strict).AssertAfter("Read", "Open")
+				stub.NewOrderTracker(tb, tt.giveStrict).AssertAfter("Read", "Open")
 				assert.False(t, r.Failed(), "the tracker reports nothing")
 			})
 		}

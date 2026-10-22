@@ -17,7 +17,7 @@ type Configurable interface {
 	// Strict turns strict mode on.
 	Strict()
 	// Reset clears the recorded calls, the counters of the fault and the
-	// expected counts, and keeps the configuration of the answers.
+	// expected counts. It keeps the configuration of the results.
 	Reset()
 	// Verify checks the expected counts of calls.
 	Verify()

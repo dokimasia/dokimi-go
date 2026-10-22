@@ -25,7 +25,7 @@ const getName = "Store.Get"
 const suiteEnv = "STUB_TEST_SUITE"
 
 // call is a call of Store.Get: its key and the error that the double
-// answered.
+// returned.
 type call struct {
 	Err error
 	Key string
@@ -50,6 +50,31 @@ func arms() stub.Arms[call, ret] {
 		Fault: func(err error) ret { return ret{Err: err} },
 		Stamp: func(c *call, r ret) { c.Err = r.Err },
 	}
+}
+
+// fake is a double of Store.Get as a generated double writes it: the stub of
+// the method, a function, the default results, and a method that returns its
+// results through stub.Answer.
+type fake struct {
+	on       *stub.MethodStub[call]
+	fn       func(key string) error
+	defaults func() ret
+}
+
+// newFake returns a fake that reports to tb.
+func newFake(tb assert.TB) *fake {
+	return &fake{on: stub.NewMethodStub[call](tb, getName)}
+}
+
+// Get returns the value and the error of the results of the call of key.
+func (f *fake) Get(key string) (string, error) {
+	a := arms()
+	if f.fn != nil {
+		a.Invoke = func() ret { return ret{Err: f.fn(key)} }
+	}
+	a.Default = f.defaults
+	r := stub.Answer(f.on, &call{Key: key}, a)
+	return r.Value, r.Err
 }
 
 // get calls Store.Get with key through s and the arms of a double without a

@@ -15,40 +15,9 @@ import (
 	"go.dokimi.dev/stub"
 )
 
-// instance returns the instance of a fake that reports to tb, with each
-// option applied to the stub of its method as a generated constructor applies
-// it through the group of the double.
-func instance(tb assert.TB, options ...func(stub.Configurable)) stub.Instance[call] {
-	tb.Helper()
-	f := newFake(tb)
-	for _, apply := range options {
-		apply(f.on)
-	}
-	return stub.Instance[call]{Stub: f.on, Call: func() { _, _ = f.Get("k") }, Reset: f.on.Reset}
-}
-
-// onClock returns the instance of a fake on clk.
-func onClock(tb assert.TB, clk assert.Clock) stub.Instance[call] {
-	tb.Helper()
-	return instance(tb, func(c stub.Configurable) { c.SetClock(clk) })
-}
-
-// delayed returns the instance of a fake whose calls sleep d on clk.
-func delayed(tb assert.TB, d time.Duration, clk assert.Clock) stub.Instance[call] {
-	tb.Helper()
-	return instance(tb, func(c stub.Configurable) {
-		c.SetClock(clk)
-		c.SetLatency(d)
-	})
-}
-
-// hasty returns i with a call that records at once instead of sleeping its
-// latency.
-func hasty(i stub.Instance[call]) stub.Instance[call] {
-	i.Call = func() { i.Stub.Record(call{}) }
-	return i
-}
-
+// Each behaviour suite of the options of a double passes a double that keeps
+// the contract of its option, and fails each check that a broken double
+// breaks.
 func TestDoubleBehaviour(t *testing.T) {
 	t.Parallel()
 
@@ -63,7 +32,7 @@ func TestDoubleBehaviour(t *testing.T) {
 			})
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var built atomic.Int32
@@ -96,7 +65,7 @@ func TestDoubleBehaviour(t *testing.T) {
 			})
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var built atomic.Int32
@@ -127,7 +96,7 @@ func TestDoubleBehaviour(t *testing.T) {
 			stub.ResetBehaviour(t, func(tb assert.TB) stub.Instance[call] { return instance(tb) })
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var built atomic.Int32
@@ -181,7 +150,7 @@ func TestDoubleBehaviour(t *testing.T) {
 			})
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var built atomic.Int32
@@ -214,7 +183,7 @@ func TestDoubleBehaviour(t *testing.T) {
 			stub.ClockBehaviour(t, onClock)
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var built atomic.Int32
@@ -272,7 +241,7 @@ func TestDoubleBehaviour(t *testing.T) {
 			stub.LatencyBehaviour(t, delayed)
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var built atomic.Int32
@@ -312,4 +281,38 @@ func TestDoubleBehaviour(t *testing.T) {
 			})
 		}
 	})
+}
+
+// instance returns the instance of a fake that reports to tb, with each
+// option applied to the stub of its method as a generated constructor applies
+// it through the group of the double.
+func instance(tb assert.TB, options ...func(stub.Configurable)) stub.Instance[call] {
+	tb.Helper()
+	f := newFake(tb)
+	for _, apply := range options {
+		apply(f.on)
+	}
+	return stub.Instance[call]{Stub: f.on, Call: func() { _, _ = f.Get("k") }, Reset: f.on.Reset}
+}
+
+// onClock returns the instance of a fake on clk.
+func onClock(tb assert.TB, clk assert.Clock) stub.Instance[call] {
+	tb.Helper()
+	return instance(tb, func(c stub.Configurable) { c.SetClock(clk) })
+}
+
+// delayed returns the instance of a fake whose calls sleep d on clk.
+func delayed(tb assert.TB, d time.Duration, clk assert.Clock) stub.Instance[call] {
+	tb.Helper()
+	return instance(tb, func(c stub.Configurable) {
+		c.SetClock(clk)
+		c.SetLatency(d)
+	})
+}
+
+// hasty returns i with a call that records at once instead of sleeping its
+// latency.
+func hasty(i stub.Instance[call]) stub.Instance[call] {
+	i.Call = func() { i.Stub.Record(call{}) }
+	return i
 }

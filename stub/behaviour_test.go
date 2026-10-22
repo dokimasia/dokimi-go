@@ -13,59 +13,6 @@ import (
 	"go.dokimi.dev/stub"
 )
 
-// fake is a double of Store.Get as a generated double writes it: the stub of
-// the method, a function, the default results, and a method that returns its
-// results through stub.Answer.
-type fake struct {
-	on       *stub.MethodStub[call]
-	fn       func(key string) error
-	defaults func() ret
-}
-
-// newFake returns a fake that reports to tb.
-func newFake(tb assert.TB) *fake {
-	return &fake{on: stub.NewMethodStub[call](tb, getName)}
-}
-
-// Get returns the value and the error of the results of the call of key.
-func (f *fake) Get(key string) (string, error) {
-	a := arms()
-	if f.fn != nil {
-		a.Invoke = func() ret { return ret{Err: f.fn(key)} }
-	}
-	a.Default = f.defaults
-	r := stub.Answer(f.on, &call{Key: key}, a)
-	return r.Value, r.Err
-}
-
-// subject returns the subject of Get on f.
-func (f *fake) subject() stub.Subject[call, ret] {
-	return stub.Subject[call, ret]{
-		Stub: f.on,
-		Call: func() { _, _ = f.Get("k") },
-		Fails: func() error {
-			_, err := f.Get("k")
-			return err
-		},
-		Result: func() ret {
-			value, err := f.Get("k")
-			return ret{Value: value, Err: err}
-		},
-		Default: f.defaults,
-		Override: func(mark func()) {
-			f.fn = func(string) error {
-				mark()
-				return nil
-			}
-		},
-	}
-}
-
-// subject returns the subject of Get on a new fake that reports to tb.
-func subject(tb assert.TB) stub.Subject[call, ret] {
-	return newFake(tb).subject()
-}
-
 // Behaviour passes a double that keeps the contract of a method, and fails
 // each check that a broken double breaks.
 func TestBehaviour(t *testing.T) {
@@ -90,7 +37,7 @@ func TestBehaviour(t *testing.T) {
 			})
 		})
 
-		t.Run("leaves out the checks of the results and the faults of a method without them", func(t *testing.T) {
+		t.Run("leaves out the checks that a method without results cannot pass", func(t *testing.T) {
 			t.Parallel()
 
 			stub.Behaviour(t, "Close", func(tb assert.TB) stub.Subject[call, ret] {
@@ -100,7 +47,7 @@ func TestBehaviour(t *testing.T) {
 			})
 		})
 
-		t.Run("runs each check as a parallel subtest", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var checks atomic.Int32
@@ -216,4 +163,32 @@ func TestBehaviour(t *testing.T) {
 			})
 		}
 	})
+}
+
+// subject returns the subject of Get on f.
+func (f *fake) subject() stub.Subject[call, ret] {
+	return stub.Subject[call, ret]{
+		Stub: f.on,
+		Call: func() { _, _ = f.Get("k") },
+		Fails: func() error {
+			_, err := f.Get("k")
+			return err
+		},
+		Result: func() ret {
+			value, err := f.Get("k")
+			return ret{Value: value, Err: err}
+		},
+		Default: f.defaults,
+		Override: func(mark func()) {
+			f.fn = func(string) error {
+				mark()
+				return nil
+			}
+		},
+	}
+}
+
+// subject returns the subject of Get on a new fake that reports to tb.
+func subject(tb assert.TB) stub.Subject[call, ret] {
+	return newFake(tb).subject()
 }

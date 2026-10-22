@@ -13,32 +13,6 @@ import (
 	"go.dokimi.dev/stub"
 )
 
-// member records which settings of a group reached it.
-type member struct {
-	strict, reset, verified, bench, clocked, sourced, delayed bool
-}
-
-// Strict records the setting.
-func (m *member) Strict() { m.strict = true }
-
-// Reset records the setting.
-func (m *member) Reset() { m.reset = true }
-
-// Verify records the setting.
-func (m *member) Verify() { m.verified = true }
-
-// BenchMode records the setting.
-func (m *member) BenchMode() { m.bench = true }
-
-// SetClock records the setting.
-func (m *member) SetClock(assert.Clock) { m.clocked = true }
-
-// SetRandSource records the setting.
-func (m *member) SetRandSource(rand.Source) { m.sourced = true }
-
-// SetLatency records the setting.
-func (m *member) SetLatency(time.Duration) { m.delayed = true }
-
 // A group applies each setting to each of its members, and Bind checks the
 // expected counts of the members at the end of the test.
 func TestGroup(t *testing.T) {
@@ -66,7 +40,7 @@ func TestGroup(t *testing.T) {
 	t.Run("Bind", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("checks the members at the end of the test", func(t *testing.T) {
+		t.Run("registers the check of each member as a cleanup", func(t *testing.T) {
 			t.Parallel()
 
 			m := &member{}
@@ -108,3 +82,29 @@ func FuzzGroup(f *testing.F) {
 	f.Add(0)
 	f.Fuzz(func(*testing.T, int) {})
 }
+
+// member records the settings that a group applied to it.
+type member struct {
+	strict, reset, verified, bench, clocked, sourced, delayed bool
+}
+
+// Strict records the setting.
+func (m *member) Strict() { m.strict = true }
+
+// Reset records the setting.
+func (m *member) Reset() { m.reset = true }
+
+// Verify records the setting.
+func (m *member) Verify() { m.verified = true }
+
+// BenchMode records the setting.
+func (m *member) BenchMode() { m.bench = true }
+
+// SetClock records the setting.
+func (m *member) SetClock(assert.Clock) { m.clocked = true }
+
+// SetRandSource records the setting.
+func (m *member) SetRandSource(rand.Source) { m.sourced = true }
+
+// SetLatency records the setting.
+func (m *member) SetLatency(time.Duration) { m.delayed = true }
