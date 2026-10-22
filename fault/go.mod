@@ -5,4 +5,4 @@ module go.dokimi.dev/fault
 
 go 1.27.2
 
-require go.dokimi.dev/assert v0.5.0
+require go.dokimi.dev/assert v0.5.2-0.20261022093415-37ff68dbed34
