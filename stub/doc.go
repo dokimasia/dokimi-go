@@ -8,7 +8,7 @@
 // a method embeds a [MethodStub], which records the calls of the method,
 // injects faults, sleeps a latency, checks the expected count of calls and
 // refuses an unconfigured call in strict mode. Each method of the double
-// answers through [Answer]:
+// returns its results through [Answer]:
 //
 //	func (s *StoreStub) Get(ctx context.Context, id string) (Item, error) {
 //		call := StoreGetCall{Ctx: ctx, ID: id}
@@ -32,9 +32,11 @@
 // the instant of each, and an [OrderTracker] checks the order of the calls of
 // two methods.
 //
-// [Behaviour] checks the contract of each method of a generated double, and
-// [DoubleBehaviour] the contract of the double as a whole. A generated test
-// runs both.
+// [Behaviour] checks the contract of each method of a generated double.
+// [BenchModeBehaviour], [StrictBehaviour], [ResetBehaviour],
+// [RandSourceBehaviour], [ClockBehaviour] and [LatencyBehaviour] each check
+// one option or one method of the double as a whole. A generated test runs
+// each of them under the function that it checks.
 //
 // # Dependency position
 //

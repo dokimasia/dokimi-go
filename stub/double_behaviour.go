@@ -29,11 +29,11 @@ func (s *readSource) Uint64() uint64 {
 	return 0
 }
 
-// errDouble is the error of the faults that [DoubleBehaviour] arms.
-var errDouble = errors.New("stub: the fault of the double behaviour")
+// errDouble is the error of the faults that the checks of the options arm.
+var errDouble = errors.New("stub: the fault of the checks of the options")
 
-// Instance is one double, as the checks of a whole double drive it: the stub
-// of one method, a call of that method, and the reset of the double.
+// Instance is one double, as the checks of its options drive it: the stub of
+// one method, a call of that method, and the reset of the double.
 type Instance[C any] struct {
 	// Stub is the stub of the method that the checks configure and read.
 	Stub *MethodStub[C]
@@ -43,94 +43,97 @@ type Instance[C any] struct {
 	Reset func()
 }
 
-// Double builds a generated double under each option whose effect does not
-// depend on the signature of a method. Each field returns a new double that
-// reports to tb.
-type Double[C any] struct {
-	// New builds a double without options.
-	New func(tb assert.TB) Instance[C]
-	// WithClock builds a double whose latency and windows of faults read clk.
-	WithClock func(tb assert.TB, clk assert.Clock) Instance[C]
-	// WithLatency builds a double whose every method sleeps d on clk before
-	// it answers.
-	WithLatency func(tb assert.TB, d time.Duration, clk assert.Clock) Instance[C]
-	// WithRandSource builds a double whose faults take their random numbers
-	// from src.
-	WithRandSource func(tb assert.TB, src rand.Source) Instance[C]
-	// BenchMode builds a double that records no call.
-	BenchMode func(tb assert.TB) Instance[C]
-	// Strict builds a double that refuses each unconfigured call.
-	Strict func(tb assert.TB) Instance[C]
-}
-
-// DoubleBehaviour checks the contract that a generated double keeps as a
-// whole: that each option of d reaches the double, and that a reset clears
-// the instants of the recorded calls. Each check is a parallel subtest of t.
-//
-// The checks of the clock run in a bubble of testing/synctest with a
-// [assert.Controlled] clock. A double that sleeps on the system clock moves
-// the time of the bubble. The checks compare that time with zero.
-func DoubleBehaviour[C any](t *testing.T, d Double[C]) {
+// BenchModeBehaviour checks the option of a generated double that turns the
+// recording of calls off. newInstance returns a new double with that option
+// that reports to tb. Each check is a parallel subtest of t.
+func BenchModeBehaviour[C any](t *testing.T, newInstance func(tb assert.TB) Instance[C]) {
 	t.Helper()
 
-	t.Run("stops recording in bench mode", func(t *testing.T) {
+	t.Run("stops recording the calls", func(t *testing.T) {
 		t.Parallel()
-		i := d.BenchMode(t)
+		i := newInstance(t)
 		i.Call()
 		assert.Equal(t, i.Stub.CallCount(), 0, "bench mode keeps the log of calls empty")
 	})
+}
 
-	t.Run("refuses an unconfigured call when built strict", func(t *testing.T) {
+// StrictBehaviour checks the option of a generated double that refuses each
+// unconfigured call. newInstance returns a new double with that option that
+// reports to tb, and the check passes an [assert.Recorder] as tb. Each check
+// is a parallel subtest of t.
+func StrictBehaviour[C any](t *testing.T, newInstance func(tb assert.TB) Instance[C]) {
+	t.Helper()
+
+	t.Run("refuses an unconfigured call", func(t *testing.T) {
 		t.Parallel()
 		r := assert.NewRecorder()
-		i := d.Strict(r)
+		i := newInstance(r)
 		i.Call()
 		assert.True(t, r.Failed(), "a strict double refuses an unconfigured call")
 	})
+}
 
-	t.Run("clears timestamps on reset", func(t *testing.T) {
+// ResetBehaviour checks the reset of a generated double, which clears the
+// instants of the recorded calls with the log. newInstance returns a new
+// double that reports to tb. Each check is a parallel subtest of t.
+func ResetBehaviour[C any](t *testing.T, newInstance func(tb assert.TB) Instance[C]) {
+	t.Helper()
+
+	t.Run("clears the instants of the recorded calls", func(t *testing.T) {
 		t.Parallel()
-		i := d.New(t)
+		i := newInstance(t)
 		i.Call()
 		assert.Length(t, i.Stub.Timestamped(), 1, "the double stamps the instant of a call")
 		i.Reset()
 		assert.Length(t, i.Stub.Timestamped(), 0, "a reset clears the instants with the log")
 	})
-
-	t.Run("draws probabilistic faults from the injected source", func(t *testing.T) {
-		t.Parallel()
-		src := &readSource{}
-		i := d.WithRandSource(t, src)
-		i.Stub.FaultsWithProbability(0.5, errDouble)
-		_, _ = i.Stub.ShouldFaultFor(*new(C))
-		assert.True(t, src.read, "a fault with a probability takes its number from the injected source")
-	})
-
-	doubleLatency(t, d)
 }
 
-// doubleLatency runs the checks of the clock of a double.
-func doubleLatency[C any](t *testing.T, d Double[C]) {
+// RandSourceBehaviour checks the option of a generated double that sets the
+// random source of its probabilistic faults. newInstance returns a new double
+// with that option on src that reports to tb. Each check is a parallel
+// subtest of t.
+func RandSourceBehaviour[C any](t *testing.T, newInstance func(tb assert.TB, src rand.Source) Instance[C]) {
 	t.Helper()
 
-	t.Run("sleeps latency against the injected clock", func(t *testing.T) {
+	t.Run("takes the number of a probabilistic fault from the source", func(t *testing.T) {
+		t.Parallel()
+		src := &readSource{}
+		i := newInstance(t, src)
+		i.Stub.FaultsWithProbability(0.5, errDouble)
+		_, _ = i.Stub.ShouldFaultFor(*new(C))
+		assert.True(t, src.read, "a fault with a probability takes its number from the source")
+	})
+}
+
+// ClockBehaviour checks the option of a generated double that sets its clock.
+// newInstance returns a new double with that option on clk that reports to
+// tb. Each check is a parallel subtest of t.
+//
+// The checks run in a bubble of testing/synctest with a [assert.Controlled]
+// clock. A double that sleeps on the system clock moves the time of the
+// bubble, and the checks compare that time with zero.
+func ClockBehaviour[C any](t *testing.T, newInstance func(tb assert.TB, clk assert.Clock) Instance[C]) {
+	t.Helper()
+
+	t.Run("sleeps a latency on the clock", func(t *testing.T) {
 		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			clk := assert.NewControlled(time.Unix(0, 0))
-			i := d.WithClock(t, clk)
+			i := newInstance(t, clk)
 			i.Stub.Latency(latencyWindow)
 			waited, spent := sleptOn(clk, i.Call)
 			assert.True(t, waited, "the call waits for its latency")
 			assert.Equal(t, spent, time.Duration(0),
-				"the latency sleeps on the injected clock and not on the system clock")
+				"the latency sleeps on the clock of the option and not on the system clock")
 		})
 	})
 
-	t.Run("records a call only once its latency has elapsed", func(t *testing.T) {
+	t.Run("records a call after its latency", func(t *testing.T) {
 		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			clk := assert.NewControlled(time.Unix(0, 0))
-			i := d.WithClock(t, clk)
+			i := newInstance(t, clk)
 			i.Stub.Latency(latencyWindow)
 			done := make(chan struct{})
 			go func() {
@@ -141,31 +144,42 @@ func doubleLatency[C any](t *testing.T, d Double[C]) {
 			assert.Equal(t, i.Stub.CallCount(), 0, "a call inside its latency is not recorded yet")
 			clk.Advance(latencyWindow + time.Second)
 			<-done
-			assert.Equal(t, i.Stub.CallCount(), 1, "the call is recorded once its latency has passed")
+			assert.Equal(t, i.Stub.CallCount(), 1, "the call is recorded after its latency")
 		})
 	})
 
-	t.Run("holds the WithLatency preset to the same clock", func(t *testing.T) {
+	t.Run("ends a fault at the end of its window", func(t *testing.T) {
 		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			clk := assert.NewControlled(time.Unix(0, 0))
-			i := d.WithLatency(t, latencyWindow, clk)
-			waited, spent := sleptOn(clk, i.Call)
-			assert.True(t, waited, "the call waits for the latency of the preset")
-			assert.Equal(t, spent, time.Duration(0),
-				"the latency of the preset sleeps on the injected clock and not on the system clock")
-		})
-	})
-
-	t.Run("stops a time-windowed fault once its window closes", func(t *testing.T) {
-		t.Parallel()
-		synctest.Test(t, func(t *testing.T) {
-			clk := assert.NewControlled(time.Unix(0, 0))
-			i := d.WithClock(t, clk)
+			i := newInstance(t, clk)
 			i.Stub.FaultsFor(latencyWindow, errDouble)
 			clk.Advance(latencyWindow + time.Second)
-			fired, _ := i.Stub.ShouldFaultFor(*new(C))
-			assert.False(t, fired, "a fault after its window does not fire")
+			faulted, _ := i.Stub.ShouldFaultFor(*new(C))
+			assert.False(t, faulted, "a fault after its window does not fail the call")
+		})
+	})
+}
+
+// LatencyBehaviour checks a constructor or an option of a generated double
+// that makes each method sleep a latency. newInstance returns a new double
+// whose methods sleep d on clk and that reports to tb. Each check is a
+// parallel subtest of t, and runs in a bubble of testing/synctest as the
+// checks of [ClockBehaviour] do.
+func LatencyBehaviour[C any](
+	t *testing.T,
+	newInstance func(tb assert.TB, d time.Duration, clk assert.Clock) Instance[C],
+) {
+	t.Helper()
+
+	t.Run("sleeps the latency on the clock", func(t *testing.T) {
+		t.Parallel()
+		synctest.Test(t, func(t *testing.T) {
+			clk := assert.NewControlled(time.Unix(0, 0))
+			i := newInstance(t, latencyWindow, clk)
+			waited, spent := sleptOn(clk, i.Call)
+			assert.True(t, waited, "the call waits for the latency")
+			assert.Equal(t, spent, time.Duration(0), "the latency sleeps on the clock and not on the system clock")
 		})
 	})
 }
