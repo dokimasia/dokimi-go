@@ -5,7 +5,7 @@
 // double that fail.
 //
 // A test arms a [Fault] on a method of a double. The double calls the method
-// ShouldFire of the fault for each call before it answers the call. The
+// ShouldTrigger of the fault for each call before it answers the call. The
 // strategies compose:
 //
 //	f := fault.And(

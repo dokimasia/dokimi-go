@@ -12,10 +12,10 @@ import (
 // Fault decides for each call of a double whether the call fails. C is the
 // type of the call that the double records.
 type Fault[C any] interface {
-	// ShouldFire reports whether the fault fires for call, and returns the
-	// error of the fault where it fires. clock is the clock of the double,
-	// and nil reads the system clock.
-	ShouldFire(call C, clock Clock) (bool, error)
+	// ShouldTrigger reports whether the fault fails call, and returns the error
+	// of the fault for a call that fails. clock is the clock of the double, and
+	// nil reads the system clock.
+	ShouldTrigger(call C, clock Clock) (bool, error)
 	// Reset rewinds the counters of the fault and keeps its configuration.
 	Reset()
 }
@@ -43,7 +43,7 @@ type stateless struct{}
 // Reset keeps the configuration, because the strategy has no counter.
 func (stateless) Reset() {}
 
-// CountedFault fires on every nth call, whatever the call and the clock.
+// CountedFault fails every nth call, whatever the call and the clock.
 type CountedFault[C any] struct {
 	err   error
 	n     int
@@ -51,15 +51,15 @@ type CountedFault[C any] struct {
 	count int
 }
 
-// NewCountedFault returns a fault that fires on every nth call. A fault with
-// an n below 1 never fires.
+// NewCountedFault returns a fault that fails every nth call. A fault with an n
+// below 1 fails no call.
 func NewCountedFault[C any](err error, n int) *CountedFault[C] {
 	return &CountedFault[C]{err: err, n: n}
 }
 
-// ShouldFire counts the call, and fires on the nth call, where it starts the
+// ShouldTrigger counts the call and fails the nth call. It then starts the
 // count again.
-func (f *CountedFault[C]) ShouldFire(C, Clock) (bool, error) {
+func (f *CountedFault[C]) ShouldTrigger(C, Clock) (bool, error) {
 	if f.n < 1 {
 		return false, nil
 	}
@@ -80,8 +80,8 @@ func (f *CountedFault[C]) Reset() {
 	f.count = 0
 }
 
-// RetryFault fires on calls 1 to n − 1, and on no call from call n on. It
-// models a dependency that recovers on the nth attempt.
+// RetryFault fails calls 1 to n − 1 and no call from call n on. It models a
+// dependency that recovers on the nth attempt.
 type RetryFault[C any] struct {
 	err   error
 	n     int
@@ -95,8 +95,8 @@ func NewRetryFault[C any](err error, n int) *RetryFault[C] {
 	return &RetryFault[C]{err: err, n: n}
 }
 
-// ShouldFire counts the call, and fires on the calls before the nth.
-func (f *RetryFault[C]) ShouldFire(C, Clock) (bool, error) {
+// ShouldTrigger counts the call and fails the calls before the nth.
+func (f *RetryFault[C]) ShouldTrigger(C, Clock) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.count++
@@ -114,7 +114,7 @@ func (f *RetryFault[C]) Reset() {
 	f.count = 0
 }
 
-// ProbabilityFault fires with a probability on each call.
+// ProbabilityFault fails each call with a probability.
 type ProbabilityFault[C any] struct {
 	stateless
 	err error
@@ -123,11 +123,11 @@ type ProbabilityFault[C any] struct {
 	mu  sync.Mutex
 }
 
-// NewProbabilityFault returns a fault that fires with the probability p on
-// each call. It takes its random numbers from src, such as a seeded source of
-// the test, so a seeded run repeats its faults. A nil src takes them from the
-// global source of math/rand/v2. A fault with p of 0 never fires, and a fault
-// with p of 1 fires on every call.
+// NewProbabilityFault returns a fault that fails each call with the
+// probability p. It takes its random numbers from src, such as a seeded source
+// of the test, so a seeded run repeats its faults. A nil src takes them from
+// the global source of math/rand/v2. A fault with p of 0 fails no call, and a
+// fault with p of 1 fails every call.
 func NewProbabilityFault[C any](err error, p float64, src rand.Source) *ProbabilityFault[C] {
 	f := &ProbabilityFault[C]{err: err, p: p}
 	if src != nil {
@@ -136,9 +136,9 @@ func NewProbabilityFault[C any](err error, p float64, src rand.Source) *Probabil
 	return f
 }
 
-// ShouldFire takes a random number in [0, 1), and fires where the number is
-// below the probability.
-func (f *ProbabilityFault[C]) ShouldFire(C, Clock) (bool, error) {
+// ShouldTrigger takes a random number in [0, 1) and fails the call when the
+// number is below the probability.
+func (f *ProbabilityFault[C]) ShouldTrigger(C, Clock) (bool, error) {
 	if f.draw() >= f.p {
 		return false, nil
 	}
@@ -155,67 +155,70 @@ func (f *ProbabilityFault[C]) draw() float64 {
 	return f.r.Float64()
 }
 
-// WindowedFault fires while the clock of the double is before a deadline.
+// WindowedFault fails each call while the clock of the double is before a
+// deadline.
 type WindowedFault[C any] struct {
 	stateless
 	err      error
 	deadline time.Time
 }
 
-// NewWindowedFault returns a fault that fires while the clock of the double is
-// before deadline.
+// NewWindowedFault returns a fault that fails each call while the clock of the
+// double is before deadline.
 func NewWindowedFault[C any](err error, deadline time.Time) *WindowedFault[C] {
 	return &WindowedFault[C]{err: err, deadline: deadline}
 }
 
-// ShouldFire fires while the instant of clock is before the deadline.
-func (f *WindowedFault[C]) ShouldFire(_ C, clock Clock) (bool, error) {
+// ShouldTrigger fails the call while the instant of clock is before the
+// deadline.
+func (f *WindowedFault[C]) ShouldTrigger(_ C, clock Clock) (bool, error) {
 	if !ClockNow(clock).Before(f.deadline) {
 		return false, nil
 	}
 	return true, f.err
 }
 
-// PredicateFault fires for a call for which its function returns true.
+// PredicateFault fails each call for which its function returns true.
 type PredicateFault[C any] struct {
 	stateless
 	err  error
 	pred func(C) bool
 }
 
-// NewPredicateFault returns a fault that fires for each call for which pred
+// NewPredicateFault returns a fault that fails each call for which pred
 // returns true.
 func NewPredicateFault[C any](err error, pred func(C) bool) *PredicateFault[C] {
 	return &PredicateFault[C]{err: err, pred: pred}
 }
 
-// ShouldFire fires where the function of the fault returns true for call.
-func (f *PredicateFault[C]) ShouldFire(call C, _ Clock) (bool, error) {
+// ShouldTrigger fails the call when the function of the fault returns true for
+// call.
+func (f *PredicateFault[C]) ShouldTrigger(call C, _ Clock) (bool, error) {
 	if !f.pred(call) {
 		return false, nil
 	}
 	return true, f.err
 }
 
-// AndFault fires when each of its faults fires.
+// AndFault fails a call that each of its faults fails.
 type AndFault[C any] struct {
 	inner []Fault[C]
 }
 
-// And returns a fault that fires when each of faults fires, with the error of
-// the first. It asks the faults in order and stops at the first that does not
-// fire, so a counter after a predicate counts only the calls that the
-// predicate passes. And of no faults never fires.
+// And returns a fault that fails a call that each of faults fails, with the
+// error of the first. It asks the faults in order and stops at the first that
+// does not fail the call. So a counter after a predicate counts only the calls
+// that the predicate passes. And of no faults fails no call.
 func And[C any](faults ...Fault[C]) *AndFault[C] {
 	return &AndFault[C]{inner: faults}
 }
 
-// ShouldFire asks the faults in order until one does not fire.
-func (f *AndFault[C]) ShouldFire(call C, clock Clock) (bool, error) {
+// ShouldTrigger asks the faults in order until one does not fail the call.
+func (f *AndFault[C]) ShouldTrigger(call C, clock Clock) (bool, error) {
 	var first error
 	for i, inner := range f.inner {
-		fired, err := inner.ShouldFire(call, clock)
-		if !fired {
+		triggered, err := inner.ShouldTrigger(call, clock)
+		if !triggered {
 			return false, nil
 		}
 		if i == 0 {
@@ -232,22 +235,22 @@ func (f *AndFault[C]) Reset() {
 	}
 }
 
-// OrFault fires when one of its faults fires.
+// OrFault fails a call that one of its faults fails.
 type OrFault[C any] struct {
 	inner []Fault[C]
 }
 
-// Or returns a fault that fires when one of faults fires, with the error of
-// the first that fires. It asks the faults in order and stops at the first
-// that fires. Or of no faults never fires.
+// Or returns a fault that fails a call that one of faults fails, with the
+// error of the first fault that fails it. It asks the faults in order and
+// stops at that fault. Or of no faults fails no call.
 func Or[C any](faults ...Fault[C]) *OrFault[C] {
 	return &OrFault[C]{inner: faults}
 }
 
-// ShouldFire asks the faults in order until one fires.
-func (f *OrFault[C]) ShouldFire(call C, clock Clock) (bool, error) {
+// ShouldTrigger asks the faults in order until one fails the call.
+func (f *OrFault[C]) ShouldTrigger(call C, clock Clock) (bool, error) {
 	for _, inner := range f.inner {
-		if fired, err := inner.ShouldFire(call, clock); fired {
+		if triggered, err := inner.ShouldTrigger(call, clock); triggered {
 			//nolint:wrapcheck // the code under test matches the armed error with errors.Is as the test armed it
 			return true, err
 		}

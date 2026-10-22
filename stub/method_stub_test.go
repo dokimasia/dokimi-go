@@ -56,13 +56,14 @@ func TestMethodStub(t *testing.T) {
 	t.Run("Faults", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires on every nth call", func(t *testing.T) {
+		t.Run("fails every nth call", func(t *testing.T) {
 			t.Parallel()
 
 			s := stub.NewMethodStub[call](nil, getName)
 			got := s.Faults(errTest, 2)
 			assert.Equal(t, got, s, "Faults returns the stub", assert.ByIdentity())
-			assert.Equal(t, fired(s, 4), []bool{false, true, false, true}, "a fault of every second call fires twice")
+			assert.Equal(t, failed(s, 4), []bool{false, true, false, true},
+				"a fault of every second call fails the second and the fourth call")
 		})
 	})
 
@@ -74,7 +75,7 @@ func TestMethodStub(t *testing.T) {
 
 			s := stub.NewMethodStub[call](nil, getName)
 			assert.Equal(t, s.FaultsOnce(errTest), s, "FaultsOnce returns the stub", assert.ByIdentity())
-			assert.Equal(t, fired(s, 3), []bool{true, false, false}, "the fault fails one call")
+			assert.Equal(t, failed(s, 3), []bool{true, false, false}, "the fault fails one call")
 		})
 
 		t.Run("arms the fault again after Reset", func(t *testing.T) {
@@ -82,9 +83,9 @@ func TestMethodStub(t *testing.T) {
 
 			s := stub.NewMethodStub[call](nil, getName)
 			s.FaultsOnce(errTest)
-			fired(s, 1)
+			failed(s, 1)
 			s.Reset()
-			assert.Equal(t, fired(s, 1), []bool{true}, "the reset rewinds the fault")
+			assert.Equal(t, failed(s, 1), []bool{true}, "the reset rewinds the fault")
 		})
 	})
 
@@ -109,7 +110,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("FaultsWhen", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires on every nth call that the function selects", func(t *testing.T) {
+		t.Run("fails every nth call that the function selects", func(t *testing.T) {
 			t.Parallel()
 
 			s := stub.NewMethodStub[call](nil, getName)
@@ -140,35 +141,35 @@ func TestMethodStub(t *testing.T) {
 			expect.ErrorIs(t, err, errTest, "the fault returns the armed error")
 		})
 
-		t.Run("never fires at a probability of 0 without a source", func(t *testing.T) {
+		t.Run("fails no call at a probability of 0 without a source", func(t *testing.T) {
 			t.Parallel()
 
 			s := stub.NewMethodStub[call](nil, getName)
 			s.FaultsWithProbability(0, errTest)
-			assert.Equal(t, fired(s, 3), []bool{false, false, false}, "no number is below 0")
+			assert.Equal(t, failed(s, 3), []bool{false, false, false}, "no number is below 0")
 		})
 	})
 
 	t.Run("FaultsUntil", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires while the clock is before the deadline", func(t *testing.T) {
+		t.Run("fails each call while the clock is before the deadline", func(t *testing.T) {
 			t.Parallel()
 
 			clk := assert.NewControlled(origin)
 			s := stub.NewMethodStub[call](nil, getName).WithClock(clk)
 			got := s.FaultsUntil(origin.Add(10*time.Second), errTest)
 			expect.Equal(t, got, s, "FaultsUntil returns the stub", assert.ByIdentity())
-			expect.Equal(t, fired(s, 1), []bool{true}, "the fault fires before the deadline")
+			expect.Equal(t, failed(s, 1), []bool{true}, "the fault fails a call before the deadline")
 			clk.Advance(11 * time.Second)
-			expect.Equal(t, fired(s, 1), []bool{false}, "the fault does not fire after the deadline")
+			expect.Equal(t, failed(s, 1), []bool{false}, "the fault does not fail a call after the deadline")
 		})
 	})
 
 	t.Run("FaultsFor", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires for the duration from the instant of the clock", func(t *testing.T) {
+		t.Run("fails each call for the duration from the instant of the clock", func(t *testing.T) {
 			t.Parallel()
 
 			clk := assert.NewControlled(origin)
@@ -177,9 +178,9 @@ func TestMethodStub(t *testing.T) {
 			got := s.FaultsFor(5*time.Second, errTest)
 			expect.Equal(t, got, s, "FaultsFor returns the stub", assert.ByIdentity())
 			clk.Advance(4 * time.Second)
-			expect.Equal(t, fired(s, 1), []bool{true}, "the fault fires inside its duration")
+			expect.Equal(t, failed(s, 1), []bool{true}, "the fault fails a call inside its duration")
 			clk.Advance(2 * time.Second)
-			expect.Equal(t, fired(s, 1), []bool{false}, "the fault does not fire after its duration")
+			expect.Equal(t, failed(s, 1), []bool{false}, "the fault does not fail a call after its duration")
 		})
 	})
 
@@ -259,7 +260,7 @@ func TestMethodStub(t *testing.T) {
 	t.Run("ShouldFaultFor", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires not at all without a fault", func(t *testing.T) {
+		t.Run("fails no call without a fault", func(t *testing.T) {
 			t.Parallel()
 
 			f, err := stub.NewMethodStub[call](nil, getName).ShouldFaultFor(call{})
@@ -403,7 +404,7 @@ func TestMethodStub(t *testing.T) {
 			s.Faults(errTest, 2)
 			_ = get(s, "a")
 			s.Reset()
-			assert.Equal(t, fired(s, 1), []bool{false}, "the first call after the reset is the first of the count")
+			assert.Equal(t, failed(s, 1), []bool{false}, "the first call after the reset is the first of the count")
 		})
 
 		t.Run("clears the expected counts", func(t *testing.T) {
@@ -434,9 +435,8 @@ type quarter struct{}
 // Uint64 returns the bits of the number 0.25.
 func (quarter) Uint64() uint64 { return 1 << 51 }
 
-// fired asks the fault of s about n calls, and returns whether it fires for
-// each.
-func fired(s *stub.MethodStub[call], n int) []bool {
+// failed asks the fault of s about n calls, and returns whether it fails each.
+func failed(s *stub.MethodStub[call], n int) []bool {
 	out := make([]bool, 0, n)
 	for range n {
 		f, _ := s.ShouldFaultFor(call{})

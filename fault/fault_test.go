@@ -37,8 +37,8 @@ var (
 	after    = at(deadline.Add(time.Second))
 )
 
-// A fault fires for the calls that its strategy selects and returns the
-// armed error as it is. Reset rewinds the counters of the fault.
+// A fault fails the calls that its strategy selects and returns the armed
+// error as it is. Reset rewinds the counters of the fault.
 func TestFault(t *testing.T) {
 	t.Parallel()
 
@@ -63,19 +63,19 @@ func TestFault(t *testing.T) {
 	t.Run("NewCountedFault", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires on every nth call", func(t *testing.T) {
+		t.Run("fails every nth call", func(t *testing.T) {
 			t.Parallel()
 
 			f := fault.NewCountedFault[call](errArmed, 3)
-			assert.Equal(t, firesFor(f, 6), []bool{false, false, true, false, false, true},
-				"a fault of every third call fires on the third and the sixth call")
+			assert.Equal(t, failsFor(f, 6), []bool{false, false, true, false, false, true},
+				"a fault of every third call fails the third and the sixth call")
 		})
 
 		t.Run("returns the armed error", func(t *testing.T) {
 			t.Parallel()
 
-			fired, err := fault.NewCountedFault[call](errArmed, 1).ShouldFire(call{}, before)
-			assert.True(t, fired, "a fault of every call fires on the first call")
+			failed, err := fault.NewCountedFault[call](errArmed, 1).ShouldTrigger(call{}, before)
+			assert.True(t, failed, "a fault of every call fails the first call")
 			expect.ErrorIs(t, err, errArmed, "the fault returns the error that the test armed")
 		})
 
@@ -83,8 +83,8 @@ func TestFault(t *testing.T) {
 			name string
 			give int
 		}{
-			{name: "never fires for an n of zero", give: 0},
-			{name: "never fires for a negative n", give: -1},
+			{name: "fails no call for an n of zero", give: 0},
+			{name: "fails no call for a negative n", give: -1},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -93,9 +93,9 @@ func TestFault(t *testing.T) {
 				f := fault.NewCountedFault[call](errArmed, tt.give)
 				assert.Equal(
 					t,
-					firesFor(f, 3),
+					failsFor(f, 3),
 					[]bool{false, false, false},
-					"a fault with an n below 1 fires on no call",
+					"a fault with an n below 1 fails no call",
 				)
 			})
 		}
@@ -104,13 +104,13 @@ func TestFault(t *testing.T) {
 			t.Parallel()
 
 			f := fault.NewCountedFault[call](errArmed, 3)
-			firesFor(f, 2)
+			failsFor(f, 2)
 			f.Reset()
 			assert.Equal(
 				t,
-				firesFor(f, 3),
+				failsFor(f, 3),
 				[]bool{false, false, true},
-				"the fault fires on the third call after the reset",
+				"the fault fails the third call after the reset",
 			)
 		})
 	})
@@ -118,28 +118,28 @@ func TestFault(t *testing.T) {
 	t.Run("NewRetryFault", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires on the calls before the nth call", func(t *testing.T) {
+		t.Run("fails the calls before the nth call", func(t *testing.T) {
 			t.Parallel()
 
 			f := fault.NewRetryFault[call](errArmed, 3)
-			assert.Equal(t, firesFor(f, 5), []bool{true, true, false, false, false},
+			assert.Equal(t, failsFor(f, 5), []bool{true, true, false, false, false},
 				"a dependency that recovers on the third attempt fails the first two")
 		})
 
 		t.Run("returns the armed error", func(t *testing.T) {
 			t.Parallel()
 
-			_, err := fault.NewRetryFault[call](errArmed, 2).ShouldFire(call{}, before)
+			_, err := fault.NewRetryFault[call](errArmed, 2).ShouldTrigger(call{}, before)
 			expect.ErrorIs(t, err, errArmed, "the fault returns the error that the test armed")
 		})
 
-		t.Run("fires on the first call again after Reset", func(t *testing.T) {
+		t.Run("fails the first call again after Reset", func(t *testing.T) {
 			t.Parallel()
 
 			f := fault.NewRetryFault[call](errArmed, 2)
-			firesFor(f, 2)
+			failsFor(f, 2)
 			f.Reset()
-			assert.Equal(t, firesFor(f, 2), []bool{true, false}, "the fault starts the attempts again after the reset")
+			assert.Equal(t, failsFor(f, 2), []bool{true, false}, "the fault starts the attempts again after the reset")
 		})
 	})
 
@@ -153,25 +153,25 @@ func TestFault(t *testing.T) {
 			want            bool
 		}{
 			{
-				name: "fires for a call whose random number is below the probability", giveProbability: 0.75,
+				name: "fails a call whose random number is below the probability", giveProbability: 0.75,
 				giveSource: half, want: true,
 			},
 			{
-				name: "fires for no call whose random number is the probability", giveProbability: 0.5,
+				name: "fails no call whose random number is the probability", giveProbability: 0.5,
 				giveSource: half,
 			},
-			{name: "fires for every call at a probability of 1", giveProbability: 1, giveSource: high, want: true},
-			{name: "fires for no call at a probability of 0", giveProbability: 0, giveSource: low},
-			{name: "fires for every call at a probability of 1 without a source", giveProbability: 1, want: true},
-			{name: "fires for no call at a probability of 0 without a source", giveProbability: 0},
+			{name: "fails every call at a probability of 1", giveProbability: 1, giveSource: high, want: true},
+			{name: "fails no call at a probability of 0", giveProbability: 0, giveSource: low},
+			{name: "fails every call at a probability of 1 without a source", giveProbability: 1, want: true},
+			{name: "fails no call at a probability of 0 without a source", giveProbability: 0},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
 				f := fault.NewProbabilityFault[call](errArmed, tt.giveProbability, tt.giveSource)
-				fired, err := f.ShouldFire(call{}, before)
-				assert.Equal(t, fired, tt.want, "the fault fires where the random number is below the probability")
+				failed, err := f.ShouldTrigger(call{}, before)
+				assert.Equal(t, failed, tt.want, "the fault fails a call whose random number is below the probability")
 				if tt.want {
 					expect.ErrorIs(t, err, errArmed, "the fault returns the error that the test armed")
 				}
@@ -182,28 +182,28 @@ func TestFault(t *testing.T) {
 			t.Parallel()
 
 			f := fault.NewProbabilityFault[call](errArmed, 1, high)
-			assert.Equal(t, firesFor(f, 2), []bool{true, true}, "a fault of every call fires for each of two calls")
+			assert.Equal(t, failsFor(f, 2), []bool{true, true}, "a fault of every call fails each of two calls")
 		})
 
 		t.Run("takes each random number from the source", func(t *testing.T) {
 			t.Parallel()
 
-			// The source returns 0.5 on each call. A fault at 0.75 fires for
-			// each of the calls, which a fault that took its numbers elsewhere
-			// would not do a hundred times in a row.
-			fired := firesFor(fault.NewProbabilityFault[call](errArmed, 0.75, half), samples)
-			assert.NotContains(t, fired, false, "each number of the source is below the probability")
+			// The source returns 0.5 on each call. A fault at 0.75 fails each
+			// of the calls. A fault that took its numbers elsewhere would not
+			// do that a hundred times in a row.
+			failed := failsFor(fault.NewProbabilityFault[call](errArmed, 0.75, half), samples)
+			assert.NotContains(t, failed, false, "each number of the source is below the probability")
 		})
 
 		t.Run("takes random numbers on both sides of the probability without a source", func(t *testing.T) {
 			t.Parallel()
 
 			// The global source returns numbers below 0.5 and from 0.5 up alike.
-			// A hundred calls fire for every call or for none with a probability
-			// of 2 in 2^100.
-			fired := firesFor(fault.NewProbabilityFault[call](errArmed, 0.5, nil), samples)
-			expect.Contains(t, fired, true, "the global source returns a number below 0.5")
-			expect.Contains(t, fired, false, "the global source returns a number from 0.5 up")
+			// A hundred calls all fail or all succeed with a probability of 2 in
+			// 2^100.
+			failed := failsFor(fault.NewProbabilityFault[call](errArmed, 0.5, nil), samples)
+			expect.Contains(t, failed, true, "the global source returns a number below 0.5")
+			expect.Contains(t, failed, false, "the global source returns a number from 0.5 up")
 		})
 
 		t.Run("keeps its probability after Reset", func(t *testing.T) {
@@ -211,7 +211,7 @@ func TestFault(t *testing.T) {
 
 			f := fault.NewProbabilityFault[call](errArmed, 1, high)
 			f.Reset()
-			assert.Equal(t, firesFor(f, 1), []bool{true}, "a fault of every call fires after the reset")
+			assert.Equal(t, failsFor(f, 1), []bool{true}, "a fault of every call fails a call after the reset")
 		})
 	})
 
@@ -223,16 +223,16 @@ func TestFault(t *testing.T) {
 			give at
 			want bool
 		}{
-			{name: "fires for a call before the deadline", give: before, want: true},
-			{name: "fires for no call at the deadline", give: at(deadline)},
-			{name: "fires for no call after the deadline", give: after},
+			{name: "fails a call before the deadline", give: before, want: true},
+			{name: "fails no call at the deadline", give: at(deadline)},
+			{name: "fails no call after the deadline", give: after},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				fired, err := fault.NewWindowedFault[call](errArmed, deadline).ShouldFire(call{}, tt.give)
-				assert.Equal(t, fired, tt.want, "the window fires while the clock is before the deadline")
+				failed, err := fault.NewWindowedFault[call](errArmed, deadline).ShouldTrigger(call{}, tt.give)
+				assert.Equal(t, failed, tt.want, "the window fails each call while the clock is before the deadline")
 				if tt.want {
 					expect.ErrorIs(t, err, errArmed, "the fault returns the error that the test armed")
 				}
@@ -242,8 +242,8 @@ func TestFault(t *testing.T) {
 		t.Run("reads the system clock without a clock", func(t *testing.T) {
 			t.Parallel()
 
-			fired, _ := fault.NewWindowedFault[call](errArmed, time.Now().Add(time.Hour)).ShouldFire(call{}, nil)
-			assert.True(t, fired, "the system clock is before a deadline an hour away")
+			failed, _ := fault.NewWindowedFault[call](errArmed, time.Now().Add(time.Hour)).ShouldTrigger(call{}, nil)
+			assert.True(t, failed, "the system clock is before a deadline an hour away")
 		})
 
 		t.Run("keeps its deadline after Reset", func(t *testing.T) {
@@ -251,8 +251,8 @@ func TestFault(t *testing.T) {
 
 			f := fault.NewWindowedFault[call](errArmed, deadline)
 			f.Reset()
-			fired, _ := f.ShouldFire(call{}, after)
-			assert.False(t, fired, "the reset does not open a window that has closed")
+			failed, _ := f.ShouldTrigger(call{}, after)
+			assert.False(t, failed, "the reset does not open a window that has closed")
 		})
 	})
 
@@ -264,15 +264,15 @@ func TestFault(t *testing.T) {
 			give call
 			want bool
 		}{
-			{name: "fires for a call for which the function returns true", give: call{ID: "a"}, want: true},
-			{name: "fires for no call for which the function returns false", give: call{ID: "b"}},
+			{name: "fails a call for which the function returns true", give: call{ID: "a"}, want: true},
+			{name: "fails no call for which the function returns false", give: call{ID: "b"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				fired, err := idA().ShouldFire(tt.give, before)
-				assert.Equal(t, fired, tt.want, "the predicate selects the calls of the ID a")
+				failed, err := idA().ShouldTrigger(tt.give, before)
+				assert.Equal(t, failed, tt.want, "the predicate selects the calls of the ID a")
 				if tt.want {
 					expect.ErrorIs(t, err, errArmed, "the fault returns the error that the test armed")
 				}
@@ -284,30 +284,30 @@ func TestFault(t *testing.T) {
 
 			f := idA()
 			f.Reset()
-			fired, _ := f.ShouldFire(call{ID: "a"}, before)
-			assert.True(t, fired, "the predicate selects the call of the ID a after the reset")
+			failed, _ := f.ShouldTrigger(call{ID: "a"}, before)
+			assert.True(t, failed, "the predicate selects the call of the ID a after the reset")
 		})
 	})
 
 	t.Run("And", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires with the error of the first fault where each fault fires", func(t *testing.T) {
+		t.Run("fails a call that each fault fails with the error of the first fault", func(t *testing.T) {
 			t.Parallel()
 
 			errSecond := errors.New("fault_test: the second error")
-			fired, err := fault.And(idA(), fault.Fault[call](fault.NewCountedFault[call](errSecond, 1))).
-				ShouldFire(call{ID: "a"}, before)
-			assert.True(t, fired, "both faults fire for the call of the ID a")
+			failed, err := fault.And(idA(), fault.Fault[call](fault.NewCountedFault[call](errSecond, 1))).
+				ShouldTrigger(call{ID: "a"}, before)
+			assert.True(t, failed, "both faults fail the call of the ID a")
 			expect.ErrorIs(t, err, errArmed, "the fault returns the error of the first fault")
 		})
 
-		t.Run("fires for no call that one fault rejects", func(t *testing.T) {
+		t.Run("fails no call that one fault rejects", func(t *testing.T) {
 			t.Parallel()
 
-			fired, _ := fault.And(idA(), fault.Fault[call](fault.NewCountedFault[call](errArmed, 1))).
-				ShouldFire(call{ID: "b"}, before)
-			assert.False(t, fired, "the predicate rejects the call of the ID b")
+			failed, _ := fault.And(idA(), fault.Fault[call](fault.NewCountedFault[call](errArmed, 1))).
+				ShouldTrigger(call{ID: "b"}, before)
+			assert.False(t, failed, "the predicate rejects the call of the ID b")
 		})
 
 		t.Run("counts the calls that the faults before a counter pass", func(t *testing.T) {
@@ -317,85 +317,85 @@ func TestFault(t *testing.T) {
 			ids := []string{"a", "b", "b", "a"}
 			got := make([]bool, 0, len(ids))
 			for _, id := range ids {
-				fired, _ := f.ShouldFire(call{ID: id}, before)
-				got = append(got, fired)
+				failed, _ := f.ShouldTrigger(call{ID: id}, before)
+				got = append(got, failed)
 			}
 			assert.Equal(t, got, []bool{false, false, false, true},
-				"the counter counts the two calls of the ID a, and fires on the second")
+				"the counter counts the two calls of the ID a and fails the second")
 		})
 
 		t.Run("resets each of its faults", func(t *testing.T) {
 			t.Parallel()
 
 			f := fault.And(fault.Fault[call](fault.NewCountedFault[call](errArmed, 2)))
-			firesFor(f, 1)
+			failsFor(f, 1)
 			f.Reset()
 			assert.Equal(
 				t,
-				firesFor(f, 2),
+				failsFor(f, 2),
 				[]bool{false, true},
 				"the counter counts from the first call after the reset",
 			)
 		})
 
-		t.Run("never fires without faults", func(t *testing.T) {
+		t.Run("fails no call without faults", func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, firesFor(fault.And[call](), 1), []bool{false}, "And of no faults fires for no call")
+			assert.Equal(t, failsFor(fault.And[call](), 1), []bool{false}, "And of no faults fails no call")
 		})
 	})
 
 	t.Run("Or", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires with the error of the first fault that fires", func(t *testing.T) {
+		t.Run("fails a call with the error of the first fault that fails it", func(t *testing.T) {
 			t.Parallel()
 
 			errSecond := errors.New("fault_test: the second error")
 			f := fault.Or(idA(), fault.Fault[call](fault.NewPredicateFault(errSecond, func(c call) bool {
 				return c.ID == "b"
 			})))
-			fired, err := f.ShouldFire(call{ID: "b"}, before)
-			assert.True(t, fired, "the second fault fires for the call of the ID b")
-			expect.ErrorIs(t, err, errSecond, "the fault returns the error of the fault that fires")
+			failed, err := f.ShouldTrigger(call{ID: "b"}, before)
+			assert.True(t, failed, "the second fault fails the call of the ID b")
+			expect.ErrorIs(t, err, errSecond, "the fault returns the error of the fault that fails the call")
 		})
 
-		t.Run("fires for no call that each fault rejects", func(t *testing.T) {
+		t.Run("fails no call that each fault rejects", func(t *testing.T) {
 			t.Parallel()
 
-			fired, _ := fault.Or(idA()).ShouldFire(call{ID: "c"}, before)
-			assert.False(t, fired, "the predicate rejects the call of the ID c")
+			failed, _ := fault.Or(idA()).ShouldTrigger(call{ID: "c"}, before)
+			assert.False(t, failed, "the predicate rejects the call of the ID c")
 		})
 
-		t.Run("asks no fault after the first that fires", func(t *testing.T) {
+		t.Run("asks no fault after the first that fails the call", func(t *testing.T) {
 			t.Parallel()
 
 			counter := fault.NewCountedFault[call](errArmed, 2)
 			f := fault.Or(idA(), fault.Fault[call](counter))
 			for range 3 {
-				_, _ = f.ShouldFire(call{ID: "a"}, before)
+				_, _ = f.ShouldTrigger(call{ID: "a"}, before)
 			}
-			assert.Equal(t, firesFor(counter, 1), []bool{false}, "the counter counts no call that the predicate took")
+			assert.Equal(t, failsFor(counter, 1), []bool{false}, "the counter counts no call that the predicate took")
 		})
 
 		t.Run("resets each of its faults", func(t *testing.T) {
 			t.Parallel()
 
 			f := fault.Or(fault.Fault[call](fault.NewCountedFault[call](errArmed, 2)))
-			firesFor(f, 1)
+			failsFor(f, 1)
 			f.Reset()
 			assert.Equal(
 				t,
-				firesFor(f, 2),
+				failsFor(f, 2),
 				[]bool{false, true},
 				"the counter counts from the first call after the reset",
 			)
 		})
 
-		t.Run("never fires without faults", func(t *testing.T) {
+		t.Run("fails no call without faults", func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, firesFor(fault.Or[call](), 1), []bool{false}, "Or of no faults fires for no call")
+			assert.Equal(t, failsFor(fault.Or[call](), 1), []bool{false}, "Or of no faults fails no call")
 		})
 	})
 }
@@ -418,18 +418,18 @@ type at time.Time
 // Now returns the instant of the clock.
 func (a at) Now() time.Time { return time.Time(a) }
 
-// firesFor asks f about n calls before the deadline, and returns whether f
-// fires for each.
-func firesFor(f fault.Fault[call], n int) []bool {
+// failsFor asks f about n calls before the deadline, and returns whether f
+// fails each.
+func failsFor(f fault.Fault[call], n int) []bool {
 	out := make([]bool, 0, n)
 	for range n {
-		fired, _ := f.ShouldFire(call{}, before)
-		out = append(out, fired)
+		failed, _ := f.ShouldTrigger(call{}, before)
+		out = append(out, failed)
 	}
 	return out
 }
 
-// idA returns a predicate that fires for the calls of the ID a with the armed
+// idA returns a predicate that fails the calls of the ID a with the armed
 // error.
 func idA() fault.Fault[call] {
 	return fault.NewPredicateFault(errArmed, func(c call) bool { return c.ID == "a" })

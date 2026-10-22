@@ -59,7 +59,7 @@ func (s *MethodStub[C]) IsStrict() bool {
 	return s.strict
 }
 
-// Faults arms a fault that fires on every nth call with err, and returns the
+// Faults arms a fault that fails every nth call with err, and returns the
 // stub.
 func (s *MethodStub[C]) Faults(err error, failEveryN int) *MethodStub[C] {
 	s.fault = fault.NewCountedFault[C](err, failEveryN)
@@ -80,16 +80,16 @@ func (s *MethodStub[C]) SetFault(f fault.Fault[C]) *MethodStub[C] {
 	return s
 }
 
-// FaultsWhen arms a fault that fires on every nth call for which pred returns
-// true, with err, and returns the stub. The count covers the calls that pred
+// FaultsWhen arms a fault that fails every nth call for which pred returns
+// true with err, and returns the stub. The count covers the calls that pred
 // selects alone.
 func (s *MethodStub[C]) FaultsWhen(pred func(C) bool, err error, n int) *MethodStub[C] {
 	s.fault = fault.And[C](fault.NewPredicateFault[C](err, pred), fault.NewCountedFault[C](err, n))
 	return s
 }
 
-// FaultsWithProbability arms a fault that fires with the probability p on each
-// call with err, and returns the stub. The fault takes its random numbers from
+// FaultsWithProbability arms a fault that fails each call with err at the
+// probability p, and returns the stub. The fault takes its random numbers from
 // the source of [MethodStub.WithRandSource], or from the global source of
 // math/rand/v2 without one.
 func (s *MethodStub[C]) FaultsWithProbability(p float64, err error) *MethodStub[C] {
@@ -97,15 +97,15 @@ func (s *MethodStub[C]) FaultsWithProbability(p float64, err error) *MethodStub[
 	return s
 }
 
-// FaultsUntil arms a fault that fires with err while the clock of the stub is
-// before deadline, and returns the stub.
+// FaultsUntil arms a fault that fails each call with err while the clock of
+// the stub is before deadline, and returns the stub.
 func (s *MethodStub[C]) FaultsUntil(deadline time.Time, err error) *MethodStub[C] {
 	s.fault = fault.NewWindowedFault[C](err, deadline)
 	return s
 }
 
-// FaultsFor arms a fault that fires with err for the duration d from the
-// current instant of the clock of the stub, and returns the stub.
+// FaultsFor arms a fault that fails each call with err for the duration d from
+// the current instant of the clock of the stub, and returns the stub.
 func (s *MethodStub[C]) FaultsFor(d time.Duration, err error) *MethodStub[C] {
 	s.fault = fault.NewWindowedFault[C](err, fault.ClockNow(s.clock).Add(d))
 	return s
@@ -157,14 +157,14 @@ func (s *MethodStub[C]) Clock() assert.Clock {
 	return s.clock
 }
 
-// ShouldFaultFor asks the armed fault whether it fires for call, and returns
-// the error of the fault where it fires.
+// ShouldFaultFor asks the armed fault whether it fails call, and returns the
+// error of the fault for a call that fails.
 func (s *MethodStub[C]) ShouldFaultFor(call C) (bool, error) {
 	if s.fault == nil {
 		return false, nil
 	}
 	//nolint:wrapcheck // the code under test matches the armed error with errors.Is as the test armed it
-	return s.fault.ShouldFire(call, s.clock)
+	return s.fault.ShouldTrigger(call, s.clock)
 }
 
 // FailUnexpectedCall stops the test in strict mode, with the name of the
@@ -177,8 +177,8 @@ func (s *MethodStub[C]) FailUnexpectedCall(call C) {
 	}
 }
 
-// FailUnfaultable stops the test for a fault that fired on a method without
-// an error result, with the name of the method, the error and the call. The
+// FailUnfaultable stops the test for a fault that failed a call of a method
+// without an error result, with the name of the method, the error and the call. The
 // method has no place for the error, so a double that dropped it would let a
 // test of a fault pass without the fault.
 func (s *MethodStub[C]) FailUnfaultable(call C, err error) {

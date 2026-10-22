@@ -31,7 +31,7 @@ type Arms[C, R any] struct {
 // Answer returns the results of one call of the method of s, and records the
 // call. The results are those of the first arm that applies:
 //
-//  1. The fault that the test armed, where it fires.
+//  1. The fault that the test armed, for a call that the fault fails.
 //  2. The function of the method.
 //  3. The fixed result of the method.
 //  4. The default results of the method.
@@ -39,15 +39,15 @@ type Arms[C, R any] struct {
 //
 // Answer first sleeps the latency of s, so a test that drives a clock sees
 // the call blocked where a real implementation is. It records the call on
-// each arm, after it stamps the results onto it. A fault that fires on a
-// method without an error result stops the test through
+// each arm, after it stamps the results onto it. A fault that fails a call of
+// a method without an error result stops the test through
 // [MethodStub.FailUnfaultable]. A call that the test did not configure
 // stops the test in strict mode through [MethodStub.FailUnexpectedCall], and
 // still returns the default or the zero results.
 func Answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R]) R {
 	s.SleepLatency()
 
-	if fired, err := s.ShouldFaultFor(*call); fired {
+	if failed, err := s.ShouldFaultFor(*call); failed {
 		if arms.Fault != nil {
 			return answer(s, call, arms, arms.Fault(err))
 		}
