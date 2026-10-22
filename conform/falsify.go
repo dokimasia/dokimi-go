@@ -23,16 +23,20 @@ import "testing"
 // one. Otherwise it runs each check as a parallel test of t, which has the
 // identity of the check without the name of the declaration, as [Run] names
 // it. The test of a check fails unless the planted defect fails the check at
-// the assertion whose message is the statement of the check.
+// the assertion whose message is the statement of the check. The test also
+// applies every other check of the suite to the defect, and fails when the
+// defect fails one of them. Checks that share one defect accept the failures
+// of each other.
 func Falsify[S any](t T, suite Suite[S]) {
 	t.Helper()
 	cfg := configure[S](nil)
-	stopAt(t, problems(suite.Declaration+"Suite", suite.Checks, nil))
+	cfg.using = suite.Using
+	stopAt(t, problems(suite.Declaration+"Suite", suite.Checks, nil, nil))
 	for _, c := range suite.Checks {
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
-			c.falsify(t, cfg)
+			c.falsify(t, cfg, suite.Checks)
 		})
 	}
 }

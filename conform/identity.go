@@ -30,6 +30,13 @@ func (id ID[S]) declaration() string {
 	return declaration
 }
 
+// callable returns the callable of the check, such as Store.Get for
+// Store.Get/keeps-the-value.
+func (id ID[S]) callable() Callable[S] {
+	callable, _, _ := strings.Cut(string(id), "/")
+	return Callable[S](callable)
+}
+
 // subtest returns the name of the test of the check: the identity without the
 // name of the declaration, such as Get/keeps-the-value for
 // Store.Get/keeps-the-value. The name of the test of the suite contains the
@@ -51,4 +58,14 @@ type Callable[S any] string
 // segment, such as Store.Get/keeps-the-value for keeps-the-value.
 func (c Callable[S]) Check(segment string) ID[S] {
 	return ID[S](string(c) + "/" + segment)
+}
+
+// method returns the name of the callable without its declaration, such as
+// Get for Store.Get. The callable of a function, such as Slug, is its own
+// name.
+func (c Callable[S]) method() string {
+	if _, method, named := strings.Cut(string(c), "."); named {
+		return method
+	}
+	return string(c)
 }

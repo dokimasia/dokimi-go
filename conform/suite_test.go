@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/expect"
 
 	"go.dokimi.dev/conform"
 )
@@ -67,6 +68,24 @@ func TestSuite(t *testing.T) {
 				conform.Excuse(storeGet.Check("keeps-the-value"), "the store keeps no values"))
 		})
 
+		t.Run("applies each check that the options do not excuse", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Int32
+			c := misses()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				applied.Add(1)
+				apply(h)
+			}
+			t.Cleanup(func() {
+				assert.Equal(t, applied.Load(), int32(2),
+					"the application applies the check to its defect and to the subject")
+			})
+			conform.Run(t, empty, newStore, conform.With(keeps(), c),
+				conform.Excuse(storeGet.Check("keeps-the-value"), "the store keeps no values"))
+		})
+
 		t.Run("reports the reason of the excusal in the skip of the check", func(t *testing.T) {
 			t.Parallel()
 
@@ -108,6 +127,37 @@ func TestSuite(t *testing.T) {
 		})
 	})
 
+	t.Run("Cases", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("runs a property check over the number of cases of the option", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder()
+			keepsEvery().Run(r, newStore, conform.Cases[Store](5))
+			cases, counted := detailOf(t, r, "cases").(float64)
+			assert.True(t, counted, "the record of the run counts its cases")
+			expect.True(t, cases < 10, "the run aims for 5 valid cases")
+		})
+
+		t.Run("runs a property check over one case", func(t *testing.T) {
+			t.Parallel()
+
+			keepsEvery().Run(t, newStore, conform.Cases[Store](1))
+		})
+
+		t.Run("ends a check with a fault for fewer than one case", func(t *testing.T) {
+			t.Parallel()
+
+			r := recorded(func(tb assert.TB) { keepsEvery().Run(tb, newStore, conform.Cases[Store](0)) })
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "the check ends with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a setting")
+			expect.Equal(t, faults[0].Error(), "conform: the application has an invalid setting: the option "+
+				"Cases asks for 0 cases, and a property run needs at least 1", "the fault contains the setting")
+		})
+	})
+
 	t.Run("Restartable", func(t *testing.T) {
 		t.Parallel()
 
@@ -129,5 +179,49 @@ func TestSuite(t *testing.T) {
 			}
 			c.Run(t, newStore, conform.Restartable(restart))
 		})
+	})
+}
+
+// The variable DOKIMI_SEED of the process seeds each property run of an
+// application and the random source of each check that runs once. The test
+// sets the variable, so neither it nor its subtests run in parallel.
+func TestSuiteSeed(t *testing.T) {
+	const seedEnv = "DOKIMI_SEED"
+	const invalid = `DOKIMI_SEED is "seven", and a seed is a decimal number below 2^64`
+
+	t.Run("seeds each property run of an application", func(t *testing.T) {
+		t.Setenv(seedEnv, "7")
+		r := assert.NewRecorder()
+		keepsEvery().Run(r, newStore)
+		assert.Equal(t, detailOf(t, r, "seed"), any("7"), "the property run takes the seed of DOKIMI_SEED")
+	})
+
+	t.Run("seeds the random source of a check that runs once", func(t *testing.T) {
+		t.Setenv(seedEnv, "7")
+		var values []uint64
+		for _, c := range []conform.Check[Store]{keeps(), misses()} {
+			c.Apply = func(h *conform.Handle[Store]) { values = append(values, h.Rand().Uint64()) }
+			c.Run(t, newStore)
+		}
+		assert.Length(t, values, 2, "each check draws one value")
+		expect.Equal(t, values[0], values[1], "two checks draw the same value under one seed")
+	})
+
+	t.Run("ends a check with a fault for a seed that is no number", func(t *testing.T) {
+		t.Setenv(seedEnv, "seven")
+		r := recorded(func(tb assert.TB) { keepsEvery().Run(tb, newStore) })
+		faults := r.Faults()
+		assert.Length(t, faults, 1, "the check ends with one fault")
+		expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a setting")
+		expect.Equal(t, faults[0].Error(), "conform: the application has an invalid setting: "+invalid,
+			"the fault contains the variable and its value")
+	})
+
+	t.Run("reports a seed that is no number as a problem of an application", func(t *testing.T) {
+		t.Setenv(seedEnv, "seven")
+		suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keeps()}}
+		a := application(func(t conform.T) { conform.Run(t, suite, newStore) })
+		assert.Equal(t, a.errors, []string{invalid}, "the application reports the seed")
+		assert.Empty(t, a.tests, "the application runs no check")
 	})
 }

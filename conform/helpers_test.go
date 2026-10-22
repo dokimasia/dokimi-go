@@ -4,16 +4,21 @@
 package conform_test
 
 import (
+	"context"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
+	"runtime/coverage"
 	"strings"
 	"sync"
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
@@ -91,6 +96,140 @@ func keeps() conform.Check[Store] {
 	}
 }
 
+// inventive is a Store in memory that finds a value under every key, the
+// planted defect of the check of misses.
+type inventive struct{ *memory }
+
+// Get returns the value under the key, and an invented value under a key
+// without one.
+func (s inventive) Get(key string) (string, bool) {
+	if value, found := s.memory.Get(key); found {
+		return value, true
+	}
+	return "invented", true
+}
+
+// scrambled is a Store that finds one value under every key. It fails the
+// checks of keeps and of misses.
+type scrambled struct{}
+
+// Put drops the value.
+func (scrambled) Put(string, string) {}
+
+// Get finds the value scrambled.
+func (scrambled) Get(string) (string, bool) { return "scrambled", true }
+
+// missesUnknownKeys is the statement of the check of misses.
+const missesUnknownKeys = "Get finds no value under a key that Put did not store"
+
+// misses returns the check that Get finds no value under a key that Put did
+// not store. Its planted defect is inventive, which passes the check of keeps.
+func misses() conform.Check[Store] {
+	return conform.Check[Store]{
+		ID:        storeGet.Check("misses-unknown-keys"),
+		Statement: missesUnknownKeys,
+		Apply: func(h *conform.Handle[Store]) {
+			_, found := h.Subject().Get("absent")
+			assert.False(h, found, h.Statement())
+		},
+		Defect: func(*conform.Handle[Store]) Store { return inventive{newMemory()} },
+	}
+}
+
+// scrambles is the planted defect scrambled, which two checks can share.
+func scrambles(*conform.Handle[Store]) Store { return scrambled{} }
+
+// keepsEveryValue is the statement of the property check of keepsEvery.
+const keepsEveryValue = "Get returns the value that Put stored under any key"
+
+// keepsEvery returns the property check that Get returns the value that Put
+// stored under a key of each case. Its planted defect is forgetful.
+func keepsEvery() conform.Check[Store] {
+	return conform.Check[Store]{
+		ID:        storeGet.Check("keeps-every-value"),
+		Statement: keepsEveryValue,
+		Property: func(h *conform.Handle[Store], c *prop.Case) {
+			key := c.Draw(prop.String(), "key")
+			s := h.Subject()
+			s.Put(key, "v")
+			got, _ := s.Get(key)
+			assert.Equal(h, got, "v", h.Statement())
+		},
+		Defect: func(*conform.Handle[Store]) Store { return forgetful{} },
+	}
+}
+
+// kind is a type over int, of which a suite declares two values.
+type kind int
+
+// declared is the statement of the property check of declaredKinds.
+const declared = "the kind is one of the declared kinds"
+
+// declaredKinds returns a suite with a property check that every kind that its
+// cases draw is 1 or 2. It overrides the generator of kind through Using.
+func declaredKinds() conform.Suite[Store] {
+	c := keepsEvery()
+	property := c.Property
+	c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+		k := pc.Draw(prop.Of[kind](), "kind")
+		assert.True(h, k == 1 || k == 2, declared)
+		property(h, pc)
+	}
+	return conform.Suite[Store]{
+		Declaration: "Store",
+		Checks:      []conform.Check[Store]{c},
+		Using:       []prop.Option{prop.Using(prop.SampledFrom[kind](1, 2))},
+	}
+}
+
+// spender is a Store whose Get calls spend and finds no value, the planted
+// defect of a ceiling of Get.
+type spender struct{ spend func() }
+
+// Put drops the value.
+func (spender) Put(string, string) {}
+
+// Get calls spend and finds no value.
+func (s spender) Get(string) (string, bool) {
+	s.spend()
+	return "", false
+}
+
+// getCalls generates calls of Get with a key of each case.
+var getCalls = prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
+	key := c.Draw(prop.String(), "key")
+	return func(_ context.Context, s Store) error {
+		_, _ = s.Get(key)
+		return nil
+	}
+})
+
+// budgeted returns a suite of Store with the call of Get under budget.
+func budgeted(budget conform.Budget) conform.Suite[Store] {
+	return conform.Suite[Store]{
+		Declaration: "Store",
+		Calls: []conform.Call[Store]{{
+			Callable: storeGet,
+			Calls:    getCalls,
+			Budget:   budget,
+			Over:     func(_ *conform.Handle[Store], spend func()) Store { return spender{spend: spend} },
+		}},
+	}
+}
+
+// detailOf returns the field of the detail of the call record of the first
+// assertion that r recorded.
+func detailOf(t *testing.T, r *assert.Recorder, field string) any {
+	t.Helper()
+	records := r.Records()
+	assert.NotEmpty(t, records, "the recorder keeps the call record of the property run")
+	var record struct {
+		Detail map[string]any `json:"detail"`
+	}
+	assert.NoError(t, json.Unmarshal([]byte(records[0]), &record), "the call record is JSON")
+	return record.Detail[field]
+}
+
 // newStore is the factory of the subjects of the specs.
 func newStore(*conform.Handle[Store]) Store { return newMemory() }
 
@@ -160,18 +299,51 @@ func application(apply func(t conform.T)) *applying {
 	return a
 }
 
+// metaWritten writes the coverage meta-data of the test binary once, into the
+// directory of its coverage, before the first child process runs. A child
+// that finds the meta-data there writes none of its own. Two children that
+// write it in one nanosecond write one temporary file, because the runtime
+// names that file by the time alone.
+var metaWritten sync.Once
+
 // childOutput runs the test of t alone in a child process of the test
 // binary, with childEnv set to the name of the test, and returns the output
-// of the child process.
+// of the child process. The child process runs in a temporary directory, so
+// the store of a failing property run writes no file into the package.
 func childOutput(t *testing.T) string {
 	t.Helper()
-	levels := strings.Split(t.Name(), "/")
+	return childOutputWith(t)
+}
+
+// childOutputWith runs the test of t as childOutput does, with the variables
+// env added to the environment of the child process.
+func childOutputWith(t *testing.T, env ...string) string {
+	t.Helper()
+	return childRun(t, t.Name(), env...)
+}
+
+// childRun runs the test name alone in a child process of the test binary,
+// with childEnv set to name and the variables env added to the environment
+// of the child process, and returns the output of the child process. The
+// child process runs in a temporary directory, as childOutput states. In a
+// run with coverage, the child writes its coverage where the parent writes
+// its own.
+func childRun(t *testing.T, name string, env ...string) string {
+	t.Helper()
+	binary, err := os.Executable()
+	assert.NoError(t, err, "the test binary has a path")
+	levels := strings.Split(name, "/")
 	for i, level := range levels {
 		levels[i] = "^" + regexp.QuoteMeta(level) + "$"
 	}
-	child := exec.CommandContext(t.Context(), os.Args[0],
-		"-test.run="+strings.Join(levels, "/"), "-test.v", "-test.timeout=1m")
-	child.Env = append(os.Environ(), childEnv+"="+t.Name())
+	args := []string{"-test.run=" + strings.Join(levels, "/"), "-test.v", "-test.timeout=1m"}
+	if dir := flag.Lookup("test.gocoverdir"); dir != nil && dir.Value.String() != "" {
+		metaWritten.Do(func() { _ = coverage.WriteMetaDir(dir.Value.String()) })
+		args = append(args, "-test.gocoverdir="+dir.Value.String())
+	}
+	child := exec.CommandContext(t.Context(), binary, args...)
+	child.Dir = t.TempDir()
+	child.Env = append(append(os.Environ(), childEnv+"="+name), env...)
 	out, _ := child.CombinedOutput()
 	t.Logf("the output of the child process:\n%s", out)
 	return string(out)

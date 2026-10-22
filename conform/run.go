@@ -22,39 +22,44 @@ type T interface {
 // Run applies each check of the suite, and each check that opts add, to a
 // fresh subject of newSubject.
 //
-// Run reports every problem of the checks and the options on t, and stops t
-// when it finds one. Otherwise it runs each check as a parallel test of t.
-// The test has the identity of the check without the name of the
+// Run reports every problem of the checks, the calls and the options on t, and
+// stops t when it finds one. The options may excuse any check of the
+// application, a ceiling of a budget included, so each entry point of a suite
+// takes the same options. Otherwise Run runs each check as a parallel test of
+// t. The test has the identity of the check without the name of the
 // declaration, such as Get/keeps-the-value, because the name of t contains
 // the declaration. The test of an excused check skips with the reason of the
 // excusal. The test of a check that opts add falsifies the check before it
-// applies the check to the subject.
+// applies the check to the subject, as [Falsify] does, against every other
+// check of the application that opts do not excuse.
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	cfg := configure(opts)
+	cfg.using = suite.Using
+	stopAt(t, validate("Run"+suite.Declaration+"Suite", suite, cfg))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
-	stopAt(t, problems("Run"+suite.Declaration+"Suite", checks, cfg.excusals))
-	excused := make(map[ID[S]]string, len(cfg.excusals))
-	for _, e := range cfg.excusals {
-		excused[e.id] = e.reason
-	}
 	for i, c := range checks {
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
-			if reason, ok := excused[c.ID]; ok {
-				t.Skipf("%s is excused: %s", c.ID, reason)
-			}
+			cfg.skipExcused(t, c.ID)
 			if i >= len(suite.Checks) {
-				c.falsify(t, cfg)
+				c.falsify(t, cfg, checks)
 			}
 			c.run(t, newSubject, cfg)
 		})
 	}
 }
 
+// failer is the part of a test or a fuzz test that stopAt fails.
+type failer interface {
+	Helper()
+	Errorf(format string, args ...any)
+	FailNow()
+}
+
 // stopAt reports each problem on t, and stops t when it finds one.
-func stopAt(t T, found []string) {
+func stopAt(t failer, found []string) {
 	t.Helper()
 	for _, problem := range found {
 		t.Errorf("%s", problem)
@@ -64,12 +69,24 @@ func stopAt(t T, found []string) {
 	}
 }
 
+// validate returns the problems of the application name of the suite. They
+// are the problems of the checks of the suite and of the checks that the
+// option With adds, of the excusals, of the calls and their budgets, and of
+// the settings. An excusal may name any check of the application, so each
+// entry point of a suite takes the same options.
+func validate[S any](name string, suite Suite[S], cfg *config[S]) []string {
+	checks := append(slices.Clip(suite.Checks), cfg.checks...)
+	found := problems(name, checks, cfg.excusals, ceilingIDs(suite.Calls, cfg.ceilings))
+	return append(append(found, budgetProblems(name, suite.Calls, cfg.ceilings)...), cfg.invalid()...)
+}
+
 // problems returns the problems of the checks and the excusals of the
-// application name.
-func problems[S any](name string, checks []Check[S], excusals []excusal[S]) []string {
+// application name. An excusal may name a check of checks or an identity of
+// known, such as the check of a ceiling of a budget.
+func problems[S any](name string, checks []Check[S], excusals []excusal[S], known []ID[S]) []string {
 	var found []string
-	seen := make(map[ID[S]]bool, len(checks))
-	ids := make([]string, 0, len(checks))
+	seen := make(map[ID[S]]bool, len(checks)+len(known))
+	ids := make([]string, 0, len(checks)+len(known))
 	for _, c := range checks {
 		if !grammar.MatchString(string(c.ID)) {
 			found = append(found, fmt.Sprintf("the identity %q of a check does not have the form "+
@@ -78,8 +95,11 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S]) []st
 		if c.Statement == "" {
 			found = append(found, fmt.Sprintf("the check %s has no statement", c.ID))
 		}
-		if c.Apply == nil {
-			found = append(found, fmt.Sprintf("the check %s has no function Apply", c.ID))
+		switch {
+		case c.Apply == nil && c.Property == nil:
+			found = append(found, fmt.Sprintf("the check %s has no function Apply and no function Property", c.ID))
+		case c.Apply != nil && c.Property != nil:
+			found = append(found, fmt.Sprintf("the check %s has both a function Apply and a function Property", c.ID))
 		}
 		if c.Defect == nil {
 			found = append(found, fmt.Sprintf("the check %s has no planted defect", c.ID))
@@ -89,6 +109,12 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S]) []st
 		}
 		seen[c.ID] = true
 		ids = append(ids, string(c.ID))
+	}
+	for _, id := range known {
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, string(id))
+		}
 	}
 	for _, e := range excusals {
 		if !seen[e.id] {

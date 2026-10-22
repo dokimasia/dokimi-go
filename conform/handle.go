@@ -5,38 +5,52 @@ package conform
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/prop"
 )
 
 // origin is the instant at which the clock of each handle starts.
 var origin = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+// ErrOption is the fault of a door of a handle whose option the application
+// does not pass, such as [Handle.Reference] without the option [Reference].
+var ErrOption = errors.New("conform: the application does not pass the option of a door")
+
+// ErrClock is the fault of [Handle.Advance] where no subject of the check read
+// the clock of its handle.
+var ErrClock = errors.New("conform: no subject reads the clock of the handle")
 
 // seat is the seat of a handle. The handle embeds it, so the promoted Helper
 // marks the frame of the assertion that calls it, and a failure on a test
 // reports the line of the check.
 type seat interface{ assert.TB }
 
-// Handle is the handle of one check. It is the seat of the assertions of the
-// check, it builds the subjects of the check, and it supplies the machinery
-// of the check. It implements [assert.TB], [assert.Reporter] and
-// [assert.Clocked], and its method Unwrap returns the seat of the check.
+// Handle is the handle of one check, or of one case of a property check. It
+// is the seat of the assertions of the check, it builds the subjects of the
+// check, and it supplies the machinery of the check. It implements
+// [assert.TB], [assert.Reporter] and [assert.Clocked], and its method Unwrap
+// returns the seat of the check.
 //
 // A failure on the handle fails the seat of the check. The seat is the test
-// of the check under [Run] and [Falsify].
+// of the check under [Run] and [Falsify], and the case under a property
+// check.
 type Handle[S any] struct {
 	seat
 
-	check   *Check[S]
-	source  func(h *Handle[S]) S
-	config  *config[S]
-	clock   *assert.Controlled
-	message atomic.Pointer[string]
+	check  *Check[S]
+	source func(h *Handle[S]) S
+	config *config[S]
+	clock  *assert.Controlled
+	random rand.Source
+	kept   *atomic.Pointer[string]
 
 	// subject is the subject of the check once built is true. mu guards
 	// both.
@@ -49,9 +63,24 @@ type Handle[S any] struct {
 }
 
 // newHandle returns the handle of the check c on tb. source builds the
-// subjects of the check.
-func newHandle[S any](tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S]) *Handle[S] {
-	return &Handle[S]{seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin)}
+// subjects of the check, and kept keeps the message of the first failure of
+// the check outside an assertion. A handle on a case of the property engine
+// draws its random values from the case. Any other handle draws them from the
+// seed of cfg, or from the identity of c without a seed.
+func newHandle[S any](
+	tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S], kept *atomic.Pointer[string],
+) *Handle[S] {
+	h := &Handle[S]{seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin), kept: kept}
+	if pc, isCase := tb.(*prop.Case); isCase {
+		h.random = pc.Rand()
+	} else {
+		seed := seedOf(string(c.ID))
+		if cfg.seeded {
+			seed = cfg.seed
+		}
+		h.random = rand.NewPCG(seed, seed)
+	}
+	return h
 }
 
 // Subject returns the subject of the check. The first call builds the
@@ -75,15 +104,16 @@ func (h *Handle[S]) New() S {
 }
 
 // Reference returns a fresh reference implementation from the option
-// [Reference]. Without the option it stops the check, and it returns the zero
-// value to a seat that goes on after a fatal failure.
+// [Reference]. Without the option it ends the check with a fault that wraps
+// [ErrOption], and it returns the zero value to a seat that takes the fault
+// and goes on.
 func (h *Handle[S]) Reference() S {
 	h.Helper()
 	if h.config.reference == nil {
-		h.Fatalf("%[1]s calls Reference without the option conform.Reference. "+
+		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s calls Reference without the option conform.Reference. "+
 			"Pass the option to the application:\n"+
-			"\tconform.Reference(func(h *conform.Handle[%[2]v]) %[2]v { … })",
-			h.check.ID, reflect.TypeFor[S]())
+			"\tconform.Reference(func(h *conform.Handle[%[3]v]) %[3]v { … })",
+			ErrOption, h.check.ID, reflect.TypeFor[S]()))
 		var zero S
 		return zero
 	}
@@ -91,15 +121,15 @@ func (h *Handle[S]) Reference() S {
 }
 
 // Second returns a fresh second subject from the option [Second]. Without the
-// option it stops the check, and it returns the zero value to a seat that
-// goes on after a fatal failure.
+// option it ends the check with a fault that wraps [ErrOption], and it
+// returns the zero value to a seat that takes the fault and goes on.
 func (h *Handle[S]) Second() S {
 	h.Helper()
 	if h.config.second == nil {
-		h.Fatalf("%[1]s calls Second without the option conform.Second. "+
+		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s calls Second without the option conform.Second. "+
 			"Pass the option to the application:\n"+
-			"\tconform.Second(func(h *conform.Handle[%[2]v]) %[2]v { … })",
-			h.check.ID, reflect.TypeFor[S]())
+			"\tconform.Second(func(h *conform.Handle[%[3]v]) %[3]v { … })",
+			ErrOption, h.check.ID, reflect.TypeFor[S]()))
 		var zero S
 		return zero
 	}
@@ -107,15 +137,16 @@ func (h *Handle[S]) Second() S {
 }
 
 // Restart returns the subject s after a restart of its process, from the
-// option [Restartable]. Without the option it stops the check, and it returns
-// s to a seat that goes on after a fatal failure.
+// option [Restartable]. Without the option it ends the check with a fault
+// that wraps [ErrOption], and it returns s to a seat that takes the fault and
+// goes on.
 func (h *Handle[S]) Restart(s S) S {
 	h.Helper()
 	if h.config.restart == nil {
-		h.Fatalf("%[1]s calls Restart without the option conform.Restartable. "+
+		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s calls Restart without the option conform.Restartable. "+
 			"Pass the option to the application:\n"+
-			"\tconform.Restartable(func(h *conform.Handle[%[2]v], s %[2]v) %[2]v { … })",
-			h.check.ID, reflect.TypeFor[S]())
+			"\tconform.Restartable(func(h *conform.Handle[%[3]v], s %[3]v) %[3]v { … })",
+			ErrOption, h.check.ID, reflect.TypeFor[S]()))
 		return s
 	}
 	return h.build(func(h *Handle[S]) S { return h.config.restart(h, s) })
@@ -130,20 +161,30 @@ func (h *Handle[S]) Clock() assert.Clock {
 	return h.clock
 }
 
-// Advance moves the clock of the check forward by d. It stops the check when
-// no factory read the clock while it built a subject, because no subject then
-// reads the clock that Advance moves. It leaves the clock at its instant for a
-// seat that goes on after a fatal failure.
+// Advance moves the clock of the check forward by d. It ends the check with a
+// fault that wraps [ErrClock] when no factory read the clock while it built a
+// subject, because no subject then reads the clock that Advance moves. It
+// leaves the clock at its instant for a seat that takes the fault and goes on.
 func (h *Handle[S]) Advance(d time.Duration) {
 	h.Helper()
 	if !h.clockRead.Load() {
-		h.Fatalf("%[1]s advances a clock that the subject never read. "+
+		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s advances a clock that the subject never read. "+
 			"Build the subject on the clock of the handle:\n"+
-			"\tRun%[2]sSuiteFromHandle(t, func(h *conform.Handle[%[3]v]) %[3]v { … h.Clock() … })",
-			h.check.ID, h.check.ID.declaration(), reflect.TypeFor[S]())
+			"\tRun%[3]sSuiteFromHandle(t, func(h *conform.Handle[%[4]v]) %[4]v { … h.Clock() … })",
+			ErrClock, h.check.ID, h.check.ID.declaration(), reflect.TypeFor[S]()))
 		return
 	}
 	h.clock.Advance(d)
+}
+
+// Rand returns the random source of the check. In a property check it is the
+// source of the case, whose every value is a choice of the case, so a double
+// that draws from it replays and shrinks with the case. In any other check it
+// is a source of the seed of DOKIMI_SEED, or of the identity of the check
+// where the variable is not set, so each run of the check draws the same
+// values.
+func (h *Handle[S]) Rand() rand.Source {
+	return h.random
 }
 
 // Statement returns the statement of the check. The decisive assertion of the
@@ -197,11 +238,11 @@ func (h *Handle[S]) Fatalf(format string, args ...any) {
 	h.seat.Fatalf(format, args...)
 }
 
-// keep keeps the message of the first failure outside an assertion, which
-// the falsification of the check reports.
+// keep keeps the message of the first failure outside an assertion. The
+// falsification of the check reports that message.
 func (h *Handle[S]) keep(format string, args []any) {
 	message := fmt.Sprintf(format, args...)
-	h.message.CompareAndSwap(nil, &message)
+	h.kept.CompareAndSwap(nil, &message)
 }
 
 // build returns a subject of newSubject. A read of the clock while build runs

@@ -7,8 +7,10 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
@@ -95,6 +97,58 @@ func TestRun(t *testing.T) {
 				"the test of the check fails")
 		})
 
+		t.Run("passes the overrides of the suite to each property run", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, declaredKinds(), newStore)
+		})
+
+		t.Run("accepts an excusal of each ceiling of a budget", func(t *testing.T) {
+			t.Parallel()
+
+			budget := conform.Budget{
+				Allocs: new(uint64(1)), Bytes: new(uint64(64)), Latency: time.Millisecond, Mean: time.Microsecond,
+			}
+			a := application(func(t conform.T) {
+				conform.Run(t, conform.Suite[Store]{
+					Declaration: "Store",
+					Checks:      []conform.Check[Store]{keeps()},
+					Calls:       budgeted(budget).Calls,
+				}, newStore,
+					conform.Excuse(storeGet.Check("allocation-budget"), "Get copies the key"),
+					conform.Excuse(storeGet.Check("byte-budget"), "Get copies the key"),
+					conform.Excuse(storeGet.Check("latency-budget"), "Get waits for a lock"),
+					conform.Excuse(storeGet.Check("mean-latency-budget"), "Get waits for a lock"))
+			})
+			assert.Empty(t, a.errors, "the application reports no problem")
+			assert.Equal(t, a.tests, []string{"Get/keeps-the-value"}, "the application runs the check of the suite")
+		})
+
+		t.Run("falsifies an added check against the checks that the application does not excuse", func(t *testing.T) {
+			t.Parallel()
+
+			c := misses()
+			c.Defect = scrambles
+			conform.Run(t, suite, newStore, conform.With(c),
+				conform.Excuse(storeGet.Check("keeps-the-value"), "the defect of the added check scrambles each value"))
+		})
+
+		t.Run("falsifies an added check against the other checks of the application", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				c := misses()
+				c.Defect = scrambles
+				conform.Run(t, suite, newStore, conform.With(c))
+				return
+			}
+			out := childOutput(t)
+			assert.Contains(t, out, "--- FAIL: "+t.Name()+"/Get/misses-unknown-keys",
+				"the test of the added check fails")
+			assert.Contains(t, out, "\tStore.Get/keeps-the-value fails at the assertion equal",
+				"the failure lists the check of the suite that the defect of the added check fails")
+		})
+
 		tests := []struct {
 			name       string
 			giveSuite  conform.Suite[Store]
@@ -113,9 +167,24 @@ func TestRun(t *testing.T) {
 				wantErrors: []string{"the check Store.Get/keeps-the-value has no statement"},
 			},
 			{
-				name:       "reports a check without a function Apply",
-				giveSuite:  broken(func(c *conform.Check[Store]) { c.Apply = nil }),
-				wantErrors: []string{"the check Store.Get/keeps-the-value has no function Apply"},
+				name:      "reports a check without a function Apply or Property",
+				giveSuite: broken(func(c *conform.Check[Store]) { c.Apply = nil }),
+				wantErrors: []string{"the check Store.Get/keeps-the-value has no function Apply and no function " +
+					"Property"},
+			},
+			{
+				name: "reports a check with both a function Apply and a function Property",
+				giveSuite: broken(func(c *conform.Check[Store]) {
+					c.Property = func(*conform.Handle[Store], *prop.Case) {}
+				}),
+				wantErrors: []string{"the check Store.Get/keeps-the-value has both a function Apply and a function " +
+					"Property"},
+			},
+			{
+				name:       "reports the option Cases with fewer than one case",
+				giveSuite:  suite,
+				giveOpts:   []conform.Option[Store]{conform.Cases[Store](0)},
+				wantErrors: []string{"the option Cases asks for 0 cases, and a property run needs at least 1"},
 			},
 			{
 				name:       "reports a check without a planted defect",
@@ -151,6 +220,16 @@ func TestRun(t *testing.T) {
 				giveSuite:  suite,
 				giveOpts:   []conform.Option[Store]{conform.Excuse(storeGet.Check("keeps-the-value"), "")},
 				wantErrors: []string{"the excusal of Store.Get/keeps-the-value has no reason"},
+			},
+			{
+				name: "reports a problem of a call of the suite",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{})
+					s.Checks = []conform.Check[Store]{keeps()}
+					s.Calls[0].Over = nil
+					return s
+				}(),
+				wantErrors: []string{"the call of Store.Get has no planted defect"},
 			},
 			{
 				name:      "reports every problem before it stops",

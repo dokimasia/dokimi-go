@@ -3,6 +3,31 @@
 
 package conform
 
+import (
+	"context"
+	"errors"
+	"fmt"
+	"hash/fnv"
+	"os"
+	"strconv"
+	"testing"
+	"time"
+
+	"go.dokimi.dev/assert/prop"
+)
+
+// seedEnv is the variable of the environment that states the seed of the
+// property runs of an application, in decimal.
+const seedEnv = "DOKIMI_SEED"
+
+// ErrConfig is the fault of an application with an invalid setting, such as
+// a seed in DOKIMI_SEED that is no number.
+var ErrConfig = errors.New("conform: the application has an invalid setting")
+
+// ErrGenerated is the error that a generated function or a generated double
+// returns where its declaration states no error that it may return.
+var ErrGenerated = errors.New("conform: a generated error")
+
 // Suite contains the checks of one declaration whose subjects have the type
 // S.
 type Suite[S any] struct {
@@ -11,6 +36,57 @@ type Suite[S any] struct {
 
 	// Checks are the checks of the declaration.
 	Checks []Check[S]
+
+	// Calls are the call generators of the callables of the declaration,
+	// with their budgets.
+	Calls []Call[S]
+
+	// Using are the overrides of the generators of the property runs of the
+	// suite, such as the members of an enumeration. Each run of a property
+	// check of the suite takes them, in an application and in falsification.
+	Using []prop.Option
+}
+
+// Call is the call generator of one callable of a suite, with the budget that
+// the declaration states for the callable.
+type Call[S any] struct {
+	// Calls generates the calls of the callable, each with the inputs that
+	// its case draws. A call returns the error of the callable, and nil for a
+	// callable that returns none.
+	Calls prop.Generator[func(ctx context.Context, s S) error]
+
+	// Over returns the planted defect of a ceiling of the budget: a subject
+	// whose callable calls spend and returns its zero results. The runtime
+	// passes a spend that exceeds the ceiling, such as one allocation more
+	// than the ceiling admits.
+	Over func(h *Handle[S], spend func()) S
+
+	// Callable is the callable, such as Store.Get.
+	Callable Callable[S]
+
+	// Budget is the budget of the callable.
+	Budget Budget
+
+	// Concurrent reports that the callable admits concurrent calls, so a
+	// parallel benchmark measures it.
+	Concurrent bool
+}
+
+// Budget is the budget of one call of a callable. A nil Allocs or Bytes, and a
+// zero Latency or Mean, state no ceiling.
+type Budget struct {
+	// Allocs is the most heap allocations of one call.
+	Allocs *uint64
+
+	// Bytes is the most heap bytes that one call allocates.
+	Bytes *uint64
+
+	// Latency is the highest p99 latency of one call.
+	Latency time.Duration
+
+	// Mean is the highest mean latency of one call. A budget with a Mean has
+	// a Latency as well, because a mean alone passes a tail that grows.
+	Mean time.Duration
 }
 
 // Option configures an application of a suite. The zero Option configures
@@ -50,7 +126,25 @@ func Restartable[S any](restart func(h *Handle[S], s S) S) Option[S] {
 	return Option[S]{set: func(c *config[S]) { c.restart = restart }}
 }
 
-// config is the configuration that the options of an application set.
+// Cases sets the number of valid cases that each property run of an
+// application aims for, 100 by default. An application reports fewer than one
+// case as a problem.
+func Cases[S any](n int) Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.cases = &n }}
+}
+
+// Ceilings states the budget of the callable for one application, for a
+// callable whose declaration states no budget. Each ceiling of the budget is a
+// check of that application alone, which the application falsifies before it
+// applies it.
+func Ceilings[S any](callable Callable[S], budget Budget) Option[S] {
+	return Option[S]{set: func(c *config[S]) {
+		c.ceilings = append(c.ceilings, stated[S]{callable: callable, budget: budget})
+	}}
+}
+
+// config is the configuration that the options of an application and the
+// environment set.
 type config[S any] struct {
 	// reference, second and restart are the doors of the handle. A door
 	// without its option is nil.
@@ -58,11 +152,30 @@ type config[S any] struct {
 	second    func(h *Handle[S]) S
 	restart   func(h *Handle[S], s S) S
 
+	// cases is the number of valid cases of the option Cases, and nil
+	// without the option.
+	cases *int
+
+	// seedText is the value of DOKIMI_SEED where the value is no seed, and
+	// nil otherwise.
+	seedText *string
+
 	// checks are the checks that With adds.
 	checks []Check[S]
 
 	// excusals are the excusals of Excuse in the order of the options.
 	excusals []excusal[S]
+
+	// ceilings are the budgets of the option Ceilings in the order of the
+	// options.
+	ceilings []stated[S]
+
+	// using are the overrides of the suite.
+	using []prop.Option
+
+	// seed is the seed of DOKIMI_SEED where seeded is true.
+	seed   uint64
+	seeded bool
 }
 
 // excusal is the excusal of the check with the identity id.
@@ -71,7 +184,34 @@ type excusal[S any] struct {
 	reason string
 }
 
-// configure returns the configuration that opts set.
+// excused returns the reason of the excusal of the check with the identity
+// id, and whether the options excuse the check.
+func (c *config[S]) excused(id ID[S]) (string, bool) {
+	for _, e := range c.excusals {
+		if e.id == id {
+			return e.reason, true
+		}
+	}
+	return "", false
+}
+
+// skipExcused skips tb with the reason of the excusal when the options excuse
+// the check with the identity id.
+func (c *config[S]) skipExcused(tb testing.TB, id ID[S]) {
+	tb.Helper()
+	if reason, excused := c.excused(id); excused {
+		tb.Skipf("%s is excused: %s", id, reason)
+	}
+}
+
+// stated is the budget that the option Ceilings states for a callable.
+type stated[S any] struct {
+	callable Callable[S]
+	budget   Budget
+}
+
+// configure returns the configuration that opts and the variable DOKIMI_SEED
+// set.
 func configure[S any](opts []Option[S]) *config[S] {
 	c := &config[S]{}
 	for _, o := range opts {
@@ -79,5 +219,57 @@ func configure[S any](opts []Option[S]) *config[S] {
 			o.set(c)
 		}
 	}
+	if text, set := os.LookupEnv(seedEnv); set {
+		seed, err := strconv.ParseUint(text, 10, 64)
+		if err != nil {
+			c.seedText = &text
+		} else {
+			c.seed, c.seeded = seed, true
+		}
+	}
 	return c
+}
+
+// invalid returns the invalid settings of the configuration.
+func (c *config[S]) invalid() []string {
+	var found []string
+	if c.seedText != nil {
+		found = append(found, fmt.Sprintf("%s is %q, and a seed is a decimal number below 2^64", seedEnv, *c.seedText))
+	}
+	if c.cases != nil && *c.cases < 1 {
+		found = append(found, fmt.Sprintf("the option Cases asks for %d cases, and a property run needs at least 1",
+			*c.cases))
+	}
+	return found
+}
+
+// runOptions returns the options of a property run of an application: the
+// overrides of the suite, the cases of the option Cases and the seed of
+// DOKIMI_SEED. A run without a seed takes the seed of the profile of the
+// property engine.
+func (c *config[S]) runOptions() []prop.Option {
+	opts := c.using
+	if c.cases != nil {
+		opts = append(opts, prop.Cases(*c.cases))
+	}
+	if c.seeded {
+		opts = append(opts, prop.Seed(c.seed))
+	}
+	return opts
+}
+
+// hermetic returns the options of a property run of falsification for the
+// check with the identity id: the overrides of the suite, a hermetic run with
+// a seed of the identity, no store and no shrinking. So each falsification of
+// one check runs the same cases, writes no stored case, and ends at the first
+// failing case.
+func (c *config[S]) hermetic(id ID[S]) []prop.Option {
+	return append(c.using, prop.Hermetic(), prop.Seed(seedOf(string(id))), prop.Store(""), prop.Shrink(0))
+}
+
+// seedOf returns the seed of the text, its 64-bit FNV-1a hash.
+func seedOf(text string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(text))
+	return h.Sum64()
 }

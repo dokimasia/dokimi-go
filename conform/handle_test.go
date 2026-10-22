@@ -16,6 +16,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
@@ -115,14 +116,16 @@ func TestHandle(t *testing.T) {
 		{
 			name:     "Reference",
 			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Reference(), nil },
-			wantMessage: "Store.Get/keeps-the-value calls Reference without the option conform.Reference. " +
+			wantMessage: "conform: the application does not pass the option of a door: " +
+				"Store.Get/keeps-the-value calls Reference without the option conform.Reference. " +
 				"Pass the option to the application:\n" +
 				"\tconform.Reference(func(h *conform.Handle[conform_test.Store]) conform_test.Store { … })",
 		},
 		{
 			name:     "Second",
 			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Second(), nil },
-			wantMessage: "Store.Get/keeps-the-value calls Second without the option conform.Second. " +
+			wantMessage: "conform: the application does not pass the option of a door: " +
+				"Store.Get/keeps-the-value calls Second without the option conform.Second. " +
 				"Pass the option to the application:\n" +
 				"\tconform.Second(func(h *conform.Handle[conform_test.Store]) conform_test.Store { … })",
 		},
@@ -132,7 +135,8 @@ func TestHandle(t *testing.T) {
 				s := h.Subject()
 				return h.Restart(s), s
 			},
-			wantMessage: "Store.Get/keeps-the-value calls Restart without the option conform.Restartable. " +
+			wantMessage: "conform: the application does not pass the option of a door: " +
+				"Store.Get/keeps-the-value calls Restart without the option conform.Restartable. " +
 				"Pass the option to the application:\n" +
 				"\tconform.Restartable(func(h *conform.Handle[conform_test.Store], s conform_test.Store) " +
 				"conform_test.Store { … })",
@@ -142,7 +146,7 @@ func TestHandle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			t.Run("stops the check without its option", func(t *testing.T) {
+			t.Run("ends the check with a fault without its option", func(t *testing.T) {
 				t.Parallel()
 
 				var reached atomic.Bool
@@ -152,8 +156,11 @@ func TestHandle(t *testing.T) {
 					reached.Store(true)
 				}
 				r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
-				assert.Equal(t, r.Message(), tt.wantMessage, "the message contains the option of the door")
-				assert.False(t, reached.Load(), "the check ends at the door")
+				faults := r.Faults()
+				assert.Length(t, faults, 1, "the door ends the check with one fault")
+				expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door without its option")
+				expect.Equal(t, faults[0].Error(), tt.wantMessage, "the fault contains the option of the door")
+				expect.False(t, reached.Load(), "the check ends at the door")
 			})
 
 			t.Run("returns to a seat that goes on after a fatal failure", func(t *testing.T) {
@@ -175,7 +182,9 @@ func TestHandle(t *testing.T) {
 					c.Run(t, newStore)
 					return
 				}
-				assert.Matches(t, childOutput(t), `handle_test\.go:\d+: Store\.Get/keeps-the-value calls `+tt.name,
+				assert.Matches(t, childOutput(t),
+					`handle_test\.go:\d+: conform: the application does not pass the option of a door: `+
+						`Store\.Get/keeps-the-value calls `+tt.name,
 					"the failure has the line of the call of the door")
 			})
 		})
@@ -193,6 +202,74 @@ func TestHandle(t *testing.T) {
 				assert.True(h, read == h.Clock(), "the subject read the clock of the handle")
 			}
 			c.Run(t, onClock)
+		})
+
+		t.Run("gives each case of a property check a clock of its own", func(t *testing.T) {
+			t.Parallel()
+
+			var mu sync.Mutex
+			clocks := map[assert.Clock]bool{}
+			cases := 0
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				mu.Lock()
+				defer mu.Unlock()
+				clocks[h.Clock()] = true
+				cases++
+			}
+			c.Run(t, newStore)
+			expect.Equal(t, len(clocks), cases, "no two cases share a clock")
+		})
+	})
+
+	t.Run("Rand", func(t *testing.T) {
+		t.Parallel()
+
+		// first returns the first value of the random source of each run of
+		// the check c.
+		first := func(t *testing.T, c conform.Check[Store]) []uint64 {
+			t.Helper()
+
+			var mu sync.Mutex
+			var values []uint64
+			record := func(h *conform.Handle[Store]) {
+				mu.Lock()
+				defer mu.Unlock()
+				values = append(values, h.Rand().Uint64())
+			}
+			if c.Property != nil {
+				c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+					_ = pc.Draw(prop.String(), "key")
+					record(h)
+				}
+			} else {
+				c.Apply = record
+			}
+			c.Run(t, newStore)
+			return values
+		}
+
+		t.Run("draws the values of a property check from each case", func(t *testing.T) {
+			t.Parallel()
+
+			distinct := map[uint64]bool{}
+			for _, v := range first(t, keepsEvery()) {
+				distinct[v] = true
+			}
+			expect.True(t, len(distinct) > 1, "the cases of a property check draw other values")
+		})
+
+		t.Run("returns the same values in each run of a check", func(t *testing.T) {
+			t.Parallel()
+
+			expect.Equal(t, first(t, keeps()), first(t, keeps()), "two runs of one check draw the same values")
+		})
+
+		t.Run("returns other values for another check", func(t *testing.T) {
+			t.Parallel()
+
+			expect.NotEqual(t, first(t, keeps()), first(t, misses()), "two checks draw other values")
 		})
 	})
 
@@ -212,7 +289,7 @@ func TestHandle(t *testing.T) {
 			c.Run(t, onClock)
 		})
 
-		t.Run("stops the check when only the check read the clock", func(t *testing.T) {
+		t.Run("ends the check with a fault when only the check read the clock", func(t *testing.T) {
 			t.Parallel()
 
 			c := keeps()
@@ -222,12 +299,16 @@ func TestHandle(t *testing.T) {
 				h.Advance(time.Minute)
 			}
 			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
-			assert.Equal(t, r.Message(),
-				"Store.Get/keeps-the-value advances a clock that the subject never read. "+
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "Advance ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrClock, "the fault is the fault of a clock that no subject read")
+			expect.Equal(t, faults[0].Error(),
+				"conform: no subject reads the clock of the handle: "+
+					"Store.Get/keeps-the-value advances a clock that the subject never read. "+
 					"Build the subject on the clock of the handle:\n"+
 					"\tRunStoreSuiteFromHandle(t, func(h *conform.Handle[conform_test.Store]) conform_test.Store "+
 					"{ … h.Clock() … })",
-				"the message contains the call that builds the subject on the clock")
+				"the fault contains the call that builds the subject on the clock")
 		})
 
 		t.Run("leaves the clock at its instant for a seat that goes on after a fatal failure", func(t *testing.T) {
@@ -272,6 +353,21 @@ func TestHandle(t *testing.T) {
 			c.Run(assert.NewRecorder().WithContext(ctx), newStore)
 			assert.Equal(t, got, any("the context of the seat"), "the handle returns the context of its seat")
 		})
+
+		t.Run("returns the context of the case in a property check", func(t *testing.T) {
+			t.Parallel()
+
+			var mismatched atomic.Bool
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				if h.Context() != pc.Context() {
+					mismatched.Store(true)
+				}
+			}
+			c.Run(t, newStore)
+			expect.False(t, mismatched.Load(), "the handle of each case returns the context of the case")
+		})
 	})
 
 	t.Run("Unwrap", func(t *testing.T) {
@@ -294,6 +390,57 @@ func TestHandle(t *testing.T) {
 			r := assert.NewRecorder()
 			keeps().Run(r, newStore)
 			assert.Length(t, r.Records(), 1, "the seat keeps the call record of the one assertion of the check")
+		})
+
+		t.Run("returns the case in a property check", func(t *testing.T) {
+			t.Parallel()
+
+			var mismatched atomic.Bool
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				if h.Unwrap() != assert.TB(pc) {
+					mismatched.Store(true)
+				}
+			}
+			c.Run(t, newStore)
+			expect.False(t, mismatched.Load(), "the handle of each case wraps the case")
+		})
+	})
+
+	t.Run("Errorf", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("reports a failure outside an assertion and returns", func(t *testing.T) {
+			t.Parallel()
+
+			var reached atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Errorf("the store is %s", "slow")
+				reached.Store(true)
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			expect.Equal(t, r.Message(), "the store is slow", "the seat takes the message of the failure")
+			expect.True(t, reached.Load(), "Errorf returns to the check")
+		})
+	})
+
+	t.Run("Fatalf", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("reports a failure outside an assertion and stops the check", func(t *testing.T) {
+			t.Parallel()
+
+			var reached atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Fatalf("the store is %s", "closed")
+				reached.Store(true)
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			expect.Equal(t, r.Message(), "the store is closed", "the seat takes the message of the failure")
+			expect.False(t, reached.Load(), "Fatalf stops the check")
 		})
 	})
 
