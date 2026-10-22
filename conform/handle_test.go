@@ -274,6 +274,29 @@ func TestHandle(t *testing.T) {
 		})
 	})
 
+	t.Run("Unwrap", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the seat of the check", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder()
+			var got assert.TB
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) { got = h.Unwrap() }
+			c.Run(r, newStore)
+			assert.Equal(t, got, assert.TB(r), "the handle wraps the seat of the check", assert.ByIdentity())
+		})
+
+		t.Run("writes the call record of an assertion of the check to the seat", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder()
+			keeps().Run(r, newStore)
+			assert.Length(t, r.Records(), 1, "the seat keeps the call record of the one assertion of the check")
+		})
+	})
+
 	t.Run("Report", func(t *testing.T) {
 		t.Parallel()
 

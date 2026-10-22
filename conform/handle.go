@@ -25,7 +25,7 @@ type seat interface{ assert.TB }
 // Handle is the handle of one check. It is the seat of the assertions of the
 // check, it builds the subjects of the check, and it supplies the machinery
 // of the check. It implements [assert.TB], [assert.Reporter] and
-// [assert.Clocked].
+// [assert.Clocked], and its method Unwrap returns the seat of the check.
 //
 // A failure on the handle fails the seat of the check. The seat is the test
 // of the check under [Run] and [Falsify].
@@ -155,6 +155,13 @@ func (h *Handle[S]) Statement() string {
 // Context returns the context of the seat of the check.
 func (h *Handle[S]) Context() context.Context {
 	return assert.Context(h.seat)
+}
+
+// Unwrap returns the seat of the check. An assertion on the handle writes its
+// call record to the seat. It calls Logf and each other method that the
+// handle does not declare on the seat.
+func (h *Handle[S]) Unwrap() assert.TB {
+	return h.seat
 }
 
 // Report passes the record of a failure to a seat that implements
