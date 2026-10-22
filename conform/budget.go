@@ -258,9 +258,10 @@ func ceilingIDs[S any](calls []Call[S], ceilings []stated[S]) []ID[S] {
 
 // budgetProblems returns the problems of the calls and the budgets of the
 // application name. A call needs a call generator and a planted defect, and
-// no two calls have one callable. A budget with a mean has a p99 as well. The
-// option Ceilings states one budget of a callable of a call, and only for a
-// callable whose declaration states none.
+// no two calls have one callable. A budget with a mean has a p99 as well, and
+// a warm-up of a budget is 0 iterations or more. The option Ceilings states
+// one budget of a callable of a call, and only for a callable whose
+// declaration states none.
 func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) []string {
 	var found []string
 	byCallable := make(map[Callable[S]]*Call[S], len(calls))
@@ -276,9 +277,14 @@ func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) [
 			found = append(found, fmt.Sprintf("two calls of %s have the callable %s", name, c.Callable))
 		}
 		byCallable[c.Callable] = c
-		if budget, _ := budgetOf(c, ceilings); budget.Mean != 0 && budget.Latency == 0 {
+		budget, _ := budgetOf(c, ceilings)
+		if budget.Mean != 0 && budget.Latency == 0 {
 			found = append(found, fmt.Sprintf("the budget of %s states a mean and no p99, and a mean alone passes "+
 				"a tail that grows", c.Callable))
+		}
+		if budget.Warmup != nil && *budget.Warmup < 0 {
+			found = append(found, fmt.Sprintf("the budget of %s states a warm-up of %d iterations, and a warm-up is "+
+				"0 iterations or more", c.Callable, *budget.Warmup))
 		}
 	}
 	seen := make(map[Callable[S]]bool, len(ceilings))

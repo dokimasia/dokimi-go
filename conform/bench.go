@@ -22,8 +22,8 @@ const (
 	falsifyCalls = 10
 )
 
-// errorsUnit is the unit of the share of the measured calls of a benchmark
-// that return an error.
+// errorsUnit is the unit of the share of the calls of a benchmark that return
+// an error.
 const errorsUnit = "errors/op"
 
 // benchSegment is the segment of the identity of the handle of a benchmark.
@@ -44,11 +44,12 @@ type B interface {
 // Bench builds one subject and takes 100 calls from the call generator of the
 // callable, with the overrides of the suite. The calls take the seed of
 // DOKIMI_SEED, or the seed of the identity of the callable where the variable
-// is not set. Each run of one seed measures the same calls. Bench makes each
-// call once before the measurement. It then repeats the calls in their order
-// under a contract of [bench.Start] with the ceilings of the budget, and
-// publishes the share of the measured calls that return an error as
-// errors/op.
+// is not set. Each run of one seed measures the same calls. Bench repeats the
+// calls in their order under a contract of [bench.Start] with the ceilings of
+// the budget. The contract first runs the Warmup of the budget, or each call
+// once for a budget without one, as the iterations of [bench.Contract.Warmup].
+// Bench publishes the share of the calls that return an error as errors/op,
+// the calls of the warm-up included.
 //
 // Bench reports every problem of the application on b, as [Run] does, and
 // stops b when it finds one. A callable without a call in the suite is a
@@ -73,8 +74,9 @@ func Bench[S any](b B, suite Suite[S], callable Callable[S], newSubject func(h *
 // Benchmark<Subject>Parallel.
 //
 // Each goroutine takes the calls in their order from an offset of its own. The
-// goroutines share no counter while they measure. BenchParallel reports every
-// problem as Bench does. A call whose Concurrent is false is a problem.
+// goroutines run the iterations of the warm-up between them before the
+// measurement, and share no counter while they measure. BenchParallel reports
+// every problem as Bench does. A call whose Concurrent is false is a problem.
 // The testing package calls the benchmark once for each b.N that it tries, as
 // it does for testing.B.RunParallel, and each call builds a subject of its
 // own.
@@ -90,12 +92,13 @@ func BenchParallel[S any](
 	h, calls, contract := measure(b, call, newSubject, cfg)
 	defer contract.End()
 	s, ctx := h.Subject(), h.Context()
-	var offsets, failed atomic.Int64
+	var offsets, made, failed atomic.Int64
 	contract.RunParallel(func(pb *bench.PB) {
-		_, errs := repeat(ctx, s, calls, int(offsets.Add(1))%len(calls), pb.Next)
+		n, errs := repeat(ctx, s, calls, int(offsets.Add(1))%len(calls), pb.Next)
+		made.Add(int64(n))
 		failed.Add(int64(errs))
 	})
-	b.ReportMetric(float64(failed.Load())/float64(b.N), errorsUnit)
+	b.ReportMetric(float64(failed.Load())/float64(made.Load()), errorsUnit)
 }
 
 // repeat makes the calls on s while next reports true. It starts at the call
@@ -138,9 +141,9 @@ func benchmarked[S any](
 
 // measure returns the handle, the calls and the contract of the benchmark of
 // the call on b. It falsifies each ceiling that the option Ceilings adds, and
-// states on the contract each ceiling that the options do not excuse. It then
-// builds the subject of the handle and makes each call once on it, before the
-// measurement.
+// states on the contract each ceiling that the options do not excuse. It also
+// states the Warmup of the budget, or one iteration of each call for a budget
+// without one.
 func measure[S any](
 	b B, call *Call[S], newSubject func(h *Handle[S]) S, cfg *config[S],
 ) (*Handle[S], []func(ctx context.Context, s S) error, *bench.Contract) {
@@ -165,11 +168,12 @@ func measure[S any](
 		seed = cfg.seed
 	}
 	calls := prop.Values(call.Calls, seed, benchCalls, cfg.using...)
-	h := newHandle(b, &Check[S]{ID: call.Callable.Check(benchSegment)}, newSubject, cfg, new(atomic.Pointer[string]))
-	s, ctx := h.Subject(), h.Context()
-	for _, c := range calls {
-		_ = c(ctx, s)
+	warmup := len(calls)
+	if budget.Warmup != nil {
+		warmup = *budget.Warmup
 	}
+	contract.Warmup(warmup)
+	h := newHandle(b, &Check[S]{ID: call.Callable.Check(benchSegment)}, newSubject, cfg, new(atomic.Pointer[string]))
 	return h, calls, contract
 }
 

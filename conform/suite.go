@@ -74,13 +74,18 @@ type Call[S any] struct {
 }
 
 // Budget is the budget of one call of a callable. A nil Allocs or Bytes, and a
-// zero Latency or Mean, state no ceiling.
+// zero Latency or Mean, state no ceiling. Warmup states no ceiling either.
 type Budget struct {
 	// Allocs is the most heap allocations of one call.
 	Allocs *uint64
 
 	// Bytes is the most heap bytes that one call allocates.
 	Bytes *uint64
+
+	// Warmup is the number of iterations that a benchmark of the callable
+	// runs before it measures, through [bench.Contract.Warmup]. A nil Warmup
+	// runs each call of the benchmark once.
+	Warmup *int
 
 	// Latency is the highest p99 latency of one call.
 	Latency time.Duration

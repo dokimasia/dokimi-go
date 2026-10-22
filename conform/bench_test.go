@@ -23,7 +23,7 @@ import (
 )
 
 // errorsUnit is the unit under which a benchmark publishes the share of its
-// measured calls that return an error.
+// calls that return an error.
 const errorsUnit = "errors/op"
 
 // benchtime is the flag of testing that states how long a benchmark runs.
@@ -67,15 +67,27 @@ func TestBench(t *testing.T) {
 			assert.Equal(t, built.Load(), int32(1), "the benchmark builds one subject")
 		})
 
-		t.Run("makes each call once before the measurement", func(t *testing.T) {
-			t.Parallel()
+		warmups := []struct {
+			name       string
+			giveWarmup *int
+			want       int32
+		}{
+			{name: "makes each call once before the measurement", want: 110},
+			{name: "runs the warm-up of its budget before the measurement", giveWarmup: new(5), want: 15},
+			{name: "measures from the first call under a warm-up of 0", giveWarmup: new(0), want: 10},
+		}
+		for _, tt := range warmups {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
 
-			var calls atomic.Int32
-			suite := budgeted(conform.Budget{})
-			suite.Calls[0].Calls = counted(&calls)
-			measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, newStore) })
-			assert.Equal(t, calls.Load(), int32(110), "the benchmark makes its 100 calls once, then 10 measured calls")
-		})
+				var calls atomic.Int32
+				suite := budgeted(conform.Budget{Warmup: tt.giveWarmup})
+				suite.Calls[0].Calls = counted(&calls)
+				measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, newStore) })
+				assert.Equal(t, calls.Load(), tt.want,
+					"the benchmark makes the calls of its warm-up before 10 measured calls")
+			})
+		}
 
 		t.Run("repeats the calls in their order", func(t *testing.T) {
 			t.Parallel()
@@ -210,6 +222,13 @@ func TestBench(t *testing.T) {
 				wantErrors: []string{"the excusal of Store.Put/keeps-the-value matches no check of BenchStoreSuite. " +
 					"BenchStoreSuite has no checks."},
 			},
+			{
+				name:         "reports a warm-up below 0",
+				giveCallable: storeGet,
+				giveOpts:     []conform.Option[Store]{conform.Ceilings(storeGet, conform.Budget{Warmup: new(-1)})},
+				wantErrors: []string{"the budget of Store.Get states a warm-up of -1 iterations, and a warm-up is 0 " +
+					"iterations or more"},
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -291,6 +310,23 @@ func TestBenchProcess(t *testing.T) {
 				conform.BenchParallel(b, concurrent(failingCalls), storeGet, newStore)
 			})
 			assert.Equal(t, result.Extra[errorsUnit], 1.0, "each measured call returns an error")
+		})
+
+		t.Run("runs the warm-up of its budget before the measurement", func(t *testing.T) {
+			var runs []*atomic.Int32
+			suite := concurrent(getCalls)
+			suite.Calls[0].Budget = conform.Budget{Warmup: new(7)}
+			parallel(t, func(b *testing.B) {
+				b.Helper()
+				conform.BenchParallel(b, suite, storeGet, func(*conform.Handle[Store]) Store {
+					calls := new(atomic.Int32)
+					runs = append(runs, calls)
+					return tallied{memory: newMemory(), calls: calls}
+				})
+			})
+			assert.NotEmpty(t, runs, "the benchmark builds a subject for each run")
+			assert.Equal(t, runs[len(runs)-1].Load(), int32(17),
+				"the last run makes 7 calls of its warm-up before 10 measured calls")
 		})
 
 		t.Run("passes the overrides of the suite to the call generator", func(t *testing.T) {
@@ -432,6 +468,19 @@ func counting(built *atomic.Int32) func(*conform.Handle[Store]) Store {
 		built.Add(1)
 		return newMemory()
 	}
+}
+
+// tallied is a store in memory whose Get counts its calls in calls.
+type tallied struct {
+	*memory
+
+	calls *atomic.Int32
+}
+
+// Get counts the call, and returns the value of the store under key.
+func (s tallied) Get(key string) (string, bool) {
+	s.calls.Add(1)
+	return s.memory.Get(key)
 }
 
 // countingDefects returns a suite of Store with the call of Get, which counts
