@@ -134,7 +134,7 @@ func TestBench(t *testing.T) {
 			t.Parallel()
 
 			suite := budgeted(conform.Budget{Latency: time.Nanosecond})
-			b := measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, newStore) })
+			b := measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, slow) })
 			assert.Equal(t, b.verdicts(t), []string{"bench-max-latency fail"}, "the benchmark fails the ceiling of p99")
 		})
 
@@ -345,7 +345,7 @@ func TestBenchProcess(t *testing.T) {
 			suite.Calls[0].Budget = conform.Budget{Latency: time.Nanosecond}
 			_, failed := parallel(t, func(b *testing.B) {
 				b.Helper()
-				conform.BenchParallel(b, suite, storeGet, newStore)
+				conform.BenchParallel(b, suite, storeGet, slow)
 			})
 			assert.True(t, failed, "the benchmark fails the ceiling of p99")
 		})
@@ -469,6 +469,25 @@ func counting(built *atomic.Int32) func(*conform.Handle[Store]) Store {
 		return newMemory()
 	}
 }
+
+// ticking is a store in memory whose Get returns once the clock of the
+// process has advanced by more than a nanosecond. A call then exceeds a
+// ceiling of 1ns on a clock of any resolution, also on a clock that advances
+// in ticks longer than the call.
+type ticking struct{ *memory }
+
+// Get waits until the clock has advanced, and returns the value of the store
+// under key.
+func (s ticking) Get(key string) (string, bool) {
+	start := time.Now()
+	for time.Since(start) <= time.Nanosecond {
+		runtime.Gosched()
+	}
+	return s.memory.Get(key)
+}
+
+// slow is a factory of ticking stores.
+func slow(*conform.Handle[Store]) Store { return ticking{memory: newMemory()} }
 
 // tallied is a store in memory whose Get counts its calls in calls.
 type tallied struct {
