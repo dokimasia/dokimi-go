@@ -30,6 +30,19 @@ func (id ID[S]) declaration() string {
 	return declaration
 }
 
+// subtest returns the name of the test of the check: the identity without the
+// name of the declaration, such as Get/keeps-the-value for
+// Store.Get/keeps-the-value. The name of the test of the suite contains the
+// declaration. The identity of a check of a function, such as
+// Slug/keeps-the-case, names no callable after a dot and is its own name.
+func (id ID[S]) subtest() string {
+	callable, segment, _ := strings.Cut(string(id), "/")
+	if _, method, named := strings.Cut(callable, "."); named {
+		return method + "/" + segment
+	}
+	return string(id)
+}
+
 // Callable is the name of a callable of a declaration whose subjects have the
 // type S, such as Store.Get. A generated suite declares one for each callable.
 type Callable[S any] string

@@ -23,10 +23,12 @@ type T interface {
 // fresh subject of newSubject.
 //
 // Run reports every problem of the checks and the options on t, and stops t
-// when it finds one. Otherwise it runs each check as a parallel test of t,
-// named by the identity of the check. The test of an excused check skips with
-// the reason of the excusal. The test of a check that opts add falsifies the
-// check before it applies the check to the subject.
+// when it finds one. Otherwise it runs each check as a parallel test of t.
+// The test has the identity of the check without the name of the
+// declaration, such as Get/keeps-the-value, because the name of t contains
+// the declaration. The test of an excused check skips with the reason of the
+// excusal. The test of a check that opts add falsifies the check before it
+// applies the check to the subject.
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	cfg := configure(opts)
@@ -37,7 +39,7 @@ func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Op
 		excused[e.id] = e.reason
 	}
 	for i, c := range checks {
-		t.Run(string(c.ID), func(t *testing.T) {
+		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
 			if reason, ok := excused[c.ID]; ok {

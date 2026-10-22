@@ -64,12 +64,24 @@ func TestRun(t *testing.T) {
 			returned.Store(true)
 		})
 
-		t.Run("runs each check as a test named by its identity", func(t *testing.T) {
+		t.Run("runs each check as a test named by its callable and its segment", func(t *testing.T) {
 			t.Parallel()
 
 			a := application(func(t conform.T) { conform.Run(t, suite, newStore) })
-			assert.Equal(t, a.tests, []string{"Store.Get/keeps-the-value"},
+			assert.Equal(t, a.tests, []string{"Get/keeps-the-value"},
 				"the application runs one test for the check")
+		})
+
+		t.Run("runs the check of a function as a test named by its identity", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.ID = "Slug/keeps-the-case"
+			a := application(func(t conform.T) {
+				conform.Run(t, conform.Suite[Store]{Declaration: "Slug", Checks: []conform.Check[Store]{c}}, newStore)
+			})
+			assert.Equal(t, a.tests, []string{"Slug/keeps-the-case"},
+				"the application runs one test for the check of the function")
 		})
 
 		t.Run("fails the test of a check that fails on the subject", func(t *testing.T) {
@@ -79,7 +91,7 @@ func TestRun(t *testing.T) {
 				conform.Run(t, suite, forget)
 				return
 			}
-			assert.Contains(t, childOutput(t), "--- FAIL: "+t.Name()+"/Store.Get/keeps-the-value",
+			assert.Contains(t, childOutput(t), "--- FAIL: "+t.Name()+"/Get/keeps-the-value",
 				"the test of the check fails")
 		})
 
