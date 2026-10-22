@@ -21,44 +21,6 @@ import (
 	"go.dokimi.dev/conform"
 )
 
-// keyOf is the type of the key of a value that a spec puts in the context of
-// a seat.
-type keyOf struct{}
-
-// texts is a seat that takes no records. It keeps the text of each failure,
-// and ends the goroutine of a check at Fatalf. fatal is true once Fatalf ran.
-type texts struct {
-	messages []string
-	mu       sync.Mutex
-	fatal    bool
-}
-
-// Helper does nothing.
-func (*texts) Helper() {}
-
-// Errorf keeps the text of the failure.
-func (s *texts) Errorf(format string, args ...any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.messages = append(s.messages, fmt.Sprintf(format, args...))
-}
-
-// Fatalf keeps the text of the failure and ends the goroutine.
-func (s *texts) Fatalf(format string, args ...any) {
-	s.Errorf(format, args...)
-	s.mu.Lock()
-	s.fatal = true
-	s.mu.Unlock()
-	runtime.Goexit()
-}
-
-// onClock is a factory of subjects that read the clock of their handle.
-func onClock(h *conform.Handle[Store]) Store {
-	m := newMemory()
-	m.clock = h.Clock()
-	return m
-}
-
 // The handle of a check is the seat of its assertions. It builds the subjects
 // of the check, supplies its machinery, and stops a check that calls a door
 // without its option.
@@ -149,18 +111,18 @@ func TestHandle(t *testing.T) {
 			t.Run("ends the check with a fault without its option", func(t *testing.T) {
 				t.Parallel()
 
-				var reached atomic.Bool
+				var continued atomic.Bool
 				c := keeps()
 				c.Apply = func(h *conform.Handle[Store]) {
 					tt.giveCall(h)
-					reached.Store(true)
+					continued.Store(true)
 				}
 				r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
 				faults := r.Faults()
 				assert.Length(t, faults, 1, "the door ends the check with one fault")
 				expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door without its option")
 				expect.Equal(t, faults[0].Error(), tt.wantMessage, "the fault contains the option of the door")
-				expect.False(t, reached.Load(), "the check ends at the door")
+				expect.False(t, continued.Load(), "the check ends at the door")
 			})
 
 			t.Run("returns to a seat that goes on after a fatal failure", func(t *testing.T) {
@@ -322,7 +284,7 @@ func TestHandle(t *testing.T) {
 				moved = h.Clock().Now().Sub(start)
 			}
 			c.Run(assert.NewRecorder(), newStore)
-			assert.Equal(t, moved, time.Duration(0), "the clock stays at its instant")
+			assert.Equal(t, moved, time.Duration(0), "the clock does not move")
 		})
 	})
 
@@ -411,36 +373,36 @@ func TestHandle(t *testing.T) {
 	t.Run("Errorf", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("reports a failure outside an assertion and returns", func(t *testing.T) {
+		t.Run("returns to the check after a failure outside an assertion", func(t *testing.T) {
 			t.Parallel()
 
-			var reached atomic.Bool
+			var continued atomic.Bool
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
 				h.Errorf("the store is %s", "slow")
-				reached.Store(true)
+				continued.Store(true)
 			}
 			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
 			expect.Equal(t, r.Message(), "the store is slow", "the seat takes the message of the failure")
-			expect.True(t, reached.Load(), "Errorf returns to the check")
+			expect.True(t, continued.Load(), "Errorf returns to the check")
 		})
 	})
 
 	t.Run("Fatalf", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("reports a failure outside an assertion and stops the check", func(t *testing.T) {
+		t.Run("stops the check after a failure outside an assertion", func(t *testing.T) {
 			t.Parallel()
 
-			var reached atomic.Bool
+			var continued atomic.Bool
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
 				h.Fatalf("the store is %s", "closed")
-				reached.Store(true)
+				continued.Store(true)
 			}
 			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
 			expect.Equal(t, r.Message(), "the store is closed", "the seat takes the message of the failure")
-			expect.False(t, reached.Load(), "Fatalf stops the check")
+			expect.False(t, continued.Load(), "Fatalf stops the check")
 		})
 	})
 
@@ -450,18 +412,18 @@ func TestHandle(t *testing.T) {
 		t.Run("passes the record of a failure to a seat that takes records", func(t *testing.T) {
 			t.Parallel()
 
-			var reached atomic.Bool
+			var continued atomic.Bool
 			c := keeps()
 			apply := c.Apply
 			c.Apply = func(h *conform.Handle[Store]) {
 				apply(h)
-				reached.Store(true)
+				continued.Store(true)
 			}
 			r := recorded(func(tb assert.TB) { c.Run(tb, forget) })
 			failures := r.Failures()
 			assert.Length(t, failures, 1, "the seat takes the record of the failure")
 			assert.Equal(t, failures[0].Assertion, "equal", "the record is the record of the assertion")
-			assert.False(t, reached.Load(), "the fatal failure stops the check")
+			assert.False(t, continued.Load(), "the fatal failure stops the check")
 		})
 
 		t.Run("writes the text of a fatal failure to a seat that takes no records", func(t *testing.T) {
@@ -504,4 +466,42 @@ func TestHandle(t *testing.T) {
 				"the failure has the line of the assertion in the check")
 		})
 	})
+}
+
+// keyOf is the type of the key of a value that a spec puts in the context of
+// a seat.
+type keyOf struct{}
+
+// texts is a seat that takes no records. It keeps the text of each failure,
+// and ends the goroutine of a check at Fatalf. fatal is true once Fatalf ran.
+type texts struct {
+	messages []string
+	mu       sync.Mutex
+	fatal    bool
+}
+
+// Helper does nothing.
+func (*texts) Helper() {}
+
+// Errorf keeps the text of the failure.
+func (s *texts) Errorf(format string, args ...any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.messages = append(s.messages, fmt.Sprintf(format, args...))
+}
+
+// Fatalf keeps the text of the failure and ends the goroutine.
+func (s *texts) Fatalf(format string, args ...any) {
+	s.Errorf(format, args...)
+	s.mu.Lock()
+	s.fatal = true
+	s.mu.Unlock()
+	runtime.Goexit()
+}
+
+// onClock is a factory of subjects that read the clock of their handle.
+func onClock(h *conform.Handle[Store]) Store {
+	m := newMemory()
+	m.clock = h.Clock()
+	return m
 }

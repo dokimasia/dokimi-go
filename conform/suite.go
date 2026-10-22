@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"os"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -248,7 +249,7 @@ func (c *config[S]) invalid() []string {
 // DOKIMI_SEED. A run without a seed takes the seed of the profile of the
 // property engine.
 func (c *config[S]) runOptions() []prop.Option {
-	opts := c.using
+	opts := slices.Clip(c.using)
 	if c.cases != nil {
 		opts = append(opts, prop.Cases(*c.cases))
 	}
@@ -264,7 +265,7 @@ func (c *config[S]) runOptions() []prop.Option {
 // one check runs the same cases, writes no stored case, and ends at the first
 // failing case.
 func (c *config[S]) hermetic(id ID[S]) []prop.Option {
-	return append(c.using, prop.Hermetic(), prop.Seed(seedOf(string(id))), prop.Store(""), prop.Shrink(0))
+	return append(slices.Clip(c.using), prop.Hermetic(), prop.Seed(seedOf(string(id))), prop.Store(""), prop.Shrink(0))
 }
 
 // seedOf returns the seed of the text, its 64-bit FNV-1a hash.

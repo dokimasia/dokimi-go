@@ -5,11 +5,14 @@ package conform_test
 
 import (
 	"os"
+	"slices"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
@@ -42,7 +45,7 @@ func TestFalsify(t *testing.T) {
 			conform.Falsify(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}})
 		})
 
-		t.Run("runs each check as a parallel test", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var returned, late atomic.Bool
@@ -59,7 +62,7 @@ func TestFalsify(t *testing.T) {
 			returned.Store(true)
 		})
 
-		t.Run("runs each check as a test named by its callable and its segment", func(t *testing.T) {
+		t.Run("runs each check under its identity without the declaration", func(t *testing.T) {
 			t.Parallel()
 
 			a := application(func(t conform.T) { conform.Falsify(t, suite) })
@@ -67,7 +70,7 @@ func TestFalsify(t *testing.T) {
 				"the falsification runs one test for the check")
 		})
 
-		t.Run("runs the check of a function as a test named by its identity", func(t *testing.T) {
+		t.Run("runs the check of a function under its identity", func(t *testing.T) {
 			t.Parallel()
 
 			c := keeps()
@@ -79,7 +82,7 @@ func TestFalsify(t *testing.T) {
 				"the falsification runs one test for the check of the function")
 		})
 
-		t.Run("fails the test of a check that its planted defect passes", func(t *testing.T) {
+		t.Run("fails a check that its planted defect passes", func(t *testing.T) {
 			t.Parallel()
 
 			if os.Getenv(childEnv) == t.Name() {
@@ -94,6 +97,19 @@ func TestFalsify(t *testing.T) {
 			t.Parallel()
 
 			conform.Falsify(t, declaredKinds())
+		})
+
+		t.Run("leaves the overrides of the suite unchanged", func(t *testing.T) {
+			t.Parallel()
+
+			suite := declaredKinds()
+			suite.Using = slices.Grow(suite.Using, 8)
+			spare := suite.Using[:cap(suite.Using)]
+			t.Cleanup(func() {
+				assert.Equal(t, spare[len(suite.Using)], prop.Option{},
+					"the falsification writes no option into the overrides of the suite")
+			})
+			conform.Falsify(t, suite)
 		})
 
 		t.Run("passes the planted defects that fail their own checks alone", func(t *testing.T) {
@@ -175,11 +191,121 @@ func TestFalsify(t *testing.T) {
 			})
 		})
 
+		t.Run("falsifies each ceiling of a benchmark on its planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Falsify(t, budgeted(conform.Budget{
+				Bytes: new(uint64(0)), Latency: time.Millisecond, Mean: time.Millisecond,
+			}))
+		})
+
+		t.Run("runs each ceiling of a benchmark under its identity", func(t *testing.T) {
+			t.Parallel()
+
+			a := application(func(t conform.T) {
+				conform.Falsify(t, budgeted(conform.Budget{
+					Allocs: new(uint64(0)), Bytes: new(uint64(0)), Latency: time.Millisecond, Mean: time.Millisecond,
+				}))
+			})
+			assert.Equal(t, a.tests, []string{"Get/byte-budget", "Get/latency-budget", "Get/mean-latency-budget"},
+				"the falsification runs the ceilings of bytes and latency, and leaves out the allocation ceiling")
+		})
+
+		t.Run("runs each ceiling of a benchmark in parallel", func(t *testing.T) {
+			t.Parallel()
+
+			var returned, late atomic.Bool
+			suite := budgeted(conform.Budget{Latency: time.Millisecond})
+			over := suite.Calls[0].Over
+			suite.Calls[0].Over = func(h *conform.Handle[Store], spend func()) Store {
+				late.Store(returned.Load())
+				return over(h, spend)
+			}
+			t.Cleanup(func() {
+				assert.True(t, late.Load(), "the ceiling runs once the test of the falsification returns")
+			})
+			conform.Falsify(t, suite)
+			returned.Store(true)
+		})
+
+		t.Run("measures 10 calls of the planted defect of a ceiling", func(t *testing.T) {
+			t.Parallel()
+
+			var spends atomic.Int32
+			suite := budgeted(conform.Budget{Latency: time.Millisecond})
+			suite.Calls[0].Over = func(_ *conform.Handle[Store], spend func()) Store {
+				return spender{spend: func() {
+					spends.Add(1)
+					spend()
+				}}
+			}
+			t.Cleanup(func() {
+				assert.Equal(t, spends.Load(), int32(10), "the falsification measures 10 calls of the planted defect")
+			})
+			conform.Falsify(t, suite)
+		})
+
+		t.Run("fails a ceiling of a benchmark that its planted defect does not exceed", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				suite := unspending()
+				suite.Calls[0].Budget = conform.Budget{Latency: time.Hour}
+				conform.Falsify(t, suite)
+				return
+			}
+			out := childOutput(t)
+			expect.Contains(t, out, "--- FAIL: "+t.Name()+"/Get/latency-budget", "the test of the ceiling fails")
+			expect.Contains(t, out, "the planted defect of Store.Get/latency-budget fails the ceiling",
+				"the failure states the rejection that did not happen")
+		})
+
+		t.Run("skips a byte ceiling in a run that does not count allocations", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				conform.Falsify(t, budgeted(conform.Budget{Bytes: new(uint64(0))}))
+				return
+			}
+			expect.Contains(t, childOutputWith(t, "DOKIMI_MUTATE_INSTRUMENTED=1"),
+				"--- SKIP: "+t.Name()+"/Get/byte-budget", "the test of the byte ceiling skips")
+		})
+
 		tests := []struct {
 			name       string
 			giveSuite  conform.Suite[Store]
 			wantErrors []string
 		}{
+			{
+				name: "reports a check with the identity of a ceiling of a budget",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{Latency: time.Millisecond})
+					c := keeps()
+					c.ID = storeGet.Check("latency-budget")
+					s.Checks = []conform.Check[Store]{c}
+					return s
+				}(),
+				wantErrors: []string{"the check Store.Get/latency-budget has the identity of a ceiling of the " +
+					"budget of its callable"},
+			},
+			{
+				name: "reports two calls of one callable with a budget as one problem",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{Latency: time.Millisecond})
+					s.Calls = append(s.Calls, s.Calls[0])
+					return s
+				}(),
+				wantErrors: []string{"two calls of StoreSuite have the callable Store.Get"},
+			},
+			{
+				name: "reports a call without a planted defect",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{Latency: time.Millisecond})
+					s.Calls[0].Over = nil
+					return s
+				}(),
+				wantErrors: []string{"the call of Store.Get has no planted defect"},
+			},
 			{
 				name:      "reports an identity outside the grammar",
 				giveSuite: broken(func(c *conform.Check[Store]) { c.ID = "Store.Get/KeepsTheValue" }),

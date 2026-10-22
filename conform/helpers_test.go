@@ -15,6 +15,7 @@ import (
 	"runtime/coverage"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"go.dokimi.dev/assert"
@@ -203,6 +204,65 @@ var getCalls = prop.Composite(func(c *prop.Case) func(context.Context, Store) er
 		return nil
 	}
 })
+
+// declaredBudget returns a suite of Store with an allocation ceiling of Get,
+// whose calls draw a kind. It sets undeclared when a call draws a kind other
+// than 1 and 2, the kinds of its override of the generator of kind.
+func declaredBudget(undeclared *atomic.Bool) conform.Suite[Store] {
+	suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
+	suite.Calls[0].Calls = prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
+		if k := c.Draw(prop.Of[kind](), "kind"); k != 1 && k != 2 {
+			undeclared.Store(true)
+		}
+		return func(_ context.Context, s Store) error {
+			_, _ = s.Get("k")
+			return nil
+		}
+	})
+	suite.Using = []prop.Option{prop.Using(prop.SampledFrom[kind](1, 2))}
+	return suite
+}
+
+// counted returns a call generator of Get that counts each call in calls.
+func counted(calls *atomic.Int32) prop.Generator[func(context.Context, Store) error] {
+	return prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
+		key := c.Draw(prop.String(), "key")
+		return func(_ context.Context, s Store) error {
+			calls.Add(1)
+			_, _ = s.Get(key)
+			return nil
+		}
+	})
+}
+
+// skipUnchecked skips t in a run that does not check allocation ceilings,
+// where every subject passes a ceiling.
+func skipUnchecked(t *testing.T) {
+	t.Helper()
+	if checked, reason := assert.AllocsChecked(); !checked {
+		t.Skipf("the run does not check allocation ceilings: %s", reason)
+	}
+}
+
+// wasteful is a Store whose Get allocates three times per call.
+type wasteful struct{}
+
+// Put drops the value.
+func (wasteful) Put(string, string) {}
+
+// Get allocates three copies of the key, and finds the key as its value.
+func (wasteful) Get(key string) (string, bool) {
+	for range 3 {
+		kept.Store(new(key))
+	}
+	return key, true
+}
+
+// kept keeps each allocation of wasteful on the heap.
+var kept atomic.Pointer[string]
+
+// squander is a factory of wasteful subjects.
+func squander(*conform.Handle[Store]) Store { return wasteful{} }
 
 // budgeted returns a suite of Store with the call of Get under budget.
 func budgeted(budget conform.Budget) conform.Suite[Store] {

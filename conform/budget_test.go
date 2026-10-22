@@ -51,7 +51,7 @@ func TestBudget(t *testing.T) {
 			assert.Equal(t, a.tests, []string{"Get/allocation-budget"}, "the application runs the ceiling")
 		})
 
-		t.Run("runs no test for a budget without an allocation ceiling", func(t *testing.T) {
+		t.Run("runs nothing for a budget without an allocation ceiling", func(t *testing.T) {
 			t.Parallel()
 
 			a := application(func(t conform.T) {
@@ -107,7 +107,7 @@ func TestBudget(t *testing.T) {
 				wantErrors: []string{"the option Ceilings states two budgets of Store.Get"},
 			},
 			{
-				name:      "reports a budget with a mean and without a p99",
+				name:      "reports a budget with a mean without a p99",
 				giveSuite: budgeted(conform.Budget{Mean: 1}),
 				wantErrors: []string{"the budget of Store.Get states a mean and no p99, and a mean alone passes " +
 					"a tail that grows"},
@@ -178,7 +178,7 @@ func TestBudget(t *testing.T) {
 	t.Run("FalsifyAllocs", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("runs the allocation ceiling of each callable as a test", func(t *testing.T) {
+		t.Run("runs the allocation ceiling of each callable under its identity", func(t *testing.T) {
 			t.Parallel()
 
 			a := application(func(t conform.T) {
@@ -309,7 +309,7 @@ func TestBudgetAllocs(t *testing.T) {
 			assert.False(t, undeclared.Load(), "each case draws a declared kind")
 		})
 
-		t.Run("fails a ceiling whose planted defect stays within it", func(t *testing.T) {
+		t.Run("fails a ceiling that its planted defect does not exceed", func(t *testing.T) {
 			skipUnchecked(t)
 			if os.Getenv(childEnv) == t.Name() {
 				suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
@@ -323,64 +323,5 @@ func TestBudgetAllocs(t *testing.T) {
 				"the failure is the failure of the falsification")
 			expect.NotContains(t, out, "before an assertion fails", "the check fails at no other place")
 		})
-	})
-}
-
-// skipUnchecked skips t in a run that does not check allocation ceilings,
-// where every subject passes a ceiling.
-func skipUnchecked(t *testing.T) {
-	t.Helper()
-	if checked, reason := assert.AllocsChecked(); !checked {
-		t.Skipf("the run does not check allocation ceilings: %s", reason)
-	}
-}
-
-// wasteful is a Store whose Get allocates three times per call.
-type wasteful struct{}
-
-// Put drops the value.
-func (wasteful) Put(string, string) {}
-
-// Get allocates three copies of the key, and finds the key as its value.
-func (wasteful) Get(key string) (string, bool) {
-	for range 3 {
-		kept.Store(new(key))
-	}
-	return key, true
-}
-
-// kept keeps each allocation of wasteful on the heap.
-var kept atomic.Pointer[string]
-
-// squander is a factory of wasteful subjects.
-func squander(*conform.Handle[Store]) Store { return wasteful{} }
-
-// declaredBudget returns a suite of Store with an allocation ceiling of Get,
-// whose calls draw a kind. It sets undeclared when a call draws a kind other
-// than 1 and 2, the kinds of its override of the generator of kind.
-func declaredBudget(undeclared *atomic.Bool) conform.Suite[Store] {
-	suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
-	suite.Calls[0].Calls = prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
-		if k := c.Draw(prop.Of[kind](), "kind"); k != 1 && k != 2 {
-			undeclared.Store(true)
-		}
-		return func(_ context.Context, s Store) error {
-			_, _ = s.Get("k")
-			return nil
-		}
-	})
-	suite.Using = []prop.Option{prop.Using(prop.SampledFrom[kind](1, 2))}
-	return suite
-}
-
-// counted returns a call generator of Get that counts each call in calls.
-func counted(calls *atomic.Int32) prop.Generator[func(context.Context, Store) error] {
-	return prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
-		key := c.Draw(prop.String(), "key")
-		return func(_ context.Context, s Store) error {
-			calls.Add(1)
-			_, _ = s.Get(key)
-			return nil
-		}
 	})
 }

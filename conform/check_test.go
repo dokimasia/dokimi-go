@@ -58,7 +58,7 @@ func TestCheck(t *testing.T) {
 			expect.Equal(t, len(subjects), cases, "no two cases share a subject")
 		})
 
-		t.Run("fails the seat with the record of the property and of its smallest case", func(t *testing.T) {
+		t.Run("fails the seat with the record of the property", func(t *testing.T) {
 			t.Parallel()
 
 			r := recorded(func(tb assert.TB) { keepsEvery().Run(tb, forget) })

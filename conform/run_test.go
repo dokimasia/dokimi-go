@@ -5,6 +5,7 @@ package conform_test
 
 import (
 	"os"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -54,7 +55,7 @@ func TestRun(t *testing.T) {
 			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
 		})
 
-		t.Run("runs each check as a parallel test", func(t *testing.T) {
+		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
 			var returned atomic.Bool
@@ -66,7 +67,7 @@ func TestRun(t *testing.T) {
 			returned.Store(true)
 		})
 
-		t.Run("runs each check as a test named by its callable and its segment", func(t *testing.T) {
+		t.Run("runs each check under its identity without the declaration", func(t *testing.T) {
 			t.Parallel()
 
 			a := application(func(t conform.T) { conform.Run(t, suite, newStore) })
@@ -74,7 +75,7 @@ func TestRun(t *testing.T) {
 				"the application runs one test for the check")
 		})
 
-		t.Run("runs the check of a function as a test named by its identity", func(t *testing.T) {
+		t.Run("runs the check of a function under its identity", func(t *testing.T) {
 			t.Parallel()
 
 			c := keeps()
@@ -86,7 +87,7 @@ func TestRun(t *testing.T) {
 				"the application runs one test for the check of the function")
 		})
 
-		t.Run("fails the test of a check that fails on the subject", func(t *testing.T) {
+		t.Run("reports the failure of a check on the subject", func(t *testing.T) {
 			t.Parallel()
 
 			if os.Getenv(childEnv) == t.Name() {
@@ -101,6 +102,19 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			conform.Run(t, declaredKinds(), newStore)
+		})
+
+		t.Run("leaves the overrides of the suite unchanged", func(t *testing.T) {
+			t.Parallel()
+
+			kinds := declaredKinds()
+			kinds.Using = slices.Grow(kinds.Using, 4)
+			spare := kinds.Using[:cap(kinds.Using)]
+			t.Cleanup(func() {
+				assert.Equal(t, spare[len(kinds.Using)], prop.Option{},
+					"the application writes no option into the overrides of the suite")
+			})
+			conform.Run(t, kinds, newStore, conform.Cases[Store](5))
 		})
 
 		t.Run("accepts an excusal of each ceiling of a budget", func(t *testing.T) {
@@ -167,13 +181,13 @@ func TestRun(t *testing.T) {
 				wantErrors: []string{"the check Store.Get/keeps-the-value has no statement"},
 			},
 			{
-				name:      "reports a check without a function Apply or Property",
+				name:      "reports a check without a function",
 				giveSuite: broken(func(c *conform.Check[Store]) { c.Apply = nil }),
 				wantErrors: []string{"the check Store.Get/keeps-the-value has no function Apply and no function " +
 					"Property"},
 			},
 			{
-				name: "reports a check with both a function Apply and a function Property",
+				name: "reports a check with two functions",
 				giveSuite: broken(func(c *conform.Check[Store]) {
 					c.Property = func(*conform.Handle[Store], *prop.Case) {}
 				}),

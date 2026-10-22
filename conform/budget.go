@@ -8,8 +8,10 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/bench"
 	"go.dokimi.dev/assert/prop"
 )
 
@@ -21,9 +23,9 @@ const (
 	meanLatencySegment = "mean-latency-budget"
 )
 
-// allocated keeps each allocation of the planted defect of an allocation
-// ceiling on the heap.
-var allocated atomic.Pointer[[8]byte]
+// sink keeps each allocation of the planted defect of an allocation ceiling or
+// a byte ceiling on the heap.
+var sink atomic.Pointer[byte]
 
 // ceiling is the check of one ceiling of a call. added reports that the
 // option Ceilings states the budget of the ceiling, so an application
@@ -127,22 +129,19 @@ func allocationCeilings[S any](calls []Call[S], ceilings []stated[S]) []ceiling[
 	for i := range calls {
 		c := &calls[i]
 		if budget, added := budgetOf(c, ceilings); budget.Allocs != nil {
-			out = append(out, ceiling[S]{check: allocationCheck(c, *budget.Allocs), added: added})
+			out = append(out, ceiling[S]{check: allocationCheck(c, budget.Allocs), added: added})
 		}
 	}
 	return out
 }
 
-// allocationCheck returns the check that the callable of c makes at most n
-// heap allocations per call.
-func allocationCheck[S any](c *Call[S], n uint64) Check[S] {
-	times := "times"
-	if n == 1 {
-		times = "time"
-	}
+// allocationCheck returns the check that the callable of c makes at most
+// *allocs heap allocations per call.
+func allocationCheck[S any](c *Call[S], allocs *uint64) Check[S] {
+	n := *allocs
 	return Check[S]{
 		ID:        c.Callable.Check(allocationSegment),
-		Statement: fmt.Sprintf("%s allocates at most %d %s per call", c.Callable.method(), n, times),
+		Statement: allocationStatement(c.Callable.method(), n),
 		Property: func(h *Handle[S], pc *prop.Case) {
 			call := pc.Draw(c.Calls, "call")
 			s := h.Subject()
@@ -151,13 +150,94 @@ func allocationCheck[S any](c *Call[S], n uint64) Check[S] {
 			pc.Target("allocations", testing.AllocsPerRun(1, run))
 			assert.MaxAllocs(h, run, n, h.Statement())
 		},
-		Defect: func(h *Handle[S]) S {
-			return c.Over(h, func() {
-				for range n + 1 {
-					allocated.Store(new([8]byte))
-				}
-			})
-		},
+		Defect: func(h *Handle[S]) S { return c.Over(h, Budget{Allocs: allocs}.over()) },
+	}
+}
+
+// allocationStatement returns the statement that the callable method makes at
+// most n heap allocations per call.
+func allocationStatement(method string, n uint64) string {
+	return fmt.Sprintf("%s allocates at most %d %s per call", method, n, plural(n, "time", "times"))
+}
+
+// plural returns one for a count of 1, and many for any other count.
+func plural(n uint64, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// limit is one ceiling of a budget: the segment of the identity of its check,
+// and a budget of that ceiling alone.
+type limit struct {
+	segment string
+	budget  Budget
+}
+
+// stated reports whether the budget of the limit states its ceiling.
+func (l limit) stated() bool {
+	return l.budget != Budget{}
+}
+
+// limits returns the four ceilings of the budget in the order of its fields:
+// the allocations, the bytes, the p99 and the mean. The budget of a ceiling
+// that the budget does not state is the zero Budget.
+func (b Budget) limits() [4]limit {
+	return [4]limit{
+		{segment: allocationSegment, budget: Budget{Allocs: b.Allocs}},
+		{segment: byteSegment, budget: Budget{Bytes: b.Bytes}},
+		{segment: latencySegment, budget: Budget{Latency: b.Latency}},
+		{segment: meanLatencySegment, budget: Budget{Mean: b.Mean}},
+	}
+}
+
+// counted reports whether the budget states a ceiling of allocations or
+// bytes, which only a run that counts allocations checks.
+func (b Budget) counted() bool {
+	return b.Allocs != nil || b.Bytes != nil
+}
+
+// state states each ceiling of the budget on c, and returns c.
+func (b Budget) state(c *bench.Contract) *bench.Contract {
+	if b.Allocs != nil {
+		c.MaxAllocs(*b.Allocs)
+	}
+	if b.Bytes != nil {
+		c.MaxBytes(*b.Bytes)
+	}
+	if b.Latency != 0 {
+		c.MaxLatency(b.Latency)
+	}
+	if b.Mean != 0 {
+		c.MaxMean(b.Mean)
+	}
+	return c
+}
+
+// over returns the spend of the planted defect of a budget of one ceiling: one
+// heap allocation more than its allocation ceiling admits, more bytes than its
+// byte ceiling admits, or twice the time of its p99 or its mean. A spend of
+// bytes allocates 16 bytes at least, because the runtime packs smaller
+// allocations without pointers into one block.
+func (b Budget) over() func() {
+	switch {
+	case b.Allocs != nil:
+		n := *b.Allocs + 1
+		return func() {
+			for range n {
+				sink.Store(new(byte))
+			}
+		}
+	case b.Bytes != nil:
+		n := *b.Bytes
+		return func() {
+			spent := make([]byte, max(n+1, 16))
+			sink.Store(&spent[0])
+		}
+	default:
+		d := max(b.Latency, b.Mean)
+		return func() { time.Sleep(2 * d) }
 	}
 }
 
@@ -166,19 +246,11 @@ func allocationCheck[S any](c *Call[S], n uint64) Check[S] {
 func ceilingIDs[S any](calls []Call[S], ceilings []stated[S]) []ID[S] {
 	var out []ID[S]
 	for i := range calls {
-		c := &calls[i]
-		budget, _ := budgetOf(c, ceilings)
-		if budget.Allocs != nil {
-			out = append(out, c.Callable.Check(allocationSegment))
-		}
-		if budget.Bytes != nil {
-			out = append(out, c.Callable.Check(byteSegment))
-		}
-		if budget.Latency != 0 {
-			out = append(out, c.Callable.Check(latencySegment))
-		}
-		if budget.Mean != 0 {
-			out = append(out, c.Callable.Check(meanLatencySegment))
+		budget, _ := budgetOf(&calls[i], ceilings)
+		for _, l := range budget.limits() {
+			if l.stated() {
+				out = append(out, calls[i].Callable.Check(l.segment))
+			}
 		}
 	}
 	return out

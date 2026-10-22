@@ -23,12 +23,12 @@ type T interface {
 // fresh subject of newSubject.
 //
 // Run reports every problem of the checks, the calls and the options on t, and
-// stops t when it finds one. The options may excuse any check of the
-// application, a ceiling of a budget included, so each entry point of a suite
-// takes the same options. Otherwise Run runs each check as a parallel test of
-// t. The test has the identity of the check without the name of the
-// declaration, such as Get/keeps-the-value, because the name of t contains
-// the declaration. The test of an excused check skips with the reason of the
+// stops t when it finds one. An excusal may name any check of the application
+// or any ceiling of a budget, because each entry point of a suite takes the
+// same options. Otherwise Run runs each check as a parallel test of t. The
+// test has the identity of the check without the name of the declaration,
+// such as Get/keeps-the-value, because the name of t contains the
+// declaration. The test of an excused check skips with the reason of the
 // excusal. The test of a check that opts add falsifies the check before it
 // applies the check to the subject, as [Falsify] does, against every other
 // check of the application that opts do not excuse.
@@ -72,8 +72,8 @@ func stopAt(t failer, found []string) {
 // validate returns the problems of the application name of the suite. They
 // are the problems of the checks of the suite and of the checks that the
 // option With adds, of the excusals, of the calls and their budgets, and of
-// the settings. An excusal may name any check of the application, so each
-// entry point of a suite takes the same options.
+// the settings. An excusal may name any check of the application, because
+// each entry point of a suite takes the same options.
 func validate[S any](name string, suite Suite[S], cfg *config[S]) []string {
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
 	found := problems(name, checks, cfg.excusals, ceilingIDs(suite.Calls, cfg.ceilings))
@@ -81,8 +81,9 @@ func validate[S any](name string, suite Suite[S], cfg *config[S]) []string {
 }
 
 // problems returns the problems of the checks and the excusals of the
-// application name. An excusal may name a check of checks or an identity of
-// known, such as the check of a ceiling of a budget.
+// application name. known are the identities of the ceilings of the budgets,
+// which no check of checks may have. An excusal may name a check of checks or
+// an identity of known.
 func problems[S any](name string, checks []Check[S], excusals []excusal[S], known []ID[S]) []string {
 	var found []string
 	seen := make(map[ID[S]]bool, len(checks)+len(known))
@@ -110,7 +111,13 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S], know
 		seen[c.ID] = true
 		ids = append(ids, string(c.ID))
 	}
+	ceilings := make(map[ID[S]]bool, len(known))
 	for _, id := range known {
+		if seen[id] && !ceilings[id] {
+			found = append(found, fmt.Sprintf("the check %s has the identity of a ceiling of the budget of its "+
+				"callable", id))
+		}
+		ceilings[id] = true
 		if !seen[id] {
 			seen[id] = true
 			ids = append(ids, string(id))

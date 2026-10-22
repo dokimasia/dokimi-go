@@ -33,11 +33,15 @@
 // The calls of a suite contain the call generator and the budget of each
 // callable. [RunBudgets] applies the allocation ceilings of the budgets to a
 // subject, and [FalsifyAllocs] applies each of them to its planted defect.
-// The option [Ceilings] states a budget for one application. [Fuzz] registers
-// the fuzz target of the property checks of one callable.
+// [Bench] measures a callable of a subject under the ceilings of its budget.
+// [BenchParallel] measures a callable that admits concurrent calls on
+// GOMAXPROCS goroutines at once. [Falsify] applies each ceiling of bytes and
+// latency to its planted defect. The option [Ceilings] states a budget for
+// one application. [Fuzz] registers the fuzz target of the property checks of
+// one callable.
 //
 // # Dependency position
 //
-// The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/prop and the
-// Go stdlib, testing among it.
+// The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,
+// go.dokimi.dev/assert/prop and the Go stdlib, testing among it.
 package conform
