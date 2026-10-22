@@ -11,3 +11,5 @@ use (
 	./fault
 	./stub
 )
+
+replace go.dokimi.dev/fault v0.1.0 => ./fault
