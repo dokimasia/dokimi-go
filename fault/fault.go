@@ -89,8 +89,8 @@ type RetryFault[C any] struct {
 	count int
 }
 
-// NewRetryFault returns a fault that fails the calls before the nth, which
-// succeeds with every call after it.
+// NewRetryFault returns a fault that fails each call before the nth call. The
+// nth call and every call after it succeed.
 func NewRetryFault[C any](err error, n int) *RetryFault[C] {
 	return &RetryFault[C]{err: err, n: n}
 }
@@ -162,8 +162,8 @@ type WindowedFault[C any] struct {
 	deadline time.Time
 }
 
-// NewWindowedFault returns a fault that fires until the clock of the double
-// reaches deadline.
+// NewWindowedFault returns a fault that fires while the clock of the double is
+// before deadline.
 func NewWindowedFault[C any](err error, deadline time.Time) *WindowedFault[C] {
 	return &WindowedFault[C]{err: err, deadline: deadline}
 }

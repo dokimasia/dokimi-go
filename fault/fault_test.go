@@ -5,6 +5,7 @@ package fault_test
 
 import (
 	"errors"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -14,15 +15,6 @@ import (
 	"go.dokimi.dev/fault"
 )
 
-// call is the call of the cases, which a predicate reads.
-type call struct {
-	ID string
-}
-
-// fixed is a random source whose Float64 returns the same number on every
-// call: its 53 low bits over 2^53.
-type fixed uint64
-
 // The cases read the smallest, the middle and the largest number that
 // Float64 returns from the sources low, half and high.
 const (
@@ -31,20 +23,12 @@ const (
 	high fixed = 1<<53 - 1
 )
 
-// Uint64 returns the bits of the source.
-func (f fixed) Uint64() uint64 { return uint64(f) }
-
-// at is a clock that reads one instant.
-type at time.Time
-
-// Now returns the instant of the clock.
-func (a at) Now() time.Time { return time.Time(a) }
-
 // errArmed is the error that the cases arm.
 var errArmed = errors.New("fault_test: the armed error")
 
-// draws is the number of calls of a case that counts the numbers of a source.
-const draws = 100
+// samples is the number of calls of a case that counts the numbers of a
+// source.
+const samples = 100
 
 // The instants of the cases around a deadline.
 var (
@@ -134,7 +118,7 @@ func TestFault(t *testing.T) {
 	t.Run("NewRetryFault", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("fires on the calls before the nth and on no call from it", func(t *testing.T) {
+		t.Run("fires on the calls before the nth call", func(t *testing.T) {
 			t.Parallel()
 
 			f := fault.NewRetryFault[call](errArmed, 3)
@@ -163,21 +147,30 @@ func TestFault(t *testing.T) {
 		t.Parallel()
 
 		tests := []struct {
-			name string
-			p    float64
-			give fixed
-			want bool
+			name            string
+			giveProbability float64
+			giveSource      rand.Source
+			want            bool
 		}{
-			{name: "fires for a call whose random number is below the probability", p: 0.75, give: half, want: true},
-			{name: "fires for no call whose random number is the probability", p: 0.5, give: half},
-			{name: "fires for every call at a probability of 1", p: 1, give: high, want: true},
-			{name: "fires for no call at a probability of 0", p: 0, give: low},
+			{
+				name: "fires for a call whose random number is below the probability", giveProbability: 0.75,
+				giveSource: half, want: true,
+			},
+			{
+				name: "fires for no call whose random number is the probability", giveProbability: 0.5,
+				giveSource: half,
+			},
+			{name: "fires for every call at a probability of 1", giveProbability: 1, giveSource: high, want: true},
+			{name: "fires for no call at a probability of 0", giveProbability: 0, giveSource: low},
+			{name: "fires for every call at a probability of 1 without a source", giveProbability: 1, want: true},
+			{name: "fires for no call at a probability of 0 without a source", giveProbability: 0},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				fired, err := fault.NewProbabilityFault[call](errArmed, tt.p, tt.give).ShouldFire(call{}, before)
+				f := fault.NewProbabilityFault[call](errArmed, tt.giveProbability, tt.giveSource)
+				fired, err := f.ShouldFire(call{}, before)
 				assert.Equal(t, fired, tt.want, "the fault fires where the random number is below the probability")
 				if tt.want {
 					expect.ErrorIs(t, err, errArmed, "the fault returns the error that the test armed")
@@ -195,40 +188,23 @@ func TestFault(t *testing.T) {
 		t.Run("takes each random number from the source", func(t *testing.T) {
 			t.Parallel()
 
-			// The source reads 0.5 on each call, so a fault at 0.75 fires for
-			// each of the calls, which a fault that drew its numbers elsewhere
+			// The source returns 0.5 on each call. A fault at 0.75 fires for
+			// each of the calls, which a fault that took its numbers elsewhere
 			// would not do a hundred times in a row.
-			fired := firesFor(fault.NewProbabilityFault[call](errArmed, 0.75, half), draws)
+			fired := firesFor(fault.NewProbabilityFault[call](errArmed, 0.75, half), samples)
 			assert.NotContains(t, fired, false, "each number of the source is below the probability")
 		})
 
 		t.Run("takes random numbers on both sides of the probability without a source", func(t *testing.T) {
 			t.Parallel()
 
-			// The global source draws below 0.5 and from 0.5 up alike, so a
-			// hundred calls fire for some calls and for no others with a
-			// probability of 2 in 2^100.
-			fired := firesFor(fault.NewProbabilityFault[call](errArmed, 0.5, nil), draws)
-			expect.Contains(t, fired, true, "the global source draws a number below 0.5")
-			expect.Contains(t, fired, false, "the global source draws a number from 0.5 up")
+			// The global source returns numbers below 0.5 and from 0.5 up alike.
+			// A hundred calls fire for every call or for none with a probability
+			// of 2 in 2^100.
+			fired := firesFor(fault.NewProbabilityFault[call](errArmed, 0.5, nil), samples)
+			expect.Contains(t, fired, true, "the global source returns a number below 0.5")
+			expect.Contains(t, fired, false, "the global source returns a number from 0.5 up")
 		})
-
-		sources := []struct {
-			name string
-			p    float64
-			want bool
-		}{
-			{name: "fires for every call at a probability of 1 without a source", p: 1, want: true},
-			{name: "fires for no call at a probability of 0 without a source", p: 0},
-		}
-		for _, tt := range sources {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-
-				fired, _ := fault.NewProbabilityFault[call](errArmed, tt.p, nil).ShouldFire(call{}, before)
-				assert.Equal(t, fired, tt.want, "the global source draws a number in [0, 1)")
-			})
-		}
 
 		t.Run("keeps its probability after Reset", func(t *testing.T) {
 			t.Parallel()
@@ -423,6 +399,24 @@ func TestFault(t *testing.T) {
 		})
 	})
 }
+
+// call is the call of the cases, which a predicate reads.
+type call struct {
+	ID string
+}
+
+// fixed is a random source whose Float64 returns the same number on every
+// call: its 53 low bits over 2^53.
+type fixed uint64
+
+// Uint64 returns the bits of the source.
+func (f fixed) Uint64() uint64 { return uint64(f) }
+
+// at is a clock that reads one instant.
+type at time.Time
+
+// Now returns the instant of the clock.
+func (a at) Now() time.Time { return time.Time(a) }
 
 // firesFor asks f about n calls before the deadline, and returns whether f
 // fires for each.
