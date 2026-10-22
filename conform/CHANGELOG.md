@@ -1,5 +1,20 @@
 # go.dokimi.dev/conform
 
+## 0.2.0
+
+### Minor Changes
+
+- ba3cddf: Add `conform.B`, the benchmark of an application, which `*testing.B` implements.
+- ba3cddf: Add `conform.Bench`, which measures a callable of a suite under the ceilings of its budget.
+- ba3cddf: Add `conform.BenchParallel`, which measures a callable that admits concurrent calls on GOMAXPROCS goroutines at once.
+- 28447ae: Add `conform.Budget.Warmup` for the iterations that a benchmark of a callable runs before it measures.
+- ba3cddf: Falsify the byte, p99 and mean ceilings of each budget in `conform.Falsify`.
+- ba3cddf: Report a check that has the identity of a ceiling of a budget as a problem of the application.
+
+### Patch Changes
+
+- ba3cddf: Fix the property runs of `conform` to leave the slice `Suite.Using` unchanged.
+
 ## 0.1.0
 
 ### Minor Changes
