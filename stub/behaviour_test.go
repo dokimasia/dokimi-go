@@ -14,8 +14,8 @@ import (
 )
 
 // fake is a double of Store.Get as a generated double writes it: the stub of
-// the method, a function, the default results, and a method that answers
-// through stub.Answer.
+// the method, a function, the default results, and a method that returns its
+// results through stub.Answer.
 type fake struct {
 	on       *stub.MethodStub[call]
 	fn       func(key string) error
@@ -27,7 +27,7 @@ func newFake(tb assert.TB) *fake {
 	return &fake{on: stub.NewMethodStub[call](tb, getName)}
 }
 
-// Get answers the call of key with the value and the error of the results.
+// Get returns the value and the error of the results of the call of key.
 func (f *fake) Get(key string) (string, error) {
 	a := arms()
 	if f.fn != nil {
@@ -80,7 +80,7 @@ func TestBehaviour(t *testing.T) {
 			stub.Behaviour(t, "Get", subject)
 		})
 
-		t.Run("passes a double whose unconfigured call answers its default results", func(t *testing.T) {
+		t.Run("passes a double whose unconfigured call returns its default results", func(t *testing.T) {
 			t.Parallel()
 
 			stub.Behaviour(t, "Get", func(tb assert.TB) stub.Subject[call, ret] {
@@ -145,7 +145,7 @@ func TestBehaviour(t *testing.T) {
 				},
 			},
 			{
-				name: "fails the check of the default results for a double that answers a value",
+				name: "fails the check of the default results for a double that returns a value",
 				give: func(tb assert.TB) stub.Subject[call, ret] {
 					s := subject(tb)
 					result := s.Result
@@ -156,7 +156,7 @@ func TestBehaviour(t *testing.T) {
 					}
 					return s
 				},
-				want: []string{"answers_with_the_default_results_when_unconfigured"},
+				want: []string{"returns_the_default_results_of_an_unconfigured_call"},
 			},
 			{
 				name: "fails the check of the default results for a double that ignores its default results",
@@ -165,7 +165,7 @@ func TestBehaviour(t *testing.T) {
 					s.Default = func() ret { return ret{Value: "default"} }
 					return s
 				},
-				want: []string{"answers_with_the_default_results_when_unconfigured"},
+				want: []string{"returns_the_default_results_of_an_unconfigured_call"},
 			},
 			{
 				name: "fails the check of the function for a double that ignores the function",
@@ -174,7 +174,7 @@ func TestBehaviour(t *testing.T) {
 					s.Override = func(func()) {}
 					return s
 				},
-				want: []string{"dispatches_to_the_Func_override"},
+				want: []string{"calls_the_function_of_Func"},
 			},
 			{
 				name: "fails the checks of the error for a double that drops the error of a fault",
@@ -186,14 +186,14 @@ func TestBehaviour(t *testing.T) {
 					}
 					return s
 				},
-				want: []string{"returns_an_injected_fault", "fires_a_counted_fault_on_the_nth_call"},
+				want: []string{"returns_an_injected_fault", "fails_the_call_that_the_count_of_Faults_names"},
 			},
 			{
 				name: "fails the check of the record of a fault for a double that records no failed call",
 				give: func(tb assert.TB) stub.Subject[call, ret] {
 					s := subject(tb)
 					s.Fails = func() error {
-						if fired, err := s.Stub.ShouldFaultFor(call{}); fired {
+						if faulted, err := s.Stub.ShouldFaultFor(call{}); faulted {
 							return err
 						}
 						s.Stub.Record(call{})

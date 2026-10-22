@@ -26,8 +26,8 @@ type Subject[C, R any] struct {
 	Fails func() error
 	// Result calls the method and returns its results.
 	Result func() R
-	// Default returns the results that an unconfigured call answers, and is
-	// nil where they are the zero results.
+	// Default returns the results of an unconfigured call, and is nil where
+	// they are the zero results.
 	Default func() R
 	// Override sets a function of the method that calls mark and returns the
 	// zero results.
@@ -44,7 +44,7 @@ type Subject[C, R any] struct {
 // The checks cover the recording of a call, the expected counts of calls,
 // strict mode, the default results of an unconfigured call, the function of
 // the method and the faults of a method that can fail. A check that the
-// method answers its fixed result needs a value that differs from the
+// method returns its fixed result needs a value that differs from the
 // default results. A generated test writes that check with a sample of the
 // results.
 func Behaviour[C, R any](t *testing.T, name string, newSubject func(tb assert.TB) Subject[C, R]) {
@@ -60,7 +60,7 @@ func Behaviour[C, R any](t *testing.T, name string, newSubject func(tb assert.TB
 	t.Run("reports an unmet call count", func(t *testing.T) {
 		t.Parallel()
 		// Verify runs here and not through the cleanup of the double. The
-		// check then holds for a double that registers no cleanup.
+		// check then also applies to a double that registers no cleanup.
 		r := assert.NewRecorder()
 		s := newSubject(r)
 		s.Stub.Times(2)
@@ -88,29 +88,29 @@ func Behaviour[C, R any](t *testing.T, name string, newSubject func(tb assert.TB
 		assert.True(t, r.Failed(), "strict mode refuses an unconfigured call of "+name)
 	})
 
-	behaviourAnswers(t, name, newSubject)
+	behaviourResults(t, name, newSubject)
 	behaviourFaults(t, name, newSubject)
 }
 
-// behaviourAnswers runs the checks of the answers of a call, each where the
+// behaviourResults runs the checks of the results of a call, each where the
 // subject has the field that the check needs.
-func behaviourAnswers[C, R any](t *testing.T, name string, newSubject func(tb assert.TB) Subject[C, R]) {
+func behaviourResults[C, R any](t *testing.T, name string, newSubject func(tb assert.TB) Subject[C, R]) {
 	t.Helper()
 
 	probe := newSubject(t)
 	if probe.Result != nil {
-		t.Run("answers with the default results when unconfigured", func(t *testing.T) {
+		t.Run("returns the default results of an unconfigured call", func(t *testing.T) {
 			t.Parallel()
 			s := newSubject(t)
 			var want R
 			if s.Default != nil {
 				want = s.Default()
 			}
-			assert.Equal(t, s.Result(), want, "an unconfigured call of "+name+" answers with its default results")
+			assert.Equal(t, s.Result(), want, "an unconfigured call of "+name+" returns its default results")
 		})
 	}
 	if probe.Override != nil {
-		t.Run("dispatches to the Func override", func(t *testing.T) {
+		t.Run("calls the function of Func", func(t *testing.T) {
 			t.Parallel()
 			called := false
 			s := newSubject(t)
@@ -137,7 +137,7 @@ func behaviourFaults[C, R any](t *testing.T, name string, newSubject func(tb ass
 		assert.ErrorIs(t, s.Fails(), errFault, name+" returns the error of the armed fault")
 	})
 
-	t.Run("fires a counted fault on the nth call", func(t *testing.T) {
+	t.Run("fails the call that the count of Faults names", func(t *testing.T) {
 		t.Parallel()
 		// A fault on the first call cannot tell a retry loop that works from
 		// one that never runs. A fault on the third call can.
