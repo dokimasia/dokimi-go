@@ -1,5 +1,12 @@
 # go.dokimi.dev/stub
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [a5fec39]
+  - go.dokimi.dev/fault@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
