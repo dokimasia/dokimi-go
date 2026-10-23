@@ -1,5 +1,12 @@
 # go.dokimi.dev/conform
 
+## 0.3.0
+
+### Minor Changes
+
+- e01c5e3: Add `conform.Handle.Cleanup`, which registers a function on the test or the case of a check, and the fault `ErrCleanup`.
+- 5972ce2: Add `conform.Handle.TempDir`, which returns a new directory of a check or a case that the run removes.
+
 ## 0.2.1
 
 ### Patch Changes
