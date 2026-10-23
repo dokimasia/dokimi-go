@@ -33,6 +33,9 @@ var ErrClock = errors.New("conform: no subject reads the clock of the handle")
 // that the run removes.
 var ErrTempDir = errors.New("conform: the handle cannot make a temporary directory")
 
+// ErrCleanup is the fault of [Handle.Cleanup] on a seat without Cleanup.
+var ErrCleanup = errors.New("conform: the handle cannot register a cleanup")
+
 // seat is the seat of a handle. The handle embeds it, so the promoted Helper
 // marks the frame of the assertion that calls it, and a failure on a test
 // reports the line of the check.
@@ -201,6 +204,22 @@ func (h *Handle[S]) Statement() string {
 // Context returns the context of the seat of the check.
 func (h *Handle[S]) Context() context.Context {
 	return assert.Context(h.seat)
+}
+
+// Cleanup registers f to run when the check ends, or when the case ends under
+// a property check, through the cleanup of the seat. A factory registers the
+// stop of a subject with it, such as the end of the goroutines of the
+// subject. It ends the check with a fault that wraps [ErrCleanup] on a seat
+// without Cleanup, and it registers nothing for a seat that takes the fault
+// and goes on.
+func (h *Handle[S]) Cleanup(f func()) {
+	h.Helper()
+	seat, has := h.seat.(interface{ Cleanup(f func()) })
+	if !has {
+		assert.Fault(h, fmt.Errorf("%w: the seat of %s has no Cleanup", ErrCleanup, h.check.ID))
+		return
+	}
+	seat.Cleanup(f)
 }
 
 // TempDir returns a new directory of the check, which the run removes when

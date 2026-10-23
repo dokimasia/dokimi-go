@@ -229,6 +229,7 @@ func (b Budget) over() func() {
 				sink.Store(new(byte))
 			}
 		}
+	//dokimi:mutate-skip ror-false: an instrumented test binary leaves each byte ceiling unchecked, so no spec under mutation sees the spend of this planted defect
 	case b.Bytes != nil:
 		n := *b.Bytes
 		return func() {

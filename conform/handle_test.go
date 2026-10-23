@@ -359,6 +359,67 @@ func TestHandle(t *testing.T) {
 		})
 	})
 
+	t.Run("Cleanup", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("runs the function when the test of the check ends", func(t *testing.T) {
+			t.Parallel()
+
+			var ran atomic.Bool
+			// The cleanup of t runs once its subtest has ended and run the
+			// function.
+			t.Cleanup(func() { assert.True(t, ran.Load(), "the test of the check runs the function") })
+			t.Run("check", func(t *testing.T) {
+				t.Parallel()
+
+				c := keeps()
+				c.Apply = func(h *conform.Handle[Store]) { h.Cleanup(func() { ran.Store(true) }) }
+				c.Run(t, newStore)
+			})
+		})
+
+		t.Run("runs the function when each case of a property check ends", func(t *testing.T) {
+			t.Parallel()
+
+			var cases, cleanups atomic.Int64
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				cases.Add(1)
+				h.Cleanup(func() { cleanups.Add(1) })
+				expect.Equal(t, cleanups.Load(), cases.Load()-1, "the earlier cases have run their functions")
+			}
+			c.Run(t, newStore)
+			assert.True(t, cases.Load() > 0, "the property check runs cases")
+			expect.Equal(t, cleanups.Load(), cases.Load(), "each case runs its function when it ends")
+		})
+
+		t.Run("ends the check with a fault on a seat without Cleanup", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) { h.Cleanup(func() {}) }
+			faults := recorded(func(tb assert.TB) { c.Run(tb, newStore) }).Faults()
+			assert.Length(t, faults, 1, "Cleanup ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrCleanup, "the fault is the fault of Cleanup")
+			expect.Equal(t, faults[0].Error(), "conform: the handle cannot register a cleanup: the seat of "+
+				"Store.Get/keeps-the-value has no Cleanup", "the fault contains the check")
+		})
+
+		t.Run("returns to a seat that goes on after a fatal failure", func(t *testing.T) {
+			t.Parallel()
+
+			var returned atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Cleanup(func() {})
+				returned.Store(true)
+			}
+			c.Run(assert.NewRecorder(), newStore)
+			assert.True(t, returned.Load(), "Cleanup returns to the check")
+		})
+	})
+
 	t.Run("TempDir", func(t *testing.T) {
 		t.Parallel()
 
