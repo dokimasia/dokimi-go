@@ -1,5 +1,11 @@
 # go.dokimi.dev/conform
 
+## 0.2.1
+
+### Patch Changes
+
+- 8936ceb: Fix `conform.BenchParallel` to draw the calls of each goroutine on its own, so no two goroutines pass one input to the subject.
+
 ## 0.2.0
 
 ### Minor Changes
