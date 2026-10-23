@@ -7,8 +7,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,10 +18,35 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/files"
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
+
+// TempDir of a case of a property check makes its directory in the directory
+// of temporary files. The test sets the variables of that directory, so
+// neither it nor its subtests run in parallel.
+func TestHandleTempDir(t *testing.T) {
+	t.Run("fails the property run where the directory of temporary files is missing", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "missing")
+		for _, env := range []string{"TMPDIR", "TMP", "TEMP"} {
+			t.Setenv(env, missing)
+		}
+		c := keepsEvery()
+		c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+			_ = pc.Draw(prop.String(), "key")
+			_ = h.TempDir()
+		}
+		r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+		assert.True(t, r.Failed(), "the property run fails")
+		failure, isRecord := detailOf(t, r, "failure").(map[string]any)
+		assert.True(t, isRecord, "the record of the property run has the failure of its case")
+		assert.Matches(t, failure["contract"],
+			`^conform: the handle cannot make a temporary directory for Store\.Get/keeps-every-value: .*missing`,
+			"the failure of the case is the fault of TempDir with the missing directory")
+	})
+}
 
 // The handle of a check is the seat of its assertions. It builds the subjects
 // of the check, supplies its machinery, and stops a check that calls a door
@@ -329,6 +356,75 @@ func TestHandle(t *testing.T) {
 			}
 			c.Run(t, newStore)
 			expect.False(t, mismatched.Load(), "the handle of each case returns the context of the case")
+		})
+	})
+
+	t.Run("TempDir", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns a directory of the test that the test removes", func(t *testing.T) {
+			t.Parallel()
+
+			var dir string
+			// The cleanup of t runs once its subtest has ended and removed
+			// the directory.
+			t.Cleanup(func() { files.Absent(t, dir, "the test removes the directory when it ends") })
+			t.Run("check", func(t *testing.T) {
+				t.Parallel()
+
+				c := keeps()
+				c.Apply = func(h *conform.Handle[Store]) {
+					dir = h.TempDir()
+					files.IsDir(h, dir, "TempDir returns a directory")
+				}
+				c.Run(t, newStore)
+			})
+		})
+
+		t.Run("returns a directory of each case that the case removes", func(t *testing.T) {
+			t.Parallel()
+
+			var mu sync.Mutex
+			var dirs []string
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				dir := h.TempDir()
+				files.IsDir(h, dir, "TempDir returns a directory of the case")
+				mu.Lock()
+				dirs = append(dirs, dir)
+				mu.Unlock()
+			}
+			c.Run(t, newStore)
+			assert.NotEmpty(t, dirs, "the cases call TempDir")
+			distinct := slices.Clone(dirs)
+			slices.Sort(distinct)
+			expect.Length(t, slices.Compact(distinct), len(dirs), "each case has a directory of its own")
+			for _, dir := range dirs {
+				files.Absent(t, dir, "the case removes its directory when it ends")
+			}
+		})
+
+		t.Run("ends the check with a fault on a seat that cannot remove a directory", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) { _ = h.TempDir() }
+			faults := recorded(func(tb assert.TB) { c.Run(tb, newStore) }).Faults()
+			assert.Length(t, faults, 1, "TempDir ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrTempDir, "the fault is the fault of TempDir")
+			expect.Equal(t, faults[0].Error(), "conform: the handle cannot make a temporary directory: the seat "+
+				"of Store.Get/keeps-the-value has no Cleanup", "the fault contains the check")
+		})
+
+		t.Run("returns an empty name to a seat that goes on after a fatal failure", func(t *testing.T) {
+			t.Parallel()
+
+			got := "unset"
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) { got = h.TempDir() }
+			c.Run(assert.NewRecorder(), newStore)
+			assert.Equal(t, got, "", "TempDir returns no directory")
 		})
 	})
 

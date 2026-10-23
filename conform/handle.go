@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,10 @@ var ErrOption = errors.New("conform: the application does not pass the option of
 // ErrClock is the fault of [Handle.Advance] where no subject of the check read
 // the clock of its handle.
 var ErrClock = errors.New("conform: no subject reads the clock of the handle")
+
+// ErrTempDir is the fault of [Handle.TempDir] where it cannot make a directory
+// that the run removes.
+var ErrTempDir = errors.New("conform: the handle cannot make a temporary directory")
 
 // seat is the seat of a handle. The handle embeds it, so the promoted Helper
 // marks the frame of the assertion that calls it, and a failure on a test
@@ -196,6 +201,35 @@ func (h *Handle[S]) Statement() string {
 // Context returns the context of the seat of the check.
 func (h *Handle[S]) Context() context.Context {
 	return assert.Context(h.seat)
+}
+
+// TempDir returns a new directory of the check, which the run removes when
+// the check ends, or when the case ends under a property check. Each call
+// returns another directory, so a factory builds each subject on a directory
+// of its own.
+//
+// TempDir makes the directory in the directory of temporary files, and the
+// cleanup of the seat removes it: the cleanup of the test of the check, or of
+// the case of a property check. It ends the check with a fault that wraps
+// [ErrTempDir] on a seat without Cleanup and where it cannot make the
+// directory, and it returns an empty name to a seat that takes the fault and
+// goes on.
+func (h *Handle[S]) TempDir() string {
+	h.Helper()
+	seat, has := h.seat.(interface{ Cleanup(f func()) })
+	if !has {
+		assert.Fault(h, fmt.Errorf("%w: the seat of %s has no Cleanup", ErrTempDir, h.check.ID))
+		return ""
+	}
+	dir, err := os.MkdirTemp("", "conform-")
+	if err != nil {
+		assert.Fault(h, fmt.Errorf("%w for %s: %w", ErrTempDir, h.check.ID, err))
+		return ""
+	}
+	seat.Cleanup(func() {
+		assert.NoError(h, os.RemoveAll(dir), "TempDir removes the directory of the check")
+	})
+	return dir
 }
 
 // Unwrap returns the seat of the check. An assertion on the handle writes its
