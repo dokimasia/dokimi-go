@@ -329,6 +329,26 @@ func TestBenchProcess(t *testing.T) {
 				"the last run makes 7 calls of its warm-up before 10 measured calls")
 		})
 
+		t.Run("draws the calls of each goroutine from the seed of the benchmark", func(t *testing.T) {
+			var keys []string
+			parallel(t, func(b *testing.B) {
+				b.Helper()
+				keys = nil
+				conform.BenchParallel(b, concurrent(keyed(&keys)), storeGet, newStore)
+			})
+			assert.Length(t, keys, 100*runtime.GOMAXPROCS(0), "the last run draws 100 calls for each goroutine")
+			assert.Equal(t, keys, slices.Repeat(keys[:100], runtime.GOMAXPROCS(0)),
+				"each goroutine takes the calls of the seed in the order of Bench")
+		})
+
+		t.Run("passes no input to two goroutines at once", func(t *testing.T) {
+			_, failed := parallel(t, func(b *testing.B) {
+				b.Helper()
+				conform.BenchParallel(b, concurrent(buffered), storeGet, newStore)
+			})
+			assert.False(t, failed, "each goroutine writes the buffers of its own calls")
+		})
+
 		t.Run("passes the overrides of the suite to the call generator", func(t *testing.T) {
 			var undeclared atomic.Bool
 			suite := declaredBudget(&undeclared)
@@ -526,6 +546,20 @@ func keyed(keys *[]string) prop.Generator[func(context.Context, Store) error] {
 		}
 	})
 }
+
+// buffered generates calls of Get that each write their key into a buffer of
+// the call before the read, as a callable that appends its output to the
+// buffer of its request does. Two goroutines that make one call write one
+// buffer, which the race detector reports.
+var buffered = prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
+	key := c.Draw(prop.String(), "key")
+	buf := make([]byte, 0, len(key))
+	return func(_ context.Context, s Store) error {
+		buf = append(buf[:0], key...)
+		_, _ = s.Get(string(buf))
+		return nil
+	}
+})
 
 // failingCalls generates calls of Get that each return errMissing.
 var failingCalls = prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
