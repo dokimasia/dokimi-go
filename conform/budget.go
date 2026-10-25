@@ -6,6 +6,7 @@ package conform
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,9 +36,10 @@ type ceiling[S any] struct {
 	added bool
 }
 
-// RunBudgets applies the allocation ceiling of each call of the suite, and of
-// each budget that the option [Ceilings] adds, to subjects of newSubject. A
-// generated suite runs it in Test<Subject>Allocs.
+// RunBudgets applies the allocation ceiling of each call of the suite, of each
+// budget that the option [Ceilings] adds, and each check that counts
+// allocations, to subjects of newSubject. A generated suite runs it in
+// Test<Subject>Allocs.
 //
 // Each allocation ceiling is a property check. Each case draws a call from
 // the call generator of the callable and builds a fresh subject outside the
@@ -49,12 +51,15 @@ type ceiling[S any] struct {
 //
 // RunBudgets reports every problem of the checks, the calls and the options
 // on t, as [Run] does, and stops t when it finds one. Otherwise it runs each
-// ceiling as a test of t, such as Get/allocation-budget. The tests do not run
-// in parallel, because a count of allocations covers the whole process. The
-// test of an excused ceiling skips with the reason of the excusal. In a run
-// that does not check allocation ceilings, each test skips with the reason of
-// [assert.AllocsChecked]. The test of a ceiling that the option Ceilings adds
-// falsifies the ceiling before it applies it.
+// ceiling as a test of t, such as Get/allocation-budget. It then runs each
+// check of the suite and of the option [With] that counts allocations as a
+// test of t, such as Apply/keeps-the-steady-state. The tests do not run in
+// parallel, because a count of allocations covers the whole process. The test
+// of an excused ceiling or check skips with the reason of the excusal. In a
+// run that does not check allocation ceilings, each test skips with the
+// reason of [assert.AllocsChecked]. The test of a ceiling that the option
+// Ceilings adds, and of a check that With adds, falsifies the ceiling or the
+// check before it applies it.
 func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	cfg := configure(opts)
@@ -71,29 +76,61 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 			c.check.run(t, newSubject, cfg)
 		})
 	}
+	checks := append(slices.Clip(suite.Checks), cfg.checks...)
+	for i, c := range checks {
+		if !c.Counted {
+			continue
+		}
+		t.Run(c.ID.subtest(), func(t *testing.T) {
+			t.Helper()
+			cfg.skipExcused(t, c.ID)
+			skipUncounted(t)
+			//dokimi:mutate-skip ror-true: an instrumented test binary skips each check that counts allocations, so no spec under mutation reaches this line
+			if i >= len(suite.Checks) {
+				c.falsify(t, cfg, checks)
+			}
+			c.run(t, newSubject, cfg)
+		})
+	}
 }
 
-// FalsifyAllocs applies the allocation ceiling of each call of the suite to
-// its planted defect. The defect is the subject that Over of the call returns,
-// whose callable allocates one time more per call than the ceiling admits. A
+// FalsifyAllocs applies the allocation ceiling of each call of the suite, and
+// each check of the suite that counts allocations, to its planted defect. The
+// defect of a ceiling is the subject that Over of the call returns, whose
+// callable allocates one time more per call than the ceiling admits. A
 // generated suite runs it in Test<Declaration>SuiteAllocs.
 //
-// FalsifyAllocs reports every problem of the calls on t, and stops t when it
-// finds one. Otherwise it runs each ceiling as a test of t. The tests do not
-// run in parallel, because a count of allocations covers the whole process.
-// The test of a ceiling fails unless the defect fails the ceiling at
-// [assert.MaxAllocs]. In a run that does not check allocation ceilings, each
-// test skips with the reason of [assert.AllocsChecked].
+// FalsifyAllocs reports every problem of the checks and the calls on t, as
+// [Falsify] does, and stops t when it finds one. Otherwise it runs each
+// ceiling as a test of t, then each check of the suite that counts
+// allocations. The tests do not run in parallel, because a count of
+// allocations covers the whole process. The test of a ceiling fails unless
+// the defect fails the ceiling at [assert.MaxAllocs]. The test of a check
+// falsifies the check on its planted defect against every other check of the
+// suite, as Falsify does. In a run that does not check allocation ceilings,
+// each test skips with the reason of [assert.AllocsChecked].
 func FalsifyAllocs[S any](t T, suite Suite[S]) {
 	t.Helper()
 	cfg := configure[S](nil)
 	cfg.using = suite.Using
-	stopAt(t, budgetProblems(suite.Declaration+"Suite", suite.Calls, nil))
+	name := suite.Declaration + "Suite"
+	found := problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil))
+	stopAt(t, append(found, budgetProblems(name, suite.Calls, nil)...))
 	for _, c := range allocationCeilings(suite.Calls, nil) {
 		t.Run(c.check.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			skipUncounted(t)
 			c.check.falsify(t, cfg, nil)
+		})
+	}
+	for _, c := range suite.Checks {
+		if !c.Counted {
+			continue
+		}
+		t.Run(c.ID.subtest(), func(t *testing.T) {
+			t.Helper()
+			skipUncounted(t)
+			c.falsify(t, cfg, suite.Checks)
 		})
 	}
 }

@@ -70,6 +70,26 @@ func TestFalsify(t *testing.T) {
 				"the falsification runs one test for the check")
 		})
 
+		t.Run("leaves out a check that counts allocations", func(t *testing.T) {
+			t.Parallel()
+
+			a := application(func(t conform.T) {
+				conform.Falsify(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{keeps(), countedEvery()},
+				})
+			})
+			assert.Equal(t, a.tests, []string{"Get/keeps-the-value"},
+				"the falsification runs the check that does not count allocations")
+		})
+
+		t.Run("applies no check that counts allocations to another planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Falsify(t, conform.Suite[Store]{
+				Declaration: "Store", Checks: []conform.Check[Store]{keeps(), countedEvery()},
+			})
+		})
+
 		t.Run("runs the check of a function under its identity", func(t *testing.T) {
 			t.Parallel()
 

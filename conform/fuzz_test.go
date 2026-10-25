@@ -18,8 +18,8 @@ import (
 const fuzzMode = "CONFORM_TEST_FUZZ_MODE"
 
 // noPropertyCheck is the reason of the skip of a fuzz target of Get without a
-// property check.
-const noPropertyCheck = "Store.Get has no property check that the application does not excuse"
+// property check to fuzz.
+const noPropertyCheck = "Store.Get has no property check that the application fuzzes"
 
 // TestFuzzProcess checks the fuzz target that Fuzz registers. Fuzz takes a
 // *testing.F, which only the testing package constructs, so each case runs
@@ -60,6 +60,12 @@ func TestFuzzProcess(t *testing.T) {
 
 		t.Run("skips a callable whose property checks the options excuse", func(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=excused")
+			expect.Contains(t, out, "--- SKIP: FuzzChild", "the fuzz test skips")
+			expect.Contains(t, out, noPropertyCheck, "the skip states the reason")
+		})
+
+		t.Run("leaves out a property check that counts allocations", func(t *testing.T) {
+			out := childRun(t, "FuzzChild", fuzzMode+"=counted")
 			expect.Contains(t, out, "--- SKIP: FuzzChild", "the fuzz test skips")
 			expect.Contains(t, out, noPropertyCheck, "the skip states the reason")
 		})
@@ -137,6 +143,12 @@ var fuzzModes = map[string]func(f *testing.F){
 		f.Helper()
 		conform.Fuzz(f, everySuite(), storeGet, newStore,
 			conform.Excuse(storeGet.Check("keeps-every-value"), "the store keeps no values"))
+	},
+	// counted fuzzes a suite whose property check counts allocations.
+	"counted": func(f *testing.F) {
+		f.Helper()
+		suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+		conform.Fuzz(f, suite, storeGet, newStore)
 	},
 	// other fuzzes a suite whose property check is a check of Put.
 	"other": func(f *testing.F) {

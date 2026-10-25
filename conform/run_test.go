@@ -75,6 +75,25 @@ func TestRun(t *testing.T) {
 				"the application runs one test for the check")
 		})
 
+		t.Run("leaves out a check that counts allocations", func(t *testing.T) {
+			t.Parallel()
+
+			a := application(func(t conform.T) {
+				conform.Run(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{keeps(), countedEvery()},
+				}, newStore, conform.With(misses()))
+			})
+			assert.Equal(t, a.tests, []string{"Get/keeps-the-value", "Get/misses-unknown-keys"},
+				"the application runs the checks that do not count allocations")
+		})
+
+		t.Run("falsifies an added check against the checks that do not count allocations", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}},
+				newStore, conform.With(keeps()))
+		})
+
 		t.Run("runs the check of a function under its identity", func(t *testing.T) {
 			t.Parallel()
 

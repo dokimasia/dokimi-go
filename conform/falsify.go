@@ -26,7 +26,9 @@ import "testing"
 // the check at the assertion whose message is the statement of the check. The
 // test also applies every other check of the suite to the defect, and fails
 // when the defect fails one of them. Checks that share one defect accept the
-// failures of each other.
+// failures of each other. Falsify leaves out each check that counts
+// allocations, which [FalsifyAllocs] falsifies, and applies no such check to
+// another planted defect.
 //
 // Falsify also runs a parallel test of each ceiling of bytes, p99 and mean of
 // the budget of each call, such as Get/latency-budget. The test measures 10
@@ -41,11 +43,12 @@ func Falsify[S any](t T, suite Suite[S]) {
 	name := suite.Declaration + "Suite"
 	found := problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil))
 	stopAt(t, append(found, budgetProblems(name, suite.Calls, nil)...))
-	for _, c := range suite.Checks {
+	parallel := uncounted(suite.Checks)
+	for _, c := range parallel {
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
-			c.falsify(t, cfg, suite.Checks)
+			c.falsify(t, cfg, parallel)
 		})
 	}
 	for i := range suite.Calls {

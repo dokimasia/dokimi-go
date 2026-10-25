@@ -160,6 +160,14 @@ func keepsEvery() conform.Check[Store] {
 	}
 }
 
+// countedEvery returns the property check of keepsEvery as a check that counts
+// allocations. Its planted defect forgetful also fails the check of keeps.
+func countedEvery() conform.Check[Store] {
+	c := keepsEvery()
+	c.Counted = true
+	return c
+}
+
 // kind is a type over int, of which a suite declares two values.
 type kind int
 

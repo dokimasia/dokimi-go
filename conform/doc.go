@@ -33,6 +33,9 @@
 // The calls of a suite contain the call generator and the budget of each
 // callable. [RunBudgets] applies the allocation ceilings of the budgets to a
 // subject, and [FalsifyAllocs] applies each of them to its planted defect.
+// Both also run each check that counts allocations, which [Check.Counted]
+// marks, in a test that does not run in parallel. [Run], [Falsify] and [Fuzz]
+// leave such a check out.
 // [Bench] measures a callable of a subject under the ceilings of its budget.
 // [BenchParallel] measures a callable that admits concurrent calls on
 // GOMAXPROCS goroutines at once. [Falsify] applies each ceiling of bytes and

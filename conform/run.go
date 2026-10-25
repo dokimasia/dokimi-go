@@ -31,20 +31,25 @@ type T interface {
 // declaration. The test of an excused check skips with the reason of the
 // excusal. The test of a check that opts add falsifies the check before it
 // applies the check to the subject, as [Falsify] does, against every other
-// check of the application that opts do not excuse.
+// check of the application that opts do not excuse. Run leaves out each check
+// that counts allocations, which [RunBudgets] runs.
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	cfg := configure(opts)
 	cfg.using = suite.Using
 	stopAt(t, validate("Run"+suite.Declaration+"Suite", suite, cfg))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
+	parallel := uncounted(checks)
 	for i, c := range checks {
+		if c.Counted {
+			continue
+		}
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
 			cfg.skipExcused(t, c.ID)
 			if i >= len(suite.Checks) {
-				c.falsify(t, cfg, checks)
+				c.falsify(t, cfg, parallel)
 			}
 			c.run(t, newSubject, cfg)
 		})

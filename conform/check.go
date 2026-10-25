@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -40,6 +41,13 @@ type Check[S any] struct {
 
 	// Statement is the sentence that the check proves of a subject.
 	Statement string
+
+	// Counted reports that the check counts the allocations of the whole
+	// process, as [assert.MaxAllocs] does. A count in a parallel test includes
+	// the allocations of the tests that run concurrently. [RunBudgets] and
+	// [FalsifyAllocs] therefore run the check in a test that does not run in
+	// parallel, and [Run], [Falsify] and [Fuzz] leave it out.
+	Counted bool
 }
 
 // Run applies the check on tb to a subject that newSubject builds on the
@@ -203,4 +211,10 @@ func (c *Check[S]) against(defect func(h *Handle[S]) S, cfg *config[S]) (string,
 func funcName(fn any) string {
 	name := runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 	return name[strings.LastIndex(name, "/")+1:]
+}
+
+// uncounted returns the checks of checks that do not count allocations, in
+// their order.
+func uncounted[S any](checks []Check[S]) []Check[S] {
+	return slices.DeleteFunc(slices.Clone(checks), func(c Check[S]) bool { return c.Counted })
 }

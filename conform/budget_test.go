@@ -51,6 +51,33 @@ func TestBudget(t *testing.T) {
 			assert.Equal(t, a.tests, []string{"Get/allocation-budget"}, "the application runs the ceiling")
 		})
 
+		t.Run("runs each check that counts allocations after the ceilings", func(t *testing.T) {
+			t.Parallel()
+
+			suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
+			suite.Checks = []conform.Check[Store]{keeps(), countedEvery()}
+			added := misses()
+			added.Counted = true
+			a := application(func(t conform.T) { conform.RunBudgets(t, suite, newStore, conform.With(added)) })
+			assert.Empty(t, a.errors, "the application reports no problem")
+			assert.Equal(t, a.tests,
+				[]string{"Get/allocation-budget", "Get/keeps-every-value", "Get/misses-unknown-keys"},
+				"the application runs the ceiling, then the checks of the suite and of the option With that count "+
+					"allocations")
+		})
+
+		t.Run("skips a check that counts allocations in a run that does not check them", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+				conform.RunBudgets(t, suite, forget)
+				return
+			}
+			expect.Contains(t, childOutputWith(t, "DOKIMI_MUTATE_INSTRUMENTED=1"),
+				"--- SKIP: "+t.Name()+"/Get/keeps-every-value", "the test of the check skips")
+		})
+
 		t.Run("runs nothing for a budget without an allocation ceiling", func(t *testing.T) {
 			t.Parallel()
 
@@ -198,16 +225,62 @@ func TestBudget(t *testing.T) {
 				"--- SKIP: "+t.Name()+"/Get/allocation-budget", "the test of the ceiling skips")
 		})
 
-		t.Run("reports two calls of one callable", func(t *testing.T) {
+		t.Run("runs each check that counts allocations after the ceilings", func(t *testing.T) {
 			t.Parallel()
 
 			suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
-			suite.Calls = append(suite.Calls, suite.Calls[0])
+			suite.Checks = []conform.Check[Store]{keeps(), countedEvery()}
 			a := application(func(t conform.T) { conform.FalsifyAllocs(t, suite) })
-			assert.Equal(t, a.errors, []string{"two calls of StoreSuite have the callable Store.Get"},
-				"the falsification reports the problem")
-			assert.Empty(t, a.tests, "the falsification runs no check")
+			assert.Equal(t, a.tests, []string{"Get/allocation-budget", "Get/keeps-every-value"},
+				"the falsification runs the ceiling, then the check that counts allocations")
 		})
+
+		t.Run("skips a check that counts allocations in a run that does not check them", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				conform.FalsifyAllocs(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()},
+				})
+				return
+			}
+			expect.Contains(t, childOutputWith(t, "DOKIMI_MUTATE_INSTRUMENTED=1"),
+				"--- SKIP: "+t.Name()+"/Get/keeps-every-value", "the test of the check skips")
+		})
+
+		tests := []struct {
+			name       string
+			giveSuite  conform.Suite[Store]
+			wantErrors []string
+		}{
+			{
+				name: "reports two calls of one callable",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{Allocs: new(uint64(0))})
+					s.Calls = append(s.Calls, s.Calls[0])
+					return s
+				}(),
+				wantErrors: []string{"two calls of StoreSuite have the callable Store.Get"},
+			},
+			{
+				name: "reports a check that counts allocations without a planted defect",
+				giveSuite: func() conform.Suite[Store] {
+					c := countedEvery()
+					c.Defect = nil
+					return conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}
+				}(),
+				wantErrors: []string{"the check Store.Get/keeps-every-value has no planted defect"},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				a := application(func(t conform.T) { conform.FalsifyAllocs(t, tt.giveSuite) })
+				assert.Equal(t, a.errors, tt.wantErrors, "the falsification reports each problem")
+				assert.Empty(t, a.tests, "the falsification runs no check")
+			})
+		}
 	})
 }
 
@@ -295,6 +368,48 @@ func TestBudgetAllocs(t *testing.T) {
 			conform.RunBudgets(t, suite, newStore, conform.Ceilings(storeGet, conform.Budget{Allocs: new(uint64(0))}))
 			assert.True(t, falsified.Load(), "the application builds the planted defect of the ceiling")
 		})
+
+		t.Run("applies a check that counts allocations to a subject of the factory", func(t *testing.T) {
+			skipUnchecked(t)
+			var built atomic.Int32
+			suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+			conform.RunBudgets(t, suite, func(*conform.Handle[Store]) Store {
+				built.Add(1)
+				return newMemory()
+			}, conform.Cases[Store](5))
+			assert.True(t, built.Load() >= 5, "the property run builds a subject in each of its 5 cases at least")
+		})
+
+		t.Run("fails a subject that fails a check that counts allocations", func(t *testing.T) {
+			skipUnchecked(t)
+			if os.Getenv(childEnv) == t.Name() {
+				suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+				conform.RunBudgets(t, suite, forget)
+				return
+			}
+			expect.Contains(t, childOutput(t), "--- FAIL: "+t.Name()+"/Get/keeps-every-value",
+				"the test of the check fails")
+		})
+
+		t.Run("skips an excused check that counts allocations", func(t *testing.T) {
+			skipUnchecked(t)
+			suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+			conform.RunBudgets(t, suite, forget,
+				conform.Excuse(storeGet.Check("keeps-every-value"), "the store keeps no values"))
+		})
+
+		t.Run("falsifies a check that counts allocations of the option With before it applies it", func(t *testing.T) {
+			skipUnchecked(t)
+			var falsified atomic.Bool
+			c := countedEvery()
+			defect := c.Defect
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				falsified.Store(true)
+				return defect(h)
+			}
+			conform.RunBudgets(t, budgeted(conform.Budget{}), newStore, conform.With(c))
+			assert.True(t, falsified.Load(), "the application builds the planted defect of the check")
+		})
 	})
 
 	t.Run("FalsifyAllocs", func(t *testing.T) {
@@ -322,6 +437,27 @@ func TestBudgetAllocs(t *testing.T) {
 			expect.Contains(t, out, "the planted defect of Store.Get/allocation-budget fails the check",
 				"the failure is the failure of the falsification")
 			expect.NotContains(t, out, "before an assertion fails", "the check fails at no other place")
+		})
+
+		t.Run("falsifies a check that counts allocations on its planted defect", func(t *testing.T) {
+			skipUnchecked(t)
+			conform.FalsifyAllocs(t, conform.Suite[Store]{
+				Declaration: "Store", Checks: []conform.Check[Store]{misses(), countedEvery()},
+			})
+		})
+
+		t.Run("fails a planted defect of a check that counts allocations that fails another check", func(t *testing.T) {
+			skipUnchecked(t)
+			if os.Getenv(childEnv) == t.Name() {
+				conform.FalsifyAllocs(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{keeps(), countedEvery()},
+				})
+				return
+			}
+			out := childOutput(t)
+			expect.Contains(t, out, "--- FAIL: "+t.Name()+"/Get/keeps-every-value", "the test of the check fails")
+			expect.Contains(t, out, "\tStore.Get/keeps-the-value fails at the assertion equal",
+				"the failure lists the other check of the suite that the defect fails")
 		})
 	})
 }
