@@ -36,6 +36,9 @@ var ErrTempDir = errors.New("conform: the handle cannot make a temporary directo
 // ErrCleanup is the fault of [Handle.Cleanup] on a seat without Cleanup.
 var ErrCleanup = errors.New("conform: the handle cannot register a cleanup")
 
+// ErrSkip is the fault of [Handle.Skipf] on a seat without Skipf.
+var ErrSkip = errors.New("conform: the handle cannot skip the check")
+
 // seat is the seat of a handle. The handle embeds it, so the promoted Helper
 // marks the frame of the assertion that calls it, and a failure on a test
 // reports the line of the check.
@@ -220,6 +223,25 @@ func (h *Handle[S]) Cleanup(f func()) {
 		return
 	}
 	seat.Cleanup(f)
+}
+
+// Skipf skips the check with the reason that format and args state, through
+// Skipf of the seat. On the test of a check it skips the test. Under a
+// property check it ends the property run as skipped at the case. A factory
+// skips a check where the environment of the run lacks a capability, such as
+// a file system without direct I/O. Skipf ends the check with a fault that
+// wraps [ErrSkip] on a seat without Skipf, and it returns to a seat that
+// takes the fault and goes on.
+func (h *Handle[S]) Skipf(format string, args ...any) {
+	h.Helper()
+	seat, has := h.seat.(interface {
+		Skipf(format string, args ...any)
+	})
+	if !has {
+		assert.Fault(h, fmt.Errorf("%w: the seat of %s has no Skipf", ErrSkip, h.check.ID))
+		return
+	}
+	seat.Skipf(format, args...)
 }
 
 // TempDir returns a new directory of the check, which the run removes when

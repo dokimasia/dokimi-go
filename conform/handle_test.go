@@ -420,6 +420,82 @@ func TestHandle(t *testing.T) {
 		})
 	})
 
+	t.Run("Skipf", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("skips the test of the check", func(t *testing.T) {
+			t.Parallel()
+
+			var check *testing.T
+			var continued atomic.Bool
+			// The cleanup of t runs once its subtest has ended.
+			t.Cleanup(func() {
+				expect.True(t, check.Skipped(), "the test of the check skips")
+				expect.False(t, continued.Load(), "the check ends at Skipf")
+			})
+			t.Run("check", func(t *testing.T) {
+				t.Parallel()
+
+				check = t
+				c := keeps()
+				c.Apply = func(h *conform.Handle[Store]) {
+					h.Skipf("the store needs %s", "a disk")
+					continued.Store(true)
+				}
+				c.Run(t, newStore)
+			})
+		})
+
+		t.Run("skips the property run at the case that calls it", func(t *testing.T) {
+			t.Parallel()
+
+			var check *testing.T
+			var cases atomic.Int64
+			// The cleanup of t runs once its subtest has ended.
+			t.Cleanup(func() {
+				expect.True(t, check.Skipped(), "the property run skips the test of the check")
+				expect.Equal(t, cases.Load(), int64(1), "the property run ends at the first case")
+			})
+			t.Run("check", func(t *testing.T) {
+				t.Parallel()
+
+				check = t
+				c := keepsEvery()
+				c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+					_ = pc.Draw(prop.String(), "key")
+					cases.Add(1)
+					h.Skipf("the store needs %s", "a disk")
+				}
+				c.Run(t, newStore)
+			})
+		})
+
+		t.Run("ends the check with a fault on a seat without Skipf", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) { h.Skipf("the store needs a disk") }
+			faults := recorded(func(tb assert.TB) { c.Run(tb, newStore) }).Faults()
+			assert.Length(t, faults, 1, "Skipf ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrSkip, "the fault is the fault of Skipf")
+			expect.Equal(t, faults[0].Error(), "conform: the handle cannot skip the check: the seat of "+
+				"Store.Get/keeps-the-value has no Skipf", "the fault contains the check")
+		})
+
+		t.Run("returns to a seat that goes on after a fatal failure", func(t *testing.T) {
+			t.Parallel()
+
+			var returned atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Skipf("the store needs a disk")
+				returned.Store(true)
+			}
+			c.Run(assert.NewRecorder(), newStore)
+			assert.True(t, returned.Load(), "Skipf returns to the check")
+		})
+	})
+
 	t.Run("TempDir", func(t *testing.T) {
 		t.Parallel()
 
