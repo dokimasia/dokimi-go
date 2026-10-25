@@ -1,5 +1,14 @@
 # go.dokimi.dev/conform
 
+## 0.3.0
+
+### Minor Changes
+
+- a5ab931: Add `conform.Check.Counted` to run a check that counts allocations in `RunBudgets` and `FalsifyAllocs` instead of `Run`, `Falsify` and `Fuzz`.
+- e01c5e3: Add `conform.Handle.Cleanup`, which registers a function on the test or the case of a check, and the fault `ErrCleanup`.
+- 9420acf: Add `conform.Handle.Skipf`, which skips the test of a check or the property run of its case, and the fault `ErrSkip`.
+- 5972ce2: Add `conform.Handle.TempDir`, which returns a new directory of a check or a case that the run removes.
+
 ## 0.2.1
 
 ### Patch Changes
