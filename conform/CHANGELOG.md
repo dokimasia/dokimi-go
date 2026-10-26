@@ -1,5 +1,15 @@
 # go.dokimi.dev/conform
 
+## 0.4.0
+
+### Minor Changes
+
+- 57c0f4c: **Breaking:** Remove `conform.ErrCleanup`, because `Handle.Cleanup` registers a function on every seat.
+
+### Patch Changes
+
+- 57c0f4c: Fix `Handle.Cleanup` and `Handle.TempDir` on a seat without `Cleanup`, such as the seats of `Falsify` and of the isolation of a planted defect.
+
 ## 0.3.0
 
 ### Minor Changes
