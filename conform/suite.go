@@ -45,6 +45,7 @@ type Suite[S any] struct {
 	// Using are the overrides of the generators of the property runs of the
 	// suite, such as the members of an enumeration. Each run of a property
 	// check of the suite takes them, in an application and in falsification.
+	// An application passes the generators of the option [Using] after them.
 	Using []prop.Option
 }
 
@@ -139,6 +140,19 @@ func Cases[S any](n int) Option[S] {
 	return Option[S]{set: func(c *config[S]) { c.cases = &n }}
 }
 
+// Using states g as the generator of T in the property runs, the fuzz targets
+// and the benchmarks of an application, as [prop.Using] states it for a run.
+// The application passes g after the overrides of the suite, so g replaces the
+// override of the suite for T. A later option of one type replaces an earlier
+// one. A consumer states the values of a type that the suite cannot build,
+// such as a struct whose fields only a constructor of its package sets:
+//
+//	storetest.RunStoreSuite(t, storetest.NewInMemory,
+//		conform.Using[store.Store](prop.Just(store.DefaultLimits())))
+func Using[S, T any](g prop.Generator[T]) Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.using = append(c.using, prop.Using(g)) }}
+}
+
 // Ceilings states the budget of the callable for one application, for a
 // callable whose declaration states no budget. Each ceiling of the budget is a
 // check of that application alone, which the application falsifies before it
@@ -176,7 +190,8 @@ type config[S any] struct {
 	// options.
 	ceilings []stated[S]
 
-	// using are the overrides of the suite.
+	// using are the overrides of the suite, followed by the generators of the
+	// option Using in the order of the options.
 	using []prop.Option
 
 	// seed is the seed of DOKIMI_SEED where seeded is true.
@@ -217,9 +232,9 @@ type stated[S any] struct {
 }
 
 // configure returns the configuration that opts and the variable DOKIMI_SEED
-// set.
-func configure[S any](opts []Option[S]) *config[S] {
-	c := &config[S]{}
+// set, with the overrides using of the suite before the generators of opts.
+func configure[S any](using []prop.Option, opts []Option[S]) *config[S] {
+	c := &config[S]{using: slices.Clip(using)}
 	for _, o := range opts {
 		if o.set != nil {
 			o.set(c)
@@ -250,9 +265,9 @@ func (c *config[S]) invalid() []string {
 }
 
 // runOptions returns the options of a property run of an application: the
-// overrides of the suite, the cases of the option Cases and the seed of
-// DOKIMI_SEED. A run without a seed takes the seed of the profile of the
-// property engine.
+// overrides of the suite, the generators of the option Using, the cases of the
+// option Cases and the seed of DOKIMI_SEED. A run without a seed takes the
+// seed of the profile of the property engine.
 func (c *config[S]) runOptions() []prop.Option {
 	opts := slices.Clip(c.using)
 	if c.cases != nil {
@@ -265,8 +280,9 @@ func (c *config[S]) runOptions() []prop.Option {
 }
 
 // hermetic returns the options of a property run of falsification for the
-// check with the identity id: the overrides of the suite, a hermetic run with
-// a seed of the identity, no store and no shrinking. So each falsification of
+// check with the identity id: the overrides of the suite, the generators of the
+// option Using, a hermetic run with a seed of the identity, no store and no
+// shrinking. So each falsification of
 // one check runs the same cases, writes no stored case, and ends at the first
 // failing case.
 func (c *config[S]) hermetic(id ID[S]) []prop.Option {

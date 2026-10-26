@@ -10,6 +10,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
@@ -155,6 +156,40 @@ func TestSuite(t *testing.T) {
 			expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a setting")
 			expect.Equal(t, faults[0].Error(), "conform: the application has an invalid setting: the option "+
 				"Cases asks for 0 cases, and a property run needs at least 1", "the fault contains the setting")
+		})
+	})
+
+	t.Run("Using", func(t *testing.T) {
+		t.Parallel()
+
+		option := conform.Using[Store](prop.Just(stated))
+
+		t.Run("replaces the override of the suite in each property run of an application", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, statedKinds(), newStore, option)
+		})
+
+		t.Run("states the generator of a type in the property run of a check", func(t *testing.T) {
+			t.Parallel()
+
+			statedKinds().Checks[0].Run(t, newStore, option)
+		})
+
+		t.Run("states the generator of a type in the falsification of an added check", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, empty, newStore, conform.With(statedKinds().Checks...), option)
+		})
+
+		t.Run("replaces the override of the suite in the calls of a benchmark", func(t *testing.T) {
+			t.Parallel()
+
+			var undeclared atomic.Bool
+			suite := declaredBudget(&undeclared)
+			suite.Calls[0].Budget = conform.Budget{}
+			measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, newStore, option) })
+			assert.True(t, undeclared.Load(), "the calls draw the kind of the option")
 		})
 	})
 

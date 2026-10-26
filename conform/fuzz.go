@@ -19,8 +19,9 @@ import (
 // For each input of the fuzzer, the case draws the identity of one property
 // check of the callable under the label check. The checks are those of the
 // suite and those that [With] adds, without the checks that the options
-// excuse and the checks that count allocations. The case runs the property of the check on a handle of the case,
-// with the overrides of the suite. A failing input shrinks and reports as a
+// excuse and the checks that count allocations. The case runs the property of
+// the check on a handle of the case, with the overrides of the suite and the
+// generators of the option [Using]. A failing input shrinks and reports as a
 // failing case of [prop.Fuzz] does. go test without -fuzz runs the seed
 // corpus of f alone.
 //
@@ -33,8 +34,7 @@ func Fuzz[S any](
 	f *testing.F, suite Suite[S], callable Callable[S], newSubject func(h *Handle[S]) S, opts ...Option[S],
 ) {
 	f.Helper()
-	cfg := configure(opts)
-	cfg.using = suite.Using
+	cfg := configure(suite.Using, opts)
 	stopAt(f, validate("Fuzz"+suite.Declaration+"Suite", suite, cfg))
 	var ids []ID[S]
 	checks := make(map[ID[S]]*Check[S])

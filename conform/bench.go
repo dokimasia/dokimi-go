@@ -43,15 +43,16 @@ type B interface {
 // a function.
 //
 // Bench builds one subject and takes 100 calls from the call generator of the
-// callable, with the overrides of the suite. The functions that the factory
-// registers through [Handle.Cleanup] run when the benchmark ends. The calls
-// take the seed of DOKIMI_SEED, or the seed of the identity of the callable
-// where the variable is not set. Each run of one seed measures the same
-// calls. Bench repeats the calls in their order under a contract of
-// [bench.Start] with the ceilings of the budget. The contract first runs the
-// Warmup of the budget, or each call once for a budget without one, as the
-// iterations of [bench.Contract.Warmup]. Bench publishes the share of the
-// calls that return an error as errors/op, the calls of the warm-up included.
+// callable, with the overrides of the suite and the generators of the option
+// [Using]. The functions that the factory registers through [Handle.Cleanup]
+// run when the benchmark ends. The calls take the seed of DOKIMI_SEED, or the
+// seed of the identity of the callable where the variable is not set. Each run
+// of one seed measures the same calls. Bench repeats the calls in their order
+// under a contract of [bench.Start] with the ceilings of the budget. The
+// contract first runs the Warmup of the budget, or each call once for a budget
+// without one, as the iterations of [bench.Contract.Warmup]. Bench publishes
+// the share of the calls that return an error as errors/op, the calls of the
+// warm-up included.
 //
 // Bench reports every problem of the application on b, as [Run] does, and
 // stops b when it finds one. A callable without a call in the suite is a
@@ -138,8 +139,7 @@ func repeat[S any](
 func benchmarked[S any](
 	name string, suite Suite[S], callable Callable[S], opts []Option[S],
 ) (*config[S], *Call[S], []string) {
-	cfg := configure(opts)
-	cfg.using = suite.Using
+	cfg := configure(suite.Using, opts)
 	found := validate(name, suite, cfg)
 	for i := range suite.Calls {
 		if suite.Calls[i].Callable == callable {

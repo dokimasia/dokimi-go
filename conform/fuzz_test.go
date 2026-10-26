@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
 )
@@ -50,6 +51,11 @@ func TestFuzzProcess(t *testing.T) {
 		t.Run("passes the overrides of the suite to each input", func(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=using")
 			expect.Contains(t, out, "--- PASS: FuzzChild/seed#0", "the input draws a declared kind")
+		})
+
+		t.Run("passes the generators of the option Using after the overrides of the suite", func(t *testing.T) {
+			out := childRun(t, "FuzzChild", fuzzMode+"=stated")
+			expect.Contains(t, out, "--- PASS: FuzzChild/seed#0", "the input draws the kind of the option")
 		})
 
 		t.Run("skips a callable without a property check", func(t *testing.T) {
@@ -131,6 +137,14 @@ var fuzzModes = map[string]func(f *testing.F){
 		f.Helper()
 		f.Add([]byte{})
 		conform.Fuzz(f, declaredKinds(), storeGet, newStore)
+	},
+	// stated fuzzes the property check of statedKinds from one seed under the
+	// option Using. The check fails for a kind other than the kind of the
+	// option.
+	"stated": func(f *testing.F) {
+		f.Helper()
+		f.Add([]byte{})
+		conform.Fuzz(f, statedKinds(), storeGet, newStore, conform.Using[Store](prop.Just(stated)))
 	},
 	// apply fuzzes a suite whose check of Get has a function Apply.
 	"apply": func(f *testing.F) {

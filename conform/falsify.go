@@ -39,8 +39,7 @@ import "testing"
 // [FalsifyAllocs] falsifies the allocation ceilings.
 func Falsify[S any](t T, suite Suite[S]) {
 	t.Helper()
-	cfg := configure[S](nil)
-	cfg.using = suite.Using
+	cfg := configure[S](suite.Using, nil)
 	name := suite.Declaration + "Suite"
 	found := problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil))
 	stopAt(t, append(found, budgetProblems(name, suite.Calls, nil)...))

@@ -191,6 +191,27 @@ func declaredKinds() conform.Suite[Store] {
 	}
 }
 
+// stated is the kind that the option Using of the specs states. The overrides
+// of declaredKinds, declaredBudget and statedKinds do not declare it.
+const stated kind = 3
+
+// statedKinds returns a suite with a property check that every kind that its
+// cases draw is stated. It overrides the generator of kind with the kinds 1 and
+// 2, so the check passes only where the option Using replaces the override.
+func statedKinds() conform.Suite[Store] {
+	c := keepsEvery()
+	property := c.Property
+	c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+		assert.Equal(h, pc.Draw(prop.Of[kind](), "kind"), stated, "the case draws the kind of the option Using")
+		property(h, pc)
+	}
+	return conform.Suite[Store]{
+		Declaration: "Store",
+		Checks:      []conform.Check[Store]{c},
+		Using:       []prop.Option{prop.Using(prop.SampledFrom[kind](1, 2))},
+	}
+}
+
 // spender is a Store whose Get calls spend and finds no value, the planted
 // defect of a ceiling of Get.
 type spender struct{ spend func() }

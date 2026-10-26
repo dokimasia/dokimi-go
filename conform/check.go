@@ -57,7 +57,7 @@ type Check[S any] struct {
 // setting.
 func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	tb.Helper()
-	cfg := configure(opts)
+	cfg := configure(nil, opts)
 	if invalid := cfg.invalid(); len(invalid) > 0 {
 		assert.Fault(tb, fmt.Errorf("%w: %s", ErrConfig, invalid[0]))
 		return
@@ -73,7 +73,7 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 // suite. The doors of the handle read the options in opts.
 func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 	tb.Helper()
-	cfg := configure(opts)
+	cfg := configure(nil, opts)
 	c.falsify(tb, cfg, cfg.checks)
 }
 

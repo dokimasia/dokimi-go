@@ -24,9 +24,9 @@
 //	}
 //
 // The options of an application also excuse a check through [Excuse], set the
-// number of cases of each property run through [Cases], and supply the
-// machinery that only the consumer can build through [Reference], [Second]
-// and [Restartable]. An application falsifies each check that [With] adds
+// number of cases of each property run through [Cases], state the generator of
+// a type through [Using], and supply the machinery that only the consumer can
+// build through [Reference], [Second] and [Restartable]. An application falsifies each check that [With] adds
 // before it applies the check to the subject. The check must fail on its
 // planted defect at the assertion whose message is its statement.
 //
