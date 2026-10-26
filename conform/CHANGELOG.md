@@ -1,5 +1,16 @@
 # go.dokimi.dev/conform
 
+## 0.5.0
+
+### Minor Changes
+
+- 77b7dce: Add `conform.Using` to state the generator of a type in the property runs, the fuzz targets and the benchmarks of an application.
+
+### Patch Changes
+
+- 9932003: Require go.dokimi.dev/assert v0.8.0.
+- 9932003: Fix `Handle.Skipf` to skip the falsification of a check.
+
 ## 0.4.0
 
 ### Minor Changes
