@@ -29,12 +29,8 @@ var ErrOption = errors.New("conform: the application does not pass the option of
 // the clock of its handle.
 var ErrClock = errors.New("conform: no subject reads the clock of the handle")
 
-// ErrTempDir is the fault of [Handle.TempDir] where it cannot make a directory
-// that the run removes.
+// ErrTempDir is the fault of [Handle.TempDir] where it cannot make a directory.
 var ErrTempDir = errors.New("conform: the handle cannot make a temporary directory")
-
-// ErrCleanup is the fault of [Handle.Cleanup] on a seat without Cleanup.
-var ErrCleanup = errors.New("conform: the handle cannot register a cleanup")
 
 // ErrSkip is the fault of [Handle.Skipf] on a seat without Skipf.
 var ErrSkip = errors.New("conform: the handle cannot skip the check")
@@ -64,10 +60,13 @@ type Handle[S any] struct {
 	kept   *atomic.Pointer[string]
 
 	// subject is the subject of the check once built is true. mu guards
-	// both.
-	subject S
-	mu      sync.Mutex
-	built   bool
+	// both. cleanups are the functions that Cleanup keeps on a seat without
+	// Cleanup, in the order of their registration. cleaning guards them.
+	subject  S
+	cleanups []func()
+	mu       sync.Mutex
+	built    bool
+	cleaning sync.Mutex
 
 	building  atomic.Int32
 	clockRead atomic.Bool
@@ -210,19 +209,21 @@ func (h *Handle[S]) Context() context.Context {
 }
 
 // Cleanup registers f to run when the check ends, or when the case ends under
-// a property check, through the cleanup of the seat. A factory registers the
-// stop of a subject with it, such as the end of the goroutines of the
-// subject. It ends the check with a fault that wraps [ErrCleanup] on a seat
-// without Cleanup, and it registers nothing for a seat that takes the fault
-// and goes on.
+// a property check. A factory registers the stop of a subject with it, such
+// as the end of the goroutines of the subject. On a seat with Cleanup, such
+// as the test of the check or a case, Cleanup registers f with the seat. On
+// any other seat the handle keeps f, and runs the functions that it keeps
+// when the check ends, the last registered first. A function that stops the
+// check, such as through Fatalf, or that panics leaves the earlier functions
+// to run.
 func (h *Handle[S]) Cleanup(f func()) {
-	h.Helper()
-	seat, has := h.seat.(interface{ Cleanup(f func()) })
-	if !has {
-		assert.Fault(h, fmt.Errorf("%w: the seat of %s has no Cleanup", ErrCleanup, h.check.ID))
+	if seat, has := h.seat.(interface{ Cleanup(f func()) }); has {
+		seat.Cleanup(f)
 		return
 	}
-	seat.Cleanup(f)
+	h.cleaning.Lock()
+	defer h.cleaning.Unlock()
+	h.cleanups = append(h.cleanups, f)
 }
 
 // Skipf skips the check with the reason that format and args state, through
@@ -249,25 +250,18 @@ func (h *Handle[S]) Skipf(format string, args ...any) {
 // returns another directory, so a factory builds each subject on a directory
 // of its own.
 //
-// TempDir makes the directory in the directory of temporary files, and the
-// cleanup of the seat removes it: the cleanup of the test of the check, or of
-// the case of a property check. It ends the check with a fault that wraps
-// [ErrTempDir] on a seat without Cleanup and where it cannot make the
-// directory, and it returns an empty name to a seat that takes the fault and
-// goes on.
+// TempDir makes the directory in the directory of temporary files, and
+// registers its removal through [Handle.Cleanup]. It ends the check with a
+// fault that wraps [ErrTempDir] where it cannot make the directory, and it
+// returns an empty name to a seat that takes the fault and goes on.
 func (h *Handle[S]) TempDir() string {
 	h.Helper()
-	seat, has := h.seat.(interface{ Cleanup(f func()) })
-	if !has {
-		assert.Fault(h, fmt.Errorf("%w: the seat of %s has no Cleanup", ErrTempDir, h.check.ID))
-		return ""
-	}
 	dir, err := os.MkdirTemp("", "conform-")
 	if err != nil {
 		assert.Fault(h, fmt.Errorf("%w for %s: %w", ErrTempDir, h.check.ID, err))
 		return ""
 	}
-	seat.Cleanup(func() {
+	h.Cleanup(func() {
 		assert.NoError(h, os.RemoveAll(dir), "TempDir removes the directory of the check")
 	})
 	return dir
@@ -326,4 +320,26 @@ func (h *Handle[S]) build(newSubject func(h *Handle[S]) S) S {
 	h.building.Add(1)
 	defer h.building.Add(-1)
 	return newSubject(h)
+}
+
+// end ends the check of the handle: it runs the functions that Cleanup kept,
+// the last registered first. Each function runs in a frame of its own, so a
+// function that stops the goroutine of the check or panics leaves the earlier
+// functions to run. A function that a function registers runs next. The code
+// that makes a handle on a seat without Cleanup calls end when the check
+// ends.
+func (h *Handle[S]) end() {
+	h.cleaning.Lock()
+	last := len(h.cleanups) - 1
+	kept := last >= 0
+	var f func()
+	if kept {
+		f, h.cleanups = h.cleanups[last], h.cleanups[:last]
+	}
+	h.cleaning.Unlock()
+	if !kept {
+		return
+	}
+	defer h.end()
+	f()
 }

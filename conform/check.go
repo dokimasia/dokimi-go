@@ -85,16 +85,19 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S])
 }
 
 // exercise applies the check on seat to subjects of source. A check with
-// Apply runs once on one handle. A check with Property runs the property
-// engine on seat with opts, and each case has a handle of its own. Each
-// handle keeps the message of the first failure outside an assertion in
+// Apply runs once on one handle, which ends when Apply returns or stops. A
+// check with Property runs the property engine on seat with opts, and each
+// case has a handle of its own, which registers its cleanups with the case.
+// Each handle keeps the message of the first failure outside an assertion in
 // kept.
 func (c *Check[S]) exercise(
 	seat assert.TB, source func(h *Handle[S]) S, cfg *config[S], opts []prop.Option, kept *atomic.Pointer[string],
 ) {
 	seat.Helper()
 	if c.Property == nil {
-		c.Apply(newHandle(seat, c, source, cfg, kept))
+		h := newHandle(seat, c, source, cfg, kept)
+		defer h.end()
+		c.Apply(h)
 		return
 	}
 	prop.ForAll(seat, c.Statement, func(pc *prop.Case) {

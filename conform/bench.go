@@ -43,14 +43,15 @@ type B interface {
 // a function.
 //
 // Bench builds one subject and takes 100 calls from the call generator of the
-// callable, with the overrides of the suite. The calls take the seed of
-// DOKIMI_SEED, or the seed of the identity of the callable where the variable
-// is not set. Each run of one seed measures the same calls. Bench repeats the
-// calls in their order under a contract of [bench.Start] with the ceilings of
-// the budget. The contract first runs the Warmup of the budget, or each call
-// once for a budget without one, as the iterations of [bench.Contract.Warmup].
-// Bench publishes the share of the calls that return an error as errors/op,
-// the calls of the warm-up included.
+// callable, with the overrides of the suite. The functions that the factory
+// registers through [Handle.Cleanup] run when the benchmark ends. The calls
+// take the seed of DOKIMI_SEED, or the seed of the identity of the callable
+// where the variable is not set. Each run of one seed measures the same
+// calls. Bench repeats the calls in their order under a contract of
+// [bench.Start] with the ceilings of the budget. The contract first runs the
+// Warmup of the budget, or each call once for a budget without one, as the
+// iterations of [bench.Contract.Warmup]. Bench publishes the share of the
+// calls that return an error as errors/op, the calls of the warm-up included.
 //
 // Bench reports every problem of the application on b, as [Run] does, and
 // stops b when it finds one. A callable without a call in the suite is a
@@ -64,6 +65,7 @@ func Bench[S any](b B, suite Suite[S], callable Callable[S], newSubject func(h *
 	cfg, call, found := benchmarked("Bench"+suite.Declaration+"Suite", suite, callable, opts)
 	stopAt(b, found)
 	h, draw, contract := measure(b, call, newSubject, cfg)
+	defer h.end()
 	defer contract.End()
 	made, failed := repeat(h.Context(), h.Subject(), draw(), contract.Loop)
 	b.ReportMetric(float64(failed)/float64(made), errorsUnit)
@@ -197,6 +199,7 @@ func falsifyLimit[S any](tb assert.TB, call *Call[S], l limit, cfg *config[S]) {
 	id := call.Callable.Check(l.segment)
 	defect := func(h *Handle[S]) S { return call.Over(h, l.budget.over()) }
 	h := newHandle(tb, &Check[S]{ID: id}, defect, cfg, new(atomic.Pointer[string]))
+	defer h.end()
 	s, ctx := h.Subject(), h.Context()
 	calls := prop.Values(call.Calls, seedOf(string(id)), falsifyCalls, cfg.using...)
 	assert.Rejects(tb, "the planted defect of "+string(id)+" fails the ceiling", func(seat assert.TB) {

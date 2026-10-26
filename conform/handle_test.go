@@ -24,10 +24,23 @@ import (
 	"go.dokimi.dev/conform"
 )
 
-// TempDir of a case of a property check makes its directory in the directory
-// of temporary files. The test sets the variables of that directory, so
-// neither it nor its subtests run in parallel.
+// TempDir makes its directory in the directory of temporary files. The test
+// sets the variables of that directory, so neither it nor its subtests run in
+// parallel.
 func TestHandleTempDir(t *testing.T) {
+	t.Run("returns an empty name to a seat that goes on where the directory of temporary files is missing",
+		func(t *testing.T) {
+			missing := filepath.Join(t.TempDir(), "missing")
+			for _, env := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(env, missing)
+			}
+			got := "unset"
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) { got = h.TempDir() }
+			c.Run(assert.NewRecorder(), newStore)
+			assert.Equal(t, got, "", "TempDir returns no directory")
+		})
+
 	t.Run("fails the property run where the directory of temporary files is missing", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "missing")
 		for _, env := range []string{"TMPDIR", "TMP", "TEMP"} {
@@ -394,30 +407,163 @@ func TestHandle(t *testing.T) {
 			expect.Equal(t, cleanups.Load(), cases.Load(), "each case runs its function when it ends")
 		})
 
-		t.Run("ends the check with a fault on a seat without Cleanup", func(t *testing.T) {
+		t.Run("runs the function when the check ends on a seat without Cleanup", func(t *testing.T) {
 			t.Parallel()
 
-			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) { h.Cleanup(func() {}) }
-			faults := recorded(func(tb assert.TB) { c.Run(tb, newStore) }).Faults()
-			assert.Length(t, faults, 1, "Cleanup ends the check with one fault")
-			expect.ErrorIs(t, faults[0], conform.ErrCleanup, "the fault is the fault of Cleanup")
-			expect.Equal(t, faults[0].Error(), "conform: the handle cannot register a cleanup: the seat of "+
-				"Store.Get/keeps-the-value has no Cleanup", "the fault contains the check")
-		})
-
-		t.Run("returns to a seat that goes on after a fatal failure", func(t *testing.T) {
-			t.Parallel()
-
-			var returned atomic.Bool
+			var ran atomic.Bool
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
-				h.Cleanup(func() {})
-				returned.Store(true)
+				h.Cleanup(func() { ran.Store(true) })
+				expect.False(t, ran.Load(), "the function waits for the end of the check")
 			}
 			c.Run(assert.NewRecorder(), newStore)
-			assert.True(t, returned.Load(), "Cleanup returns to the check")
+			expect.True(t, ran.Load(), "the end of the check runs the function")
 		})
+
+		t.Run("runs the functions in the reverse order of their registration", func(t *testing.T) {
+			t.Parallel()
+
+			var order []string
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Cleanup(func() { order = append(order, "first") })
+				h.Cleanup(func() { order = append(order, "second") })
+			}
+			c.Run(assert.NewRecorder(), newStore)
+			expect.Equal(t, order, []string{"second", "first"}, "the last function that the check registers runs first")
+		})
+
+		t.Run("runs a function that a function registers before the earlier functions", func(t *testing.T) {
+			t.Parallel()
+
+			var order []string
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Cleanup(func() { order = append(order, "first") })
+				h.Cleanup(func() {
+					order = append(order, "second")
+					h.Cleanup(func() { order = append(order, "third") })
+				})
+			}
+			c.Run(assert.NewRecorder(), newStore)
+			expect.Equal(t, order, []string{"second", "third", "first"},
+				"the function that a function registers runs next")
+		})
+
+		t.Run("runs the earlier functions after a function that stops the check", func(t *testing.T) {
+			t.Parallel()
+
+			var ran atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Cleanup(func() { ran.Store(true) })
+				h.Cleanup(func() { h.Fatalf("the store is %s", "closed") })
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			expect.Equal(t, r.Message(), "the store is closed", "the function fails the check")
+			expect.True(t, ran.Load(), "the earlier function runs after the function that stops the check")
+		})
+
+		t.Run("runs the earlier functions after a function that panics", func(t *testing.T) {
+			t.Parallel()
+
+			var ran atomic.Bool
+			var recovered any
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Cleanup(func() { ran.Store(true) })
+				h.Cleanup(func() {
+					var gone *memory
+					gone.Put("k", "v")
+				})
+			}
+			func() {
+				defer func() { recovered = recover() }()
+				c.Run(assert.NewRecorder(), newStore)
+			}()
+			expect.NotNil(t, recovered, "the panic of the function leaves the run of the check")
+			expect.True(t, ran.Load(), "the earlier function runs after the function that panics")
+		})
+
+		runners := []struct {
+			name string
+			give func(t *testing.T, register func(h *conform.Handle[Store]))
+		}{
+			{
+				name: "runs the function of a check when Falsify ends the check",
+				give: func(t *testing.T, register func(h *conform.Handle[Store])) {
+					t.Helper()
+					c := keeps()
+					apply := c.Apply
+					c.Apply = func(h *conform.Handle[Store]) {
+						register(h)
+						apply(h)
+					}
+					c.Falsify(t)
+				},
+			},
+			{
+				name: "runs the function of a planted defect when Falsify ends the check",
+				give: func(t *testing.T, register func(h *conform.Handle[Store])) {
+					t.Helper()
+					c := keeps()
+					c.Defect = func(h *conform.Handle[Store]) Store {
+						register(h)
+						return forgetful{}
+					}
+					c.Falsify(t)
+				},
+			},
+			{
+				name: "runs the function of a check when the isolation of a planted defect ends the check",
+				give: func(t *testing.T, register func(h *conform.Handle[Store])) {
+					t.Helper()
+					other := keeps()
+					apply := other.Apply
+					other.Apply = func(h *conform.Handle[Store]) {
+						register(h)
+						apply(h)
+					}
+					misses().Falsify(t, conform.With(other))
+				},
+			},
+			{
+				name: "runs the function of a factory when Bench ends",
+				give: func(t *testing.T, register func(h *conform.Handle[Store])) {
+					t.Helper()
+					measured(t, 10, func(b conform.B) {
+						conform.Bench(b, budgeted(conform.Budget{}), storeGet, func(h *conform.Handle[Store]) Store {
+							register(h)
+							return newMemory()
+						})
+					})
+				},
+			},
+			{
+				name: "runs the function of a planted defect when the falsification of a ceiling ends",
+				give: func(t *testing.T, register func(h *conform.Handle[Store])) {
+					t.Helper()
+					suite := budgeted(conform.Budget{})
+					suite.Calls[0].Over = func(h *conform.Handle[Store], spend func()) Store {
+						register(h)
+						return spender{spend: spend}
+					}
+					measured(t, 10, func(b conform.B) {
+						conform.Bench(b, suite, storeGet, newStore,
+							conform.Ceilings(storeGet, conform.Budget{Latency: time.Millisecond}))
+					})
+				},
+			},
+		}
+		for _, tt := range runners {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var ran atomic.Int32
+				tt.give(t, func(h *conform.Handle[Store]) { h.Cleanup(func() { ran.Add(1) }) })
+				expect.Equal(t, ran.Load(), int32(1), "the runner runs the function once when the check ends")
+			})
+		}
 	})
 
 	t.Run("Skipf", func(t *testing.T) {
@@ -542,26 +688,17 @@ func TestHandle(t *testing.T) {
 			}
 		})
 
-		t.Run("ends the check with a fault on a seat that cannot remove a directory", func(t *testing.T) {
+		t.Run("returns a directory that the end of the check removes on a seat without Cleanup", func(t *testing.T) {
 			t.Parallel()
 
+			var dir string
 			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) { _ = h.TempDir() }
-			faults := recorded(func(tb assert.TB) { c.Run(tb, newStore) }).Faults()
-			assert.Length(t, faults, 1, "TempDir ends the check with one fault")
-			expect.ErrorIs(t, faults[0], conform.ErrTempDir, "the fault is the fault of TempDir")
-			expect.Equal(t, faults[0].Error(), "conform: the handle cannot make a temporary directory: the seat "+
-				"of Store.Get/keeps-the-value has no Cleanup", "the fault contains the check")
-		})
-
-		t.Run("returns an empty name to a seat that goes on after a fatal failure", func(t *testing.T) {
-			t.Parallel()
-
-			got := "unset"
-			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) { got = h.TempDir() }
+			c.Apply = func(h *conform.Handle[Store]) {
+				dir = h.TempDir()
+				files.IsDir(t, dir, "TempDir returns a directory")
+			}
 			c.Run(assert.NewRecorder(), newStore)
-			assert.Equal(t, got, "", "TempDir returns no directory")
+			files.Absent(t, dir, "the end of the check removes the directory")
 		})
 	})
 
