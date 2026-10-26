@@ -228,11 +228,13 @@ func (h *Handle[S]) Cleanup(f func()) {
 
 // Skipf skips the check with the reason that format and args state, through
 // Skipf of the seat. On the test of a check it skips the test. Under a
-// property check it ends the property run as skipped at the case. A factory
-// skips a check where the environment of the run lacks a capability, such as
-// a file system without direct I/O. Skipf ends the check with a fault that
-// wraps [ErrSkip] on a seat without Skipf, and it returns to a seat that
-// takes the fault and goes on.
+// property check it ends the property run as skipped at the case. Under
+// falsification it skips the test of the falsification. The isolation of
+// another planted defect gives a check that skips no verdict. A factory skips
+// a check where the environment of the run lacks a capability, such as a file
+// system without direct I/O. Skipf ends the check with a fault that wraps
+// [ErrSkip] on a seat without Skipf, and it returns to a seat that takes the
+// fault and goes on.
 func (h *Handle[S]) Skipf(format string, args ...any) {
 	h.Helper()
 	seat, has := h.seat.(interface {

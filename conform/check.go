@@ -67,10 +67,10 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 
 // Falsify applies the check on tb to its planted defect. It fails tb unless
 // the first failure of the check is a failure of the assertion whose message
-// is the statement of the check. It also applies each check that [With] adds
-// to the defect, and fails tb when the defect fails one of them, as [Falsify]
-// applies the other checks of a suite. The doors of the handle read the
-// options in opts.
+// is the statement of the check. A check that skips before it fails skips tb.
+// It also applies each check that [With] adds to the defect, and fails tb when
+// the defect fails one of them, as [Falsify] applies the other checks of a
+// suite. The doors of the handle read the options in opts.
 func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 	tb.Helper()
 	cfg := configure(opts)
@@ -154,7 +154,7 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 // options excuse. It fails tb when the defect fails one of them, because a
 // planted defect proves its check only when no other check fails on it. The
 // failure lists each check that fails, with its first assertion or its panic.
-// A check that ends with a fault on the defect has no verdict on it.
+// A check that skips or ends with a fault on the defect has no verdict on it.
 func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) {
 	tb.Helper()
 	defect := reflect.ValueOf(c.Defect).Pointer()

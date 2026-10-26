@@ -23,12 +23,13 @@ import "testing"
 // when it finds one. Otherwise it runs each check as a parallel test of t,
 // which has the identity of the check without the name of the declaration, as
 // [Run] names it. The test of a check fails unless the planted defect fails
-// the check at the assertion whose message is the statement of the check. The
-// test also applies every other check of the suite to the defect, and fails
-// when the defect fails one of them. Checks that share one defect accept the
-// failures of each other. Falsify leaves out each check that counts
-// allocations, which [FalsifyAllocs] falsifies, and applies no such check to
-// another planted defect.
+// the check at the assertion whose message is the statement of the check. A
+// check that skips before it fails skips its test. The test also applies every
+// other check of the suite to the defect, and fails when the defect fails one
+// of them. Checks that share one defect accept the failures of each other.
+// Falsify leaves out each check that counts allocations, which
+// [FalsifyAllocs] falsifies, and does not apply such a check to another
+// planted defect.
 //
 // Falsify also runs a parallel test of each ceiling of bytes, p99 and mean of
 // the budget of each call, such as Get/latency-budget. The test measures 10

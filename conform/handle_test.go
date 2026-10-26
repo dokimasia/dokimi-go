@@ -640,6 +640,73 @@ func TestHandle(t *testing.T) {
 			c.Run(assert.NewRecorder(), newStore)
 			assert.True(t, returned.Load(), "Skipf returns to the check")
 		})
+
+		t.Run("gives a check that skips no verdict in the isolation of a planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			other := keeps()
+			other.Apply = func(h *conform.Handle[Store]) { h.Skipf("the store needs %s", "a disk") }
+			misses().Falsify(t, conform.With(other))
+		})
+
+		runners := []struct {
+			name string
+			give func(t *testing.T, skip func(h *conform.Handle[Store]))
+		}{
+			{
+				name: "skips the falsification of a check that skips",
+				give: func(t *testing.T, skip func(h *conform.Handle[Store])) {
+					t.Helper()
+					c := keeps()
+					apply := c.Apply
+					c.Apply = func(h *conform.Handle[Store]) {
+						skip(h)
+						apply(h)
+					}
+					c.Falsify(t)
+				},
+			},
+			{
+				name: "skips the falsification of a planted defect that skips",
+				give: func(t *testing.T, skip func(h *conform.Handle[Store])) {
+					t.Helper()
+					c := keeps()
+					c.Defect = func(h *conform.Handle[Store]) Store {
+						skip(h)
+						return forgetful{}
+					}
+					c.Falsify(t)
+				},
+			},
+			{
+				name: "skips the falsification of a property check at the case that skips",
+				give: func(t *testing.T, skip func(h *conform.Handle[Store])) {
+					t.Helper()
+					c := keepsEvery()
+					property := c.Property
+					c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+						skip(h)
+						property(h, pc)
+					}
+					c.Falsify(t)
+				},
+			},
+		}
+		for _, tt := range runners {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var check *testing.T
+				// The cleanup of t runs once its subtest has ended.
+				t.Cleanup(func() { expect.True(t, check.Skipped(), "the falsification skips its test") })
+				t.Run("check", func(t *testing.T) {
+					t.Parallel()
+
+					check = t
+					tt.give(t, func(h *conform.Handle[Store]) { h.Skipf("the store needs %s", "a disk") })
+				})
+			})
+		}
 	})
 
 	t.Run("TempDir", func(t *testing.T) {
