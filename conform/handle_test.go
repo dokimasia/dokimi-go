@@ -41,24 +41,25 @@ func TestHandleTempDir(t *testing.T) {
 			assert.Equal(t, got, "", "TempDir returns no directory")
 		})
 
-	t.Run("fails the property run where the directory of temporary files is missing", func(t *testing.T) {
-		missing := filepath.Join(t.TempDir(), "missing")
-		for _, env := range []string{"TMPDIR", "TMP", "TEMP"} {
-			t.Setenv(env, missing)
-		}
-		c := keepsEvery()
-		c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
-			_ = pc.Draw(prop.String(), "key")
-			_ = h.TempDir()
-		}
-		r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
-		assert.True(t, r.Failed(), "the property run fails")
-		failure, isRecord := detailOf(t, r, "failure").(map[string]any)
-		assert.True(t, isRecord, "the record of the property run has the failure of its case")
-		assert.Matches(t, failure["contract"],
-			`^conform: the handle cannot make a temporary directory for Store\.Get/keeps-every-value: .*missing`,
-			"the failure of the case is the fault of TempDir with the missing directory")
-	})
+	t.Run("ends the property run with the fault of TempDir where the directory of temporary files is missing",
+		func(t *testing.T) {
+			missing := filepath.Join(t.TempDir(), "missing")
+			for _, env := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(env, missing)
+			}
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				_ = h.TempDir()
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "the property run ends with one fault")
+			assert.ErrorIs(t, faults[0], conform.ErrTempDir, "the fault of the run is the fault of TempDir")
+			assert.Matches(t, faults[0].Error(),
+				`conform: the handle cannot make a temporary directory for Store\.Get/keeps-every-value: .*missing`,
+				"the fault names the check and the missing directory")
+		})
 }
 
 // The handle of a check is the seat of its assertions. It builds the subjects
