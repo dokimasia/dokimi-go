@@ -35,7 +35,7 @@ type T interface {
 // that counts allocations, which [RunBudgets] runs.
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
-	cfg := configure(suite.Using, opts)
+	cfg := configure(suite.overrides(t), opts)
 	stopAt(t, validate("Run"+suite.Declaration+"Suite", suite, cfg))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
 	parallel := uncounted(checks)

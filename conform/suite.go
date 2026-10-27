@@ -47,6 +47,14 @@ type Suite[S any] struct {
 	// check of the suite takes them, in an application and in falsification.
 	// An application passes the generators of the option [Using] after them.
 	Using []prop.Option
+
+	// Sinks are the send channel types that the inputs of the calls of the
+	// suite contain. [Run], [RunBudgets], [Falsify], [FalsifyAllocs], [Fuzz],
+	// [Bench] and [BenchParallel] each open every sink on the context of
+	// their test. They pass the channel of each sink after the overrides of
+	// Using and before the generators of the option [Using], so the option
+	// replaces a sink.
+	Sinks []Sink
 }
 
 // Call is the call generator of one callable of a suite, with the budget that

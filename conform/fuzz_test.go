@@ -58,6 +58,11 @@ func TestFuzzProcess(t *testing.T) {
 			expect.Contains(t, out, "--- PASS: FuzzChild/seed#0", "the input draws the kind of the option")
 		})
 
+		t.Run("passes the sinks of the suite to each input", func(t *testing.T) {
+			out := childRun(t, "FuzzChild", fuzzMode+"=sinks")
+			expect.Contains(t, out, "--- PASS: FuzzChild/seed#0", "the input sends to the sink of the suite")
+		})
+
 		t.Run("skips a callable without a property check", func(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=apply")
 			expect.Contains(t, out, "--- SKIP: FuzzChild", "the fuzz test skips")
@@ -146,6 +151,13 @@ var fuzzModes = map[string]func(f *testing.F){
 		f.Add([]byte{})
 		conform.Fuzz(f, statedKinds(), storeGet, newStore, conform.Using[Store](prop.Just(stated)))
 	},
+	// sinks fuzzes the property check of sinkSuite from one seed. The draw of
+	// the send channel of the check fails without the sink of the suite.
+	"sinks": func(f *testing.F) {
+		f.Helper()
+		f.Add([]byte{})
+		conform.Fuzz(f, sinkSuite(), storeGet, newStore)
+	},
 	// apply fuzzes a suite whose check of Get has a function Apply.
 	"apply": func(f *testing.F) {
 		f.Helper()
@@ -178,9 +190,4 @@ var fuzzModes = map[string]func(f *testing.F){
 		conform.Fuzz(f, everySuite(), storeGet, newStore,
 			conform.Excuse(storePut.Check("keeps-the-value"), "the store keeps no values"))
 	},
-}
-
-// everySuite returns a suite of Store with the property check of keepsEvery.
-func everySuite() conform.Suite[Store] {
-	return conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keepsEvery()}}
 }

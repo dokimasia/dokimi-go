@@ -123,6 +123,12 @@ func TestRun(t *testing.T) {
 			conform.Run(t, declaredKinds(), newStore)
 		})
 
+		t.Run("passes the sinks of the suite to each property run", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, sinkSuite(), newStore)
+		})
+
 		t.Run("leaves the overrides of the suite unchanged", func(t *testing.T) {
 			t.Parallel()
 

@@ -43,16 +43,16 @@ type B interface {
 // a function.
 //
 // Bench builds one subject and takes 100 calls from the call generator of the
-// callable, with the overrides of the suite and the generators of the option
-// [Using]. The functions that the factory registers through [Handle.Cleanup]
-// run when the benchmark ends. The calls take the seed of DOKIMI_SEED, or the
-// seed of the identity of the callable where the variable is not set. Each run
-// of one seed measures the same calls. Bench repeats the calls in their order
-// under a contract of [bench.Start] with the ceilings of the budget. The
-// contract first runs the Warmup of the budget, or each call once for a budget
-// without one, as the iterations of [bench.Contract.Warmup]. Bench publishes
-// the share of the calls that return an error as errors/op, the calls of the
-// warm-up included.
+// callable, with the overrides and the sinks of the suite and the generators
+// of the option [Using]. The functions that the factory registers through
+// [Handle.Cleanup] run when the benchmark ends. The calls take the seed of
+// DOKIMI_SEED, or the seed of the identity of the callable where the variable
+// is not set. Each run of one seed measures the same calls. Bench repeats the
+// calls in their order under a contract of [bench.Start] with the ceilings of
+// the budget. The contract first runs the Warmup of the budget, or each call
+// once for a budget without one, as the iterations of [bench.Contract.Warmup].
+// Bench publishes the share of the calls that return an error as errors/op,
+// the calls of the warm-up included.
 //
 // Bench reports every problem of the application on b, as [Run] does, and
 // stops b when it finds one. A callable without a call in the suite is a
@@ -63,7 +63,7 @@ type B interface {
 // allocations or bytes, because the contract checks neither.
 func Bench[S any](b B, suite Suite[S], callable Callable[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	b.Helper()
-	cfg, call, found := benchmarked("Bench"+suite.Declaration+"Suite", suite, callable, opts)
+	cfg, call, found := benchmarked(b, "Bench"+suite.Declaration+"Suite", suite, callable, opts)
 	stopAt(b, found)
 	h, draw, contract := measure(b, call, newSubject, cfg)
 	defer h.end()
@@ -91,7 +91,7 @@ func BenchParallel[S any](
 	b *testing.B, suite Suite[S], callable Callable[S], newSubject func(h *Handle[S]) S, opts ...Option[S],
 ) {
 	b.Helper()
-	cfg, call, found := benchmarked("Bench"+suite.Declaration+"SuiteParallel", suite, callable, opts)
+	cfg, call, found := benchmarked(b, "Bench"+suite.Declaration+"SuiteParallel", suite, callable, opts)
 	if call != nil && !call.Concurrent {
 		found = append(found, fmt.Sprintf("the call of %s admits no concurrent calls", callable))
 	}
@@ -133,13 +133,13 @@ func repeat[S any](
 }
 
 // benchmarked returns the configuration of opts and the call of the callable
-// for the benchmark of the application name, with the problems of the
-// application. A suite without a call of the callable has that problem, and
-// the call is nil.
+// for the benchmark b of the application name, with the problems of the
+// application. The sinks of the suite open on the context of b. A suite
+// without a call of the callable has that problem, and the call is nil.
 func benchmarked[S any](
-	name string, suite Suite[S], callable Callable[S], opts []Option[S],
+	b B, name string, suite Suite[S], callable Callable[S], opts []Option[S],
 ) (*config[S], *Call[S], []string) {
-	cfg := configure(suite.Using, opts)
+	cfg := configure(suite.overrides(b), opts)
 	found := validate(name, suite, cfg)
 	for i := range suite.Calls {
 		if suite.Calls[i].Callable == callable {

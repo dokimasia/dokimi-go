@@ -130,6 +130,15 @@ func TestBench(t *testing.T) {
 			assert.False(t, undeclared.Load(), "each call draws a declared kind")
 		})
 
+		t.Run("passes the sinks of the suite to the call generator", func(t *testing.T) {
+			t.Parallel()
+
+			b := measured(t, 10, func(b conform.B) {
+				conform.Bench(b, sinkBudget(conform.Budget{}), storeGet, newStore)
+			})
+			assert.Equal(t, b.metric(t, errorsUnit), 0.0, "each call returns after its sends")
+		})
+
 		t.Run("fails a subject over a ceiling of its budget", func(t *testing.T) {
 			t.Parallel()
 
@@ -358,6 +367,16 @@ func TestBenchProcess(t *testing.T) {
 				conform.BenchParallel(b, suite, storeGet, newStore)
 			})
 			assert.False(t, undeclared.Load(), "each call draws a declared kind")
+		})
+
+		t.Run("passes the sinks of the suite to the call generator", func(t *testing.T) {
+			suite := sinkBudget(conform.Budget{})
+			suite.Calls[0].Concurrent = true
+			_, failed := parallel(t, func(b *testing.B) {
+				b.Helper()
+				conform.BenchParallel(b, suite, storeGet, newStore)
+			})
+			assert.False(t, failed, "each goroutine sends to the sink of the benchmark")
 		})
 
 		t.Run("fails a subject over a ceiling of its budget", func(t *testing.T) {

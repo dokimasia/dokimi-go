@@ -43,6 +43,14 @@
 // one application. [Fuzz] registers the fuzz target of the property checks of
 // one callable.
 //
+// A generated suite states the values of the channels and of the interfaces
+// of package io in its inputs. [Stream] generates a channel that a subject
+// receives from, and [Closed] is the end value of such a channel. [SinkOf]
+// returns the sink of a send channel type, the one channel of the type that
+// takes every send while the test of an entry point runs. The field Sinks of
+// a [Suite] lists them. [NewBytes] returns a [Bytes], a value of the
+// interfaces of io over bytes.
+//
 // # Dependency position
 //
 // The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,

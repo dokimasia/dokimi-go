@@ -306,6 +306,69 @@ func budgeted(budget conform.Budget) conform.Suite[Store] {
 	}
 }
 
+// everySuite returns a suite of Store with the property check of keepsEvery.
+func everySuite() conform.Suite[Store] {
+	return conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keepsEvery()}}
+}
+
+// sendsPerCase is the number of values that keepsAfterSends and sendCalls send
+// to the send channel of each case.
+const sendsPerCase = 100
+
+// keepsAfterSends returns the property check that Get returns the value that
+// Put stored, after the case sends sendsPerCase values to a send channel that
+// it draws. The draw fails without the sink of the channel, and a send blocks
+// without a goroutine that receives it. Its planted defect is forgetful.
+func keepsAfterSends() conform.Check[Store] {
+	return conform.Check[Store]{
+		ID:        storeGet.Check("keeps-after-sends"),
+		Statement: keepsTheValue,
+		Property: func(h *conform.Handle[Store], pc *prop.Case) {
+			out := pc.Draw(prop.Of[chan<- int](), "out")
+			for i := range sendsPerCase {
+				out <- i
+			}
+			s := h.Subject()
+			s.Put("k", "v")
+			got, _ := s.Get("k")
+			assert.Equal(h, got, "v", h.Statement())
+		},
+		Defect: forget,
+	}
+}
+
+// sinkSuite returns a suite of Store with the check of keepsAfterSends and the
+// sink of chan<- int.
+func sinkSuite() conform.Suite[Store] {
+	return conform.Suite[Store]{
+		Declaration: "Store",
+		Checks:      []conform.Check[Store]{keepsAfterSends()},
+		Sinks:       []conform.Sink{conform.SinkOf[chan<- int]()},
+	}
+}
+
+// sendCalls generates calls of Get that send sendsPerCase values to a send
+// channel of each case before they call Get.
+var sendCalls = prop.Composite(func(c *prop.Case) func(context.Context, Store) error {
+	out := c.Draw(prop.Of[chan<- int](), "out")
+	return func(_ context.Context, s Store) error {
+		for i := range sendsPerCase {
+			out <- i
+		}
+		_, _ = s.Get("k")
+		return nil
+	}
+})
+
+// sinkBudget returns the suite of budgeted with the calls of sendCalls and the
+// sink of chan<- int.
+func sinkBudget(budget conform.Budget) conform.Suite[Store] {
+	suite := budgeted(budget)
+	suite.Calls[0].Calls = sendCalls
+	suite.Sinks = []conform.Sink{conform.SinkOf[chan<- int]()}
+	return suite
+}
+
 // detailOf returns the field of the detail of the call record of the first
 // assertion that r recorded.
 func detailOf(t *testing.T, r *assert.Recorder, field string) any {

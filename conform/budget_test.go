@@ -350,6 +350,11 @@ func TestBudgetAllocs(t *testing.T) {
 			assert.False(t, undeclared.Load(), "each case draws a declared kind")
 		})
 
+		t.Run("passes the sinks of the suite to each property run", func(t *testing.T) {
+			skipUnchecked(t)
+			conform.RunBudgets(t, sinkBudget(conform.Budget{Allocs: new(uint64(0))}), newStore, conform.Cases[Store](5))
+		})
+
 		t.Run("skips an excused allocation ceiling", func(t *testing.T) {
 			skipUnchecked(t)
 			conform.RunBudgets(t, budgeted(conform.Budget{Allocs: new(uint64(0))}), squander,
@@ -422,6 +427,11 @@ func TestBudgetAllocs(t *testing.T) {
 			var undeclared atomic.Bool
 			conform.FalsifyAllocs(t, declaredBudget(&undeclared))
 			assert.False(t, undeclared.Load(), "each case draws a declared kind")
+		})
+
+		t.Run("passes the sinks of the suite to each property run", func(t *testing.T) {
+			skipUnchecked(t)
+			conform.FalsifyAllocs(t, sinkBudget(conform.Budget{Allocs: new(uint64(0))}))
 		})
 
 		t.Run("fails a ceiling that its planted defect does not exceed", func(t *testing.T) {

@@ -119,6 +119,12 @@ func TestFalsify(t *testing.T) {
 			conform.Falsify(t, declaredKinds())
 		})
 
+		t.Run("passes the sinks of the suite to each property run", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Falsify(t, sinkSuite())
+		})
+
 		t.Run("leaves the overrides of the suite unchanged", func(t *testing.T) {
 			t.Parallel()
 

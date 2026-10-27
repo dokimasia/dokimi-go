@@ -62,7 +62,7 @@ type ceiling[S any] struct {
 // check before it applies it.
 func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
-	cfg := configure(suite.Using, opts)
+	cfg := configure(suite.overrides(t), opts)
 	stopAt(t, validate("Run"+suite.Declaration+"Budgets", suite, cfg))
 	for _, c := range allocationCeilings(suite.Calls, cfg.ceilings) {
 		t.Run(c.check.ID.subtest(), func(t *testing.T) {
@@ -110,7 +110,7 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 // each test skips with the reason of [assert.AllocsChecked].
 func FalsifyAllocs[S any](t T, suite Suite[S]) {
 	t.Helper()
-	cfg := configure[S](suite.Using, nil)
+	cfg := configure[S](suite.overrides(t), nil)
 	name := suite.Declaration + "Suite"
 	found := problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil))
 	stopAt(t, append(found, budgetProblems(name, suite.Calls, nil)...))
