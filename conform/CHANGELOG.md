@@ -1,5 +1,13 @@
 # go.dokimi.dev/conform
 
+## 0.6.0
+
+### Minor Changes
+
+- 77f316f: Add `conform.Bytes` and `conform.NewBytes`, a value of the interfaces of package io over bytes.
+- 77f316f: Add `conform.SinkOf` and `Suite.Sinks` to give each send channel in the inputs of a suite a channel that takes every send while its test runs.
+- 77f316f: Add `conform.Stream` and `conform.Closed` to generate the channels that a subject receives from.
+
 ## 0.5.0
 
 ### Minor Changes
