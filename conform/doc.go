@@ -12,7 +12,8 @@
 // applies every check of a suite to a subject of the consumer. [Falsify]
 // applies every check to its planted defect, and every other check of the
 // suite to the same defect. Each check runs as a test of its own, named by
-// its identity.
+// its identity. The field Around of a [Check] runs each run of the check
+// inside an environment, such as a testing/synctest bubble.
 //
 // A generated suite declares the application of its declaration, and a
 // consumer adds checks of its own through [With]:

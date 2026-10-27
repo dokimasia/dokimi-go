@@ -17,6 +17,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
@@ -418,6 +419,25 @@ func recorded(fn func(tb assert.TB)) *assert.Recorder {
 	}()
 	<-done
 	return r
+}
+
+// bubbled returns the check c inside the bubble of synctest.Test. Its body
+// first asserts that synctest.Wait returns, which panics outside a bubble.
+func bubbled(c conform.Check[Store]) conform.Check[Store] {
+	c.Around = synctest.Test
+	if apply := c.Apply; apply != nil {
+		c.Apply = func(h *conform.Handle[Store]) {
+			assert.NotPanics(h, synctest.Wait, "the check runs inside a bubble")
+			apply(h)
+		}
+		return c
+	}
+	property := c.Property
+	c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+		assert.NotPanics(h, synctest.Wait, "the case runs inside a bubble")
+		property(h, pc)
+	}
+	return c
 }
 
 // applying is a test of an application that records the errors and the

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
@@ -24,6 +25,58 @@ func outsideCases(built *atomic.Int32) func(*conform.Handle[Store]) Store {
 		}
 		return newMemory()
 	}
+}
+
+// tested is a recorder of the test t. Its method Unwrap returns t, so a check
+// with Around runs inside the environment of t, and the recorder keeps what
+// conform reports on the seat.
+type tested struct {
+	*assert.Recorder
+
+	t *testing.T
+}
+
+// Unwrap returns the test of the recorder.
+func (s *tested) Unwrap() assert.TB { return s.t }
+
+// onTest returns a recorder of the test t.
+func onTest(t *testing.T) *tested {
+	t.Helper()
+	return &tested{Recorder: assert.NewRecorder(), t: t}
+}
+
+// strand starts a goroutine that blocks on a channel until the process ends.
+// Inside a bubble, the bubble fails once its root goroutine returns.
+func strand() {
+	blocked := make(chan struct{})
+	go func() { <-blocked }()
+}
+
+// stranding returns the check c, whose body first strands a goroutine.
+func stranding(c conform.Check[Store]) conform.Check[Store] {
+	if apply := c.Apply; apply != nil {
+		c.Apply = func(h *conform.Handle[Store]) {
+			strand()
+			apply(h)
+		}
+		return c
+	}
+	property := c.Property
+	c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+		strand()
+		property(h, pc)
+	}
+	return c
+}
+
+// tracked returns the check c, whose function Apply first sets ran.
+func tracked(c conform.Check[Store], ran *atomic.Bool) conform.Check[Store] {
+	apply := c.Apply
+	c.Apply = func(h *conform.Handle[Store]) {
+		ran.Store(true)
+		apply(h)
+	}
+	return c
 }
 
 // A check applies to a subject on a seat, and falsification proves that it
@@ -171,6 +224,131 @@ func TestCheck(t *testing.T) {
 			faults := r.Faults()
 			assert.Length(t, faults, 1, "the subject of the factory has no door of the planted defect")
 			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door that the handle lacks")
+		})
+
+		t.Run("runs the check inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			bubbled(keeps()).Run(t, newStore)
+		})
+
+		t.Run("runs each case of a property check inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			bubbled(keepsEvery()).Run(t, newStore)
+		})
+
+		t.Run("finds the test of a recorder of WithTest", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder().WithTest(t)
+			bubbled(keeps()).Run(r, newStore)
+			expect.Empty(t, r.Faults(), "the check finds the test of its environment")
+		})
+
+		t.Run("fails the seat when the environment of the check fails", func(t *testing.T) {
+			t.Parallel()
+
+			s := onTest(t)
+			bubbled(stranding(keeps())).Run(s, newStore)
+			assert.Equal(t, s.Messages(), []string{"the environment of Store.Get/keeps-the-value fails: " +
+				"deadlock: main bubble goroutine has exited but blocked goroutines remain"},
+				"the seat fails with the failure of the environment")
+		})
+
+		t.Run("fails the seat when the environment of a case fails", func(t *testing.T) {
+			t.Parallel()
+
+			s := onTest(t)
+			bubbled(stranding(keepsEvery())).Run(s, newStore, conform.Cases[Store](1))
+			assert.Equal(t, s.Messages(), []string{"the environment of Store.Get/keeps-every-value fails: " +
+				"deadlock: main bubble goroutine has exited but blocked goroutines remain"},
+				"the seat fails with the failure of the environment")
+		})
+
+		t.Run("ends with a fault on a seat without a test", func(t *testing.T) {
+			t.Parallel()
+
+			var ran atomic.Bool
+			c := tracked(bubbled(keeps()), &ran)
+			r := assert.NewRecorder()
+			c.Run(r, newStore)
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "the check ends with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of an invalid setting")
+			expect.Equal(t, faults[0].Error(), "conform: the application has an invalid setting: the check "+
+				"Store.Get/keeps-the-value runs inside Around, and the seat is no *testing.T and wraps none",
+				"the fault names the check")
+			expect.False(t, ran.Load(), "the check does not run")
+		})
+
+		t.Run("ends with a fault when Around returns without calling run", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Around = func(*testing.T, func(*testing.T)) {}
+			s := onTest(t)
+			c.Run(s, newStore)
+			faults := s.Faults()
+			assert.Length(t, faults, 1, "the check ends with one fault")
+			expect.Equal(t, faults[0].Error(), "conform: Around of Store.Get/keeps-the-value: the wrapper returned "+
+				"without calling run", "the fault states the misuse of run")
+		})
+
+		t.Run("ends with a fault when Around calls run a second time", func(t *testing.T) {
+			t.Parallel()
+
+			var runs atomic.Int32
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				runs.Add(1)
+				apply(h)
+			}
+			c.Around = func(t *testing.T, run func(*testing.T)) {
+				t.Helper()
+				run(t)
+				run(t)
+			}
+			s := onTest(t)
+			c.Run(s, newStore)
+			faults := s.Faults()
+			assert.Length(t, faults, 1, "the check ends with one fault")
+			expect.Equal(t, faults[0].Error(), "conform: Around of Store.Get/keeps-the-value: the wrapper called "+
+				"run a second time", "the fault states the misuse of run")
+			expect.Equal(t, runs.Load(), int32(1), "the second call of run runs no check")
+		})
+
+		t.Run("runs no check when Around calls run after it returned", func(t *testing.T) {
+			t.Parallel()
+
+			var late func(*testing.T)
+			var ran atomic.Bool
+			c := tracked(keeps(), &ran)
+			c.Around = func(t *testing.T, run func(*testing.T)) {
+				t.Helper()
+				late = run
+			}
+			c.Run(onTest(t), newStore)
+			late(t)
+			expect.False(t, ran.Load(), "a call of run after Around returned runs no check")
+		})
+
+		t.Run("fails the seat when Around panics before it calls run", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Around = func(t *testing.T, _ func(*testing.T)) {
+				t.Helper()
+				var gone *memory
+				gone.Put("k", "v")
+			}
+			s := onTest(t)
+			c.Run(s, newStore)
+			expect.Empty(t, s.Faults(), "Around that panics misuses no run")
+			assert.Equal(t, s.Messages(), []string{"the environment of Store.Get/keeps-the-value fails: " +
+				"runtime error: invalid memory address or nil pointer dereference"},
+				"the seat fails with the failure of the environment")
 		})
 	})
 
@@ -491,6 +669,181 @@ func TestCheck(t *testing.T) {
 			}
 			c.Falsify(t, conform.With(other))
 			assert.True(t, restarted.Load(), "the check of the options restarts the defect with the door of its check")
+		})
+
+		t.Run("passes when the defect fails the statement inside the environment of the check", func(t *testing.T) {
+			t.Parallel()
+
+			bubbled(keeps()).Falsify(t)
+		})
+
+		t.Run("passes when the defect fails a case of the property inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			bubbled(keepsEvery()).Falsify(t)
+		})
+
+		t.Run("accepts a failure of the environment after the defect fails the statement", func(t *testing.T) {
+			t.Parallel()
+
+			bubbled(stranding(keeps())).Falsify(t)
+		})
+
+		t.Run("accepts a failure of the environment after a case fails the statement", func(t *testing.T) {
+			t.Parallel()
+
+			bubbled(stranding(keepsEvery())).Falsify(t)
+		})
+
+		t.Run("fails when the environment fails before an assertion fails", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Around = synctest.Test
+			c.Apply = func(*conform.Handle[Store]) { <-make(chan struct{}) }
+			s := onTest(t)
+			c.Falsify(s)
+			assert.Equal(t, s.Message(),
+				`the planted defect of Store.Get/keeps-the-value fails the check before an assertion fails. `+
+					`Falsification needs a failure of the assertion whose message is the statement `+
+					`"Get returns the value that Put stored". The check failed with this message:`+"\n"+
+					`deadlock: all goroutines in bubble are blocked`,
+				"the message contains the failure of the environment")
+		})
+
+		t.Run("skips when the check skips inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			var falsification *testing.T
+			// The cleanup of t runs once its subtest has ended.
+			t.Cleanup(func() {
+				expect.True(t, falsification.Skipped(), "the test of the falsification skips")
+			})
+			t.Run("falsification", func(t *testing.T) {
+				t.Parallel()
+
+				falsification = t
+				c := keeps()
+				c.Around = synctest.Test
+				c.Apply = func(h *conform.Handle[Store]) { h.Skipf("the store needs %s", "a disk") }
+				c.Falsify(t)
+			})
+		})
+
+		t.Run("ends with a fault on a seat without a test", func(t *testing.T) {
+			t.Parallel()
+
+			var ran atomic.Bool
+			c := tracked(bubbled(keeps()), &ran)
+			r := assert.NewRecorder()
+			c.Falsify(r)
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "falsification ends with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of an invalid setting")
+			expect.False(t, ran.Load(), "the check does not run")
+		})
+
+		t.Run("ends with a fault when Around returns without calling run", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Around = func(*testing.T, func(*testing.T)) {}
+			s := onTest(t)
+			c.Falsify(s)
+			faults := s.Faults()
+			assert.Length(t, faults, 1, "falsification ends with one fault")
+			expect.Equal(t, faults[0].Error(), "conform: Around of Store.Get/keeps-the-value: the wrapper returned "+
+				"without calling run", "the fault states the misuse of run")
+		})
+
+		t.Run("applies a check of the options to the defect inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			misses().Falsify(t, conform.With(bubbled(keeps())))
+		})
+
+		t.Run("applies a property check of the options to the defect inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			misses().Falsify(t, conform.With(bubbled(keepsEvery())))
+		})
+
+		t.Run("lists a check of the options that fails its environment on the defect", func(t *testing.T) {
+			t.Parallel()
+
+			c := misses()
+			c.Defect = scrambles
+			other := keeps()
+			other.Around = synctest.Test
+			other.Apply = func(h *conform.Handle[Store]) {
+				if _, isScrambled := h.Subject().(scrambled); isScrambled {
+					strand()
+				}
+			}
+			s := onTest(t)
+			c.Falsify(s, conform.With(other))
+			assert.Contains(t, s.Message(), "\n\tStore.Get/keeps-the-value fails its environment with \"deadlock: "+
+				"main bubble goroutine has exited but blocked goroutines remain\"\n",
+				"the message lists the check with the failure of its environment")
+		})
+
+		t.Run("lists a property check of the options that fails its environment on the defect", func(t *testing.T) {
+			t.Parallel()
+
+			c := misses()
+			c.Defect = scrambles
+			other := keepsEvery()
+			other.Around = synctest.Test
+			other.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				if _, isScrambled := h.Subject().(scrambled); isScrambled {
+					strand()
+				}
+			}
+			s := onTest(t)
+			c.Falsify(s, conform.With(other))
+			assert.Contains(t, s.Message(), "\n\tStore.Get/keeps-every-value fails its environment with \"deadlock: "+
+				"main bubble goroutine has exited but blocked goroutines remain\"\n",
+				"the message lists the property check with the failure of its environment")
+		})
+
+		t.Run("ends with a fault on a seat without a test for a check of the options", func(t *testing.T) {
+			t.Parallel()
+
+			var ran atomic.Bool
+			r := assert.NewRecorder()
+			misses().Falsify(r, conform.With(tracked(bubbled(keeps()), &ran)))
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "falsification ends with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of an invalid setting")
+			expect.False(t, ran.Load(), "the check of the options does not run")
+		})
+
+		t.Run("ignores a check of the options whose Around calls run a second time", func(t *testing.T) {
+			t.Parallel()
+
+			complaining := keeps()
+			complaining.Around = func(t *testing.T, run func(*testing.T)) {
+				t.Helper()
+				run(t)
+				run(t)
+			}
+			complaining.Apply = func(h *conform.Handle[Store]) { h.Errorf("the check ran") }
+			misses().Falsify(t, conform.With(complaining))
+		})
+
+		t.Run("applies a check of the options to the defect with the context of its environment", func(t *testing.T) {
+			t.Parallel()
+
+			var same atomic.Bool
+			other := keeps()
+			other.Around = func(t *testing.T, run func(*testing.T)) {
+				t.Helper()
+				run(t)
+			}
+			other.Apply = func(h *conform.Handle[Store]) { same.Store(h.Context() == t.Context()) }
+			misses().Falsify(t, conform.With(other))
+			assert.True(t, same.Load(), "the check reads the context of the test that Around hands run")
 		})
 	})
 }

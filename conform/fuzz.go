@@ -19,17 +19,18 @@ import (
 // For each input of the fuzzer, the case draws the identity of one property
 // check of the callable under the label check. The checks are those of the
 // suite and those that [With] adds, without the checks that the options
-// excuse and the checks that count allocations. The case runs the property of
-// the check on a handle of the case, with the overrides and the sinks of the
-// suite and the generators of the option [Using]. A failing input shrinks and
-// reports as a failing case of [prop.Fuzz] does. go test without -fuzz runs
-// the seed corpus of f alone.
+// excuse, the checks that count allocations and the checks with Around. The
+// case runs the property of the check on a handle of the case, with the
+// overrides and the sinks of the suite and the generators of the option
+// [Using]. A failing input shrinks and reports as a failing case of
+// [prop.Fuzz] does. go test without -fuzz runs the seed corpus of f alone.
 //
 // Fuzz reports every problem of the checks and the options on f, and stops f
 // when it finds one. It skips f when the callable has no property check to
 // fuzz. Fuzz runs no ceiling of a budget and no check that counts
 // allocations, because a count of allocations or a latency of the fuzzer
-// measures its instrumentation.
+// measures its instrumentation. It runs no check with Around, because the
+// property engine applies one wrapper of Around to every input of a target.
 func Fuzz[S any](
 	f *testing.F, suite Suite[S], callable Callable[S], newSubject func(h *Handle[S]) S, opts ...Option[S],
 ) {
@@ -39,7 +40,8 @@ func Fuzz[S any](
 	var ids []ID[S]
 	checks := make(map[ID[S]]*Check[S])
 	for _, c := range append(slices.Clip(suite.Checks), cfg.checks...) {
-		if _, excused := cfg.excused(c.ID); c.Property == nil || c.Counted || c.ID.callable() != callable || excused {
+		_, excused := cfg.excused(c.ID)
+		if c.Property == nil || c.Counted || c.Around != nil || c.ID.callable() != callable || excused {
 			continue
 		}
 		ids = append(ids, c.ID)

@@ -217,6 +217,13 @@ func TestFalsify(t *testing.T) {
 			})
 		})
 
+		t.Run("falsifies a check of the suite inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Falsify(t,
+				conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{bubbled(keeps())}})
+		})
+
 		t.Run("leaves out the options of each check", func(t *testing.T) {
 			t.Parallel()
 

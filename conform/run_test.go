@@ -188,6 +188,13 @@ func TestRun(t *testing.T) {
 				"the failure lists the check of the suite that the defect of the added check fails")
 		})
 
+		t.Run("runs a check of the suite inside its environment", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{bubbled(keeps())}},
+				newStore)
+		})
+
 		tests := []struct {
 			name       string
 			giveSuite  conform.Suite[Store]

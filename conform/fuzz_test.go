@@ -88,6 +88,12 @@ func TestFuzzProcess(t *testing.T) {
 			expect.Contains(t, out, noPropertyCheck, "the skip states the reason")
 		})
 
+		t.Run("leaves out a property check that runs inside an environment", func(t *testing.T) {
+			out := childRun(t, "FuzzChild", fuzzMode+"=around")
+			expect.Contains(t, out, "--- SKIP: FuzzChild", "the fuzz test skips")
+			expect.Contains(t, out, noPropertyCheck, "the skip states the reason")
+		})
+
 		t.Run("leaves out the property checks of another callable", func(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=other")
 			expect.Contains(t, out, "--- SKIP: FuzzChild", "the fuzz test skips")
@@ -193,6 +199,12 @@ var fuzzModes = map[string]func(f *testing.F){
 	"counted": func(f *testing.F) {
 		f.Helper()
 		suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+		conform.Fuzz(f, suite, storeGet, newStore)
+	},
+	// around fuzzes a suite whose property check runs inside a bubble.
+	"around": func(f *testing.F) {
+		f.Helper()
+		suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{bubbled(keepsEvery())}}
 		conform.Fuzz(f, suite, storeGet, newStore)
 	},
 	// other fuzzes a suite whose property check is a check of Put.
