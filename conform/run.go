@@ -106,6 +106,10 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S], know
 		case c.Apply != nil && c.Property != nil:
 			found = append(found, fmt.Sprintf("the check %s has both a function Apply and a function Property", c.ID))
 		}
+		if c.Options != nil && c.Property == nil {
+			found = append(found, fmt.Sprintf("the check %s has options and no function Property, and the options "+
+				"of a check apply to its property run", c.ID))
+		}
 		if c.Defect == nil {
 			found = append(found, fmt.Sprintf("the check %s has no planted defect", c.ID))
 		}

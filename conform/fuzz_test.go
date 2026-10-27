@@ -63,6 +63,13 @@ func TestFuzzProcess(t *testing.T) {
 			expect.Contains(t, out, "--- PASS: FuzzChild/seed#0", "the input sends to the sink of the suite")
 		})
 
+		t.Run("leaves out the options of a check", func(t *testing.T) {
+			out := childRun(t, "FuzzChild", fuzzMode+"=checked")
+			expect.Contains(t, out, "--- FAIL: FuzzChild/seed#0", "the input draws a kind of the override of the suite")
+			expect.Contains(t, out, "the case draws the kind of the option Using",
+				"the failure is the failure of the draw of the kind")
+		})
+
 		t.Run("skips a callable without a property check", func(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=apply")
 			expect.Contains(t, out, "--- SKIP: FuzzChild", "the fuzz test skips")
@@ -157,6 +164,18 @@ var fuzzModes = map[string]func(f *testing.F){
 		f.Helper()
 		f.Add([]byte{})
 		conform.Fuzz(f, sinkSuite(), storeGet, newStore)
+	},
+	// checked fuzzes the property check of statedKinds from one seed, with the
+	// kind of the option Using as an option of the check. The input fails,
+	// because the target leaves the options of the check out.
+	"checked": func(f *testing.F) {
+		f.Helper()
+		f.Add([]byte{})
+		suite := statedKinds()
+		suite.Checks[0].Options = func(*conform.Handle[Store]) []prop.Option {
+			return []prop.Option{prop.Using(prop.Just(stated))}
+		}
+		conform.Fuzz(f, suite, storeGet, newStore)
 	},
 	// apply fuzzes a suite whose check of Get has a function Apply.
 	"apply": func(f *testing.F) {

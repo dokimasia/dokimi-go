@@ -160,6 +160,18 @@ func keepsEvery() conform.Check[Store] {
 	}
 }
 
+// unseen is the label of a share that no case of keepsEvery classifies.
+const unseen = "a label that no case classifies"
+
+// requiring returns the property check of keepsEvery with options that require
+// half of its cases to classify unseen. An application of the check fails,
+// because no case classifies the label.
+func requiring() conform.Check[Store] {
+	c := keepsEvery()
+	c.Options = func(*conform.Handle[Store]) []prop.Option { return []prop.Option{prop.Require(unseen, 0.5)} }
+	return c
+}
+
 // countedEvery returns the property check of keepsEvery as a check that counts
 // allocations. Its planted defect forgetful also fails the check of keeps.
 func countedEvery() conform.Check[Store] {

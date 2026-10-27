@@ -36,6 +36,21 @@ type Check[S any] struct {
 	// for the calls of the check, except at the statement of the check.
 	Defect func(h *Handle[S]) S
 
+	// Doors are the doors of the planted defect of the check. Falsification
+	// builds each handle on the defect with them: in the falsification of the
+	// check, and where it applies another check to the defect. A door that
+	// Doors lacks comes from the options of the falsification. An application
+	// of the check to a subject reads the doors of its options alone.
+	Doors Doors[S]
+
+	// Options returns the options of the property run of the check in an
+	// application, such as the shares of prop.Require. The application calls
+	// it before the run, with a handle of its own whose subject is a fresh
+	// subject of the factory, and passes the options after its own.
+	// Falsification and fuzz targets leave the options out. A check with
+	// Options has a function Property.
+	Options func(h *Handle[S]) []prop.Option
+
 	// ID is the identity of the check.
 	ID ID[S]
 
@@ -78,10 +93,18 @@ func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 }
 
 // run applies the check on tb to a subject of source, under the settings of
-// an application.
+// an application. A property check with Options also takes the options of
+// its run from a handle of its own, after the options of the application. The
+// handle ends once Options returns.
 func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S]) {
 	tb.Helper()
-	c.exercise(tb, source, cfg, cfg.runOptions(), new(atomic.Pointer[string]))
+	opts := cfg.runOptions()
+	if c.Property != nil && c.Options != nil {
+		h := newHandle(tb, &c, source, cfg, new(atomic.Pointer[string]))
+		opts = append(opts, c.Options(h)...)
+		h.end()
+	}
+	c.exercise(tb, source, cfg, opts, new(atomic.Pointer[string]))
 }
 
 // exercise applies the check on seat to subjects of source. A check with
@@ -106,11 +129,13 @@ func (c *Check[S]) exercise(
 }
 
 // falsify applies the check on tb to its planted defect. A property check
-// runs hermetically, as [config.hermetic] states. Once the defect fails the
-// check at its statement, falsify applies each check of others to the
-// defect, as [Check.isolate] states.
+// runs hermetically, as [config.hermetic] states. Each handle on the defect
+// takes the doors of the check first, as [config.onDefect] states. Once the
+// defect fails the check at its statement, falsify applies each check of
+// others to the defect, as [Check.isolate] states.
 func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) {
 	tb.Helper()
+	cfg = cfg.onDefect(c.Doors)
 	kept := new(atomic.Pointer[string])
 	failures := assert.Rejects(tb, "the planted defect of "+string(c.ID)+" fails the check", func(seat assert.TB) {
 		c.exercise(seat, c.Defect, cfg, cfg.hermetic(c.ID), kept)

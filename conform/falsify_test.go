@@ -217,6 +217,34 @@ func TestFalsify(t *testing.T) {
 			})
 		})
 
+		t.Run("leaves out the options of each check", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Falsify(t, conform.Suite[Store]{
+				Declaration: "Store", Checks: []conform.Check[Store]{misses(), requiring()},
+			})
+		})
+
+		t.Run("restarts a planted defect with the door of its check", func(t *testing.T) {
+			t.Parallel()
+
+			restarts := conform.Check[Store]{
+				ID:        storeGet.Check("keeps-the-value-across-a-restart"),
+				Statement: "Get returns the value that Put stored before a restart",
+				Apply: func(h *conform.Handle[Store]) {
+					s := h.Subject()
+					s.Put("k", "v")
+					got, _ := h.Restart(s).Get("k")
+					assert.Equal(h, got, "v", h.Statement())
+				},
+				Defect: newStore,
+				Doors:  conform.Doors[Store]{Restart: func(*conform.Handle[Store], Store) Store { return newMemory() }},
+			}
+			conform.Falsify(t, conform.Suite[Store]{
+				Declaration: "Store", Checks: []conform.Check[Store]{restarts, misses()},
+			})
+		})
+
 		t.Run("falsifies each ceiling of a benchmark on its planted defect", func(t *testing.T) {
 			t.Parallel()
 

@@ -26,9 +26,12 @@
 // The options of an application also excuse a check through [Excuse], set the
 // number of cases of each property run through [Cases], state the generator of
 // a type through [Using], and supply the machinery that only the consumer can
-// build through [Reference], [Second] and [Restartable]. An application falsifies each check that [With] adds
-// before it applies the check to the subject. The check must fail on its
-// planted defect at the assertion whose message is its statement.
+// build through [Reference], [Second], [Restartable] and [Crashable]. An
+// application falsifies each check that [With] adds before it applies the
+// check to the subject. The check must fail on its planted defect at the
+// assertion whose message is its statement. The field Doors of a [Check]
+// supplies the same machinery to its planted defect, and its field Options
+// states the options of its property run in an application.
 //
 // The calls of a suite contain the call generator and the budget of each
 // callable. [RunBudgets] applies the allocation ceilings of the budgets to a

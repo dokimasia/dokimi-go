@@ -126,19 +126,25 @@ func Excuse[S any](id ID[S], reason string) Option[S] {
 // Reference supplies the reference implementations of an application.
 // [Handle.Reference] returns a fresh one from newReference.
 func Reference[S any](newReference func(h *Handle[S]) S) Option[S] {
-	return Option[S]{set: func(c *config[S]) { c.reference = newReference }}
+	return Option[S]{set: func(c *config[S]) { c.doors.Reference = newReference }}
 }
 
 // Second supplies the second subjects of an application. [Handle.Second]
 // returns a fresh one from newSecond.
 func Second[S any](newSecond func(h *Handle[S]) S) Option[S] {
-	return Option[S]{set: func(c *config[S]) { c.second = newSecond }}
+	return Option[S]{set: func(c *config[S]) { c.doors.Second = newSecond }}
 }
 
 // Restartable supplies the restart of the subjects of an application.
 // [Handle.Restart] returns the subject that restart returns.
 func Restartable[S any](restart func(h *Handle[S], s S) S) Option[S] {
-	return Option[S]{set: func(c *config[S]) { c.restart = restart }}
+	return Option[S]{set: func(c *config[S]) { c.doors.Restart = restart }}
+}
+
+// Crashable supplies the crash of the subjects of an application.
+// [Handle.Crash] returns the subject that crash returns.
+func Crashable[S any](crash func(h *Handle[S], s S, call func()) S) Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.doors.Crash = crash }}
 }
 
 // Cases sets the number of valid cases that each property run of an
@@ -174,11 +180,8 @@ func Ceilings[S any](callable Callable[S], budget Budget) Option[S] {
 // config is the configuration that the options of an application and the
 // environment set.
 type config[S any] struct {
-	// reference, second and restart are the doors of the handle. A door
-	// without its option is nil.
-	reference func(h *Handle[S]) S
-	second    func(h *Handle[S]) S
-	restart   func(h *Handle[S], s S) S
+	// doors are the doors of the handle. A door without its option is nil.
+	doors Doors[S]
 
 	// cases is the number of valid cases of the option Cases, and nil
 	// without the option.
@@ -205,6 +208,18 @@ type config[S any] struct {
 	// seed is the seed of DOKIMI_SEED where seeded is true.
 	seed   uint64
 	seeded bool
+
+	// defect reports that the handles of the configuration build on a planted
+	// defect, whose doors come from its check first.
+	defect bool
+}
+
+// onDefect returns a copy of c for the handles on a planted defect with the
+// doors d of its check. Each door that d lacks comes from c.
+func (c *config[S]) onDefect(d Doors[S]) *config[S] {
+	defect := *c
+	defect.doors, defect.defect = d.over(c.doors), true
+	return &defect
 }
 
 // excusal is the excusal of the check with the identity id.

@@ -63,7 +63,7 @@ func TestHandleTempDir(t *testing.T) {
 
 // The handle of a check is the seat of its assertions. It builds the subjects
 // of the check, supplies its machinery, and stops a check that calls a door
-// without its option.
+// that the handle lacks.
 func TestHandle(t *testing.T) {
 	t.Parallel()
 
@@ -113,23 +113,48 @@ func TestHandle(t *testing.T) {
 	tests := []struct {
 		name        string
 		giveCall    func(h *conform.Handle[Store]) (got, want Store)
+		giveDoor    func(door Store) conform.Doors[Store]
+		giveOption  func(door Store) conform.Option[Store]
 		wantMessage string
+		wantDefect  string
 	}{
 		{
 			name:     "Reference",
 			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Reference(), nil },
-			wantMessage: "conform: the application does not pass the option of a door: " +
+			giveDoor: func(door Store) conform.Doors[Store] {
+				return conform.Doors[Store]{Reference: func(*conform.Handle[Store]) Store { return door }}
+			},
+			giveOption: func(door Store) conform.Option[Store] {
+				return conform.Reference(func(*conform.Handle[Store]) Store { return door })
+			},
+			wantMessage: "conform: the handle lacks the door: " +
 				"Store.Get/keeps-the-value calls Reference without the option conform.Reference. " +
 				"Pass the option to the application:\n" +
 				"\tconform.Reference(func(h *conform.Handle[conform_test.Store]) conform_test.Store { … })",
+			wantDefect: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Reference on its planted defect, and the check has no door " +
+				"Reference. Give the check the door:\n" +
+				"\tconform.Doors[conform_test.Store]{Reference: " +
+				"func(h *conform.Handle[conform_test.Store]) conform_test.Store { … }}",
 		},
 		{
 			name:     "Second",
 			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Second(), nil },
-			wantMessage: "conform: the application does not pass the option of a door: " +
+			giveDoor: func(door Store) conform.Doors[Store] {
+				return conform.Doors[Store]{Second: func(*conform.Handle[Store]) Store { return door }}
+			},
+			giveOption: func(door Store) conform.Option[Store] {
+				return conform.Second(func(*conform.Handle[Store]) Store { return door })
+			},
+			wantMessage: "conform: the handle lacks the door: " +
 				"Store.Get/keeps-the-value calls Second without the option conform.Second. " +
 				"Pass the option to the application:\n" +
 				"\tconform.Second(func(h *conform.Handle[conform_test.Store]) conform_test.Store { … })",
+			wantDefect: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Second on its planted defect, and the check has no door " +
+				"Second. Give the check the door:\n" +
+				"\tconform.Doors[conform_test.Store]{Second: " +
+				"func(h *conform.Handle[conform_test.Store]) conform_test.Store { … }}",
 		},
 		{
 			name: "Restart",
@@ -137,11 +162,57 @@ func TestHandle(t *testing.T) {
 				s := h.Subject()
 				return h.Restart(s), s
 			},
-			wantMessage: "conform: the application does not pass the option of a door: " +
+			giveDoor: func(door Store) conform.Doors[Store] {
+				return conform.Doors[Store]{Restart: func(*conform.Handle[Store], Store) Store { return door }}
+			},
+			giveOption: func(door Store) conform.Option[Store] {
+				return conform.Restartable(func(*conform.Handle[Store], Store) Store { return door })
+			},
+			wantMessage: "conform: the handle lacks the door: " +
 				"Store.Get/keeps-the-value calls Restart without the option conform.Restartable. " +
 				"Pass the option to the application:\n" +
 				"\tconform.Restartable(func(h *conform.Handle[conform_test.Store], s conform_test.Store) " +
 				"conform_test.Store { … })",
+			wantDefect: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Restart on its planted defect, and the check has no door " +
+				"Restart. Give the check the door:\n" +
+				"\tconform.Doors[conform_test.Store]{Restart: " +
+				"func(h *conform.Handle[conform_test.Store], s conform_test.Store) conform_test.Store { … }}",
+		},
+		{
+			name: "Crash",
+			giveCall: func(h *conform.Handle[Store]) (got, want Store) {
+				s := h.Subject()
+				called := false
+				got = h.Crash(s, func() { called = true })
+				if !called {
+					return nil, s
+				}
+				return got, s
+			},
+			giveDoor: func(door Store) conform.Doors[Store] {
+				return conform.Doors[Store]{Crash: func(_ *conform.Handle[Store], _ Store, call func()) Store {
+					call()
+					return door
+				}}
+			},
+			giveOption: func(door Store) conform.Option[Store] {
+				return conform.Crashable(func(_ *conform.Handle[Store], _ Store, call func()) Store {
+					call()
+					return door
+				})
+			},
+			wantMessage: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Crash without the option conform.Crashable. " +
+				"Pass the option to the application:\n" +
+				"\tconform.Crashable(func(h *conform.Handle[conform_test.Store], s conform_test.Store, " +
+				"call func()) conform_test.Store { … })",
+			wantDefect: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Crash on its planted defect, and the check has no door " +
+				"Crash. Give the check the door:\n" +
+				"\tconform.Doors[conform_test.Store]{Crash: " +
+				"func(h *conform.Handle[conform_test.Store], s conform_test.Store, call func()) " +
+				"conform_test.Store { … }}",
 		},
 	}
 	for _, tt := range tests {
@@ -160,9 +231,57 @@ func TestHandle(t *testing.T) {
 				r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
 				faults := r.Faults()
 				assert.Length(t, faults, 1, "the door ends the check with one fault")
-				expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door without its option")
+				expect.ErrorIs(t, faults[0], conform.ErrOption,
+					"the fault is the fault of a door that the handle lacks")
 				expect.Equal(t, faults[0].Error(), tt.wantMessage, "the fault contains the option of the door")
 				expect.False(t, continued.Load(), "the check ends at the door")
+			})
+
+			t.Run("ends the falsification with a fault without the door of the check", func(t *testing.T) {
+				t.Parallel()
+
+				var continued atomic.Bool
+				c := keeps()
+				c.Apply = func(h *conform.Handle[Store]) {
+					tt.giveCall(h)
+					continued.Store(true)
+				}
+				r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+				faults := r.Faults()
+				assert.Length(t, faults, 1, "the door ends the falsification with one fault")
+				expect.ErrorIs(t, faults[0], conform.ErrOption,
+					"the fault is the fault of a door that the handle lacks")
+				expect.Equal(t, faults[0].Error(), tt.wantDefect, "the fault contains the door of the check")
+				expect.False(t, continued.Load(), "the check ends at the door")
+			})
+
+			t.Run("returns the door of the check on its planted defect", func(t *testing.T) {
+				t.Parallel()
+
+				door := Store(newMemory())
+				c := keeps()
+				apply := c.Apply
+				c.Doors = tt.giveDoor(door)
+				c.Apply = func(h *conform.Handle[Store]) {
+					got, _ := tt.giveCall(h)
+					assert.True(h, got == door, "the door returns the subject of the door of the check")
+					apply(h)
+				}
+				c.Falsify(t)
+			})
+
+			t.Run("returns the door of the options on a planted defect whose check lacks it", func(t *testing.T) {
+				t.Parallel()
+
+				door := Store(newMemory())
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					got, _ := tt.giveCall(h)
+					assert.True(h, got == door, "the door returns the subject of the option")
+					apply(h)
+				}
+				c.Falsify(t, tt.giveOption(door))
 			})
 
 			t.Run("returns to a seat that goes on after a fatal failure", func(t *testing.T) {
@@ -185,7 +304,7 @@ func TestHandle(t *testing.T) {
 					return
 				}
 				assert.Matches(t, childOutput(t),
-					`handle_test\.go:\d+: conform: the application does not pass the option of a door: `+
+					`handle_test\.go:\d+: conform: the handle lacks the door: `+
 						`Store\.Get/keeps-the-value calls `+tt.name,
 					"the failure has the line of the call of the door")
 			})

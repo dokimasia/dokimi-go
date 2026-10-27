@@ -215,6 +215,29 @@ func TestSuite(t *testing.T) {
 			c.Run(t, newStore, conform.Restartable(restart))
 		})
 	})
+
+	t.Run("Crashable", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("supplies the crash of a subject during a call", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				s := h.Subject()
+				got, _ := h.Crash(s, func() { s.Put("k", "v") }).Get("k")
+				assert.Equal(h, got, "v-torn", "the crashed subject has the value that the crash left")
+			}
+			crash := func(_ *conform.Handle[Store], s Store, call func()) Store {
+				call()
+				crashed := newMemory()
+				value, _ := s.Get("k")
+				crashed.Put("k", value+"-torn")
+				return crashed
+			}
+			c.Run(t, newStore, conform.Crashable(crash))
+		})
+	})
 }
 
 // The variable DOKIMI_SEED of the process seeds each property run of an

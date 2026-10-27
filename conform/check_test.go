@@ -15,6 +15,17 @@ import (
 	"go.dokimi.dev/conform"
 )
 
+// outsideCases returns a factory of stores in memory, which counts each store
+// that it builds on a handle outside the cases of a property run in built.
+func outsideCases(built *atomic.Int32) func(*conform.Handle[Store]) Store {
+	return func(h *conform.Handle[Store]) Store {
+		if _, isCase := h.Unwrap().(*prop.Case); !isCase {
+			built.Add(1)
+		}
+		return newMemory()
+	}
+}
+
 // A check applies to a subject on a seat, and falsification proves that it
 // fails on its planted defect at the assertion of its statement.
 func TestCheck(t *testing.T) {
@@ -69,6 +80,97 @@ func TestCheck(t *testing.T) {
 			inner, isCase := failures[0].CaseFailure()
 			assert.True(t, isCase, "the record contains the failure of the smallest case")
 			expect.Equal(t, inner.Contract, keepsEveryValue, "the case fails at the assertion of the statement")
+		})
+
+		t.Run("passes the options of a property check after the options of the application", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder()
+			c := keepsEvery()
+			c.Options = func(*conform.Handle[Store]) []prop.Option { return []prop.Option{prop.Cases(50)} }
+			c.Run(r, newStore, conform.Cases[Store](3))
+			cases, counted := detailOf(t, r, "cases").(float64)
+			assert.True(t, counted, "the record of the run counts its cases")
+			expect.True(t, cases >= 50, "the cases of the check replace the 3 cases of the application")
+		})
+
+		t.Run("fails a run that leaves a share of the options unmet", func(t *testing.T) {
+			t.Parallel()
+
+			r := recorded(func(tb assert.TB) { requiring().Run(tb, newStore) })
+			expect.True(t, r.Failed(), "the run fails the share of the options of the check")
+		})
+
+		t.Run("builds the subject of the handle of the options from the factory", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			var subject Store
+			c := keepsEvery()
+			c.Options = func(h *conform.Handle[Store]) []prop.Option {
+				subject = h.Subject()
+				return nil
+			}
+			c.Run(t, outsideCases(&built), conform.Cases[Store](1))
+			_, isMemory := subject.(*memory)
+			expect.True(t, isMemory, "the handle of the options returns a subject of the factory")
+			expect.Equal(t, built.Load(), int32(1), "the factory builds one subject outside the cases")
+		})
+
+		t.Run("builds no subject outside the cases for options that do not read it", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			c := keepsEvery()
+			c.Options = func(*conform.Handle[Store]) []prop.Option { return nil }
+			c.Run(t, outsideCases(&built), conform.Cases[Store](1))
+			expect.Equal(t, built.Load(), int32(0), "the factory builds the subjects of the cases alone")
+		})
+
+		t.Run("ends the handle of the options before the first case", func(t *testing.T) {
+			t.Parallel()
+
+			var ended, early atomic.Bool
+			c := keepsEvery()
+			property := c.Property
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				if !ended.Load() {
+					early.Store(true)
+				}
+				property(h, pc)
+			}
+			c.Options = func(h *conform.Handle[Store]) []prop.Option {
+				h.Cleanup(func() { ended.Store(true) })
+				return nil
+			}
+			c.Run(assert.NewRecorder(), newStore)
+			expect.True(t, ended.Load(), "the handle of the options runs its cleanups")
+			expect.False(t, early.Load(), "the cleanups of the options run before the first case")
+		})
+
+		t.Run("leaves the options of a check without a property uncalled", func(t *testing.T) {
+			t.Parallel()
+
+			var called atomic.Bool
+			c := keeps()
+			c.Options = func(*conform.Handle[Store]) []prop.Option {
+				called.Store(true)
+				return nil
+			}
+			c.Run(t, newStore)
+			expect.False(t, called.Load(), "a check without a property has no run for its options")
+		})
+
+		t.Run("leaves out the doors of the planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Doors = conform.Doors[Store]{Reference: newStore}
+			c.Apply = func(h *conform.Handle[Store]) { _ = h.Reference() }
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "the subject of the factory has no door of the planted defect")
+			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door that the handle lacks")
 		})
 	})
 
@@ -333,6 +435,45 @@ func TestCheck(t *testing.T) {
 				apply(h)
 			}
 			c.Falsify(t, conform.Reference(newStore))
+		})
+
+		t.Run("prefers the door of the check to the door of the options", func(t *testing.T) {
+			t.Parallel()
+
+			door := Store(newMemory())
+			c := keeps()
+			apply := c.Apply
+			c.Doors = conform.Doors[Store]{Reference: func(*conform.Handle[Store]) Store { return door }}
+			c.Apply = func(h *conform.Handle[Store]) {
+				assert.True(h, h.Reference() == door, "Reference returns the door of the check")
+				apply(h)
+			}
+			c.Falsify(t, conform.Reference(newStore))
+		})
+
+		t.Run("applies a check of the options to the defect without the options of that check", func(t *testing.T) {
+			t.Parallel()
+
+			misses().Falsify(t, conform.With(requiring()))
+		})
+
+		t.Run("applies a check of the options to the defect with the doors of the defect", func(t *testing.T) {
+			t.Parallel()
+
+			var restarted atomic.Bool
+			c := keeps()
+			c.Doors = conform.Doors[Store]{Restart: func(*conform.Handle[Store], Store) Store {
+				restarted.Store(true)
+				return forgetful{}
+			}}
+			other := misses()
+			apply := other.Apply
+			other.Apply = func(h *conform.Handle[Store]) {
+				_ = h.Restart(h.Subject())
+				apply(h)
+			}
+			c.Falsify(t, conform.With(other))
+			assert.True(t, restarted.Load(), "the check of the options restarts the defect with the door of its check")
 		})
 	})
 }

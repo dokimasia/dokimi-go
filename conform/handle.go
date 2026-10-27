@@ -21,9 +21,11 @@ import (
 // origin is the instant at which the clock of each handle starts.
 var origin = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-// ErrOption is the fault of a door of a handle whose option the application
-// does not pass, such as [Handle.Reference] without the option [Reference].
-var ErrOption = errors.New("conform: the application does not pass the option of a door")
+// ErrOption is the fault of a door that a handle lacks: a door of an
+// application without its option, such as [Handle.Reference] without the
+// option [Reference], and a door of a planted defect whose check has no such
+// door.
+var ErrOption = errors.New("conform: the handle lacks the door")
 
 // ErrClock is the fault of [Handle.Advance] where no subject of the check read
 // the clock of its handle.
@@ -39,6 +41,47 @@ var ErrSkip = errors.New("conform: the handle cannot skip the check")
 // marks the frame of the assertion that calls it, and a failure on a test
 // reports the line of the check.
 type seat interface{ assert.TB }
+
+// Doors are the doors of a handle: the subjects, the restart and the crash
+// that only the code that builds a subject can supply. An application sets
+// them through the options [Reference], [Second], [Restartable] and
+// [Crashable], and a check sets the doors of its planted defect through
+// [Check.Doors]. A nil door is not supplied.
+type Doors[S any] struct {
+	// Reference returns a fresh reference implementation, which
+	// [Handle.Reference] returns.
+	Reference func(h *Handle[S]) S
+
+	// Second returns a fresh second subject, which [Handle.Second] returns.
+	Second func(h *Handle[S]) S
+
+	// Restart returns the subject s after a restart of its process, which
+	// [Handle.Restart] returns.
+	Restart func(h *Handle[S], s S) S
+
+	// Crash runs call against s, crashes the medium of s while call runs, and
+	// returns the subject over the medium as the crash left it. It draws the
+	// point of the crash from h.Rand(), so a property check replays and
+	// shrinks the point with its case. [Handle.Crash] returns its subject.
+	Crash func(h *Handle[S], s S, call func()) S
+}
+
+// over returns d with each door that d lacks from fallback.
+func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
+	if d.Reference == nil {
+		d.Reference = fallback.Reference
+	}
+	if d.Second == nil {
+		d.Second = fallback.Second
+	}
+	if d.Restart == nil {
+		d.Restart = fallback.Restart
+	}
+	if d.Crash == nil {
+		d.Crash = fallback.Crash
+	}
+	return d
+}
 
 // Handle is the handle of one check, or of one case of a property check. It
 // is the seat of the assertions of the check, it builds the subjects of the
@@ -114,52 +157,78 @@ func (h *Handle[S]) New() S {
 }
 
 // Reference returns a fresh reference implementation from the option
-// [Reference]. Without the option it ends the check with a fault that wraps
-// [ErrOption], and it returns the zero value to a seat that takes the fault
-// and goes on.
+// [Reference], or from the door Reference of a planted defect. Without the
+// door it ends the check with a fault that wraps [ErrOption], and it returns
+// the zero value to a seat that takes the fault and goes on.
 func (h *Handle[S]) Reference() S {
 	h.Helper()
-	if h.config.reference == nil {
-		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s calls Reference without the option conform.Reference. "+
-			"Pass the option to the application:\n"+
-			"\tconform.Reference(func(h *conform.Handle[%[3]v]) %[3]v { … })",
-			ErrOption, h.check.ID, reflect.TypeFor[S]()))
+	if h.config.doors.Reference == nil {
+		h.lacks("Reference", "conform.Reference", "func(h *conform.Handle[%[1]v]) %[1]v { … }")
 		var zero S
 		return zero
 	}
-	return h.build(h.config.reference)
+	return h.build(h.config.doors.Reference)
 }
 
-// Second returns a fresh second subject from the option [Second]. Without the
-// option it ends the check with a fault that wraps [ErrOption], and it
-// returns the zero value to a seat that takes the fault and goes on.
+// Second returns a fresh second subject from the option [Second], or from the
+// door Second of a planted defect. Without the door it ends the check with a
+// fault that wraps [ErrOption], and it returns the zero value to a seat that
+// takes the fault and goes on.
 func (h *Handle[S]) Second() S {
 	h.Helper()
-	if h.config.second == nil {
-		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s calls Second without the option conform.Second. "+
-			"Pass the option to the application:\n"+
-			"\tconform.Second(func(h *conform.Handle[%[3]v]) %[3]v { … })",
-			ErrOption, h.check.ID, reflect.TypeFor[S]()))
+	if h.config.doors.Second == nil {
+		h.lacks("Second", "conform.Second", "func(h *conform.Handle[%[1]v]) %[1]v { … }")
 		var zero S
 		return zero
 	}
-	return h.build(h.config.second)
+	return h.build(h.config.doors.Second)
 }
 
 // Restart returns the subject s after a restart of its process, from the
-// option [Restartable]. Without the option it ends the check with a fault
-// that wraps [ErrOption], and it returns s to a seat that takes the fault and
-// goes on.
+// option [Restartable] or the door Restart of a planted defect. Without the
+// door it ends the check with a fault that wraps [ErrOption], and it returns
+// s to a seat that takes the fault and goes on.
 func (h *Handle[S]) Restart(s S) S {
 	h.Helper()
-	if h.config.restart == nil {
-		assert.Fault(h, fmt.Errorf("%[1]w: %[2]s calls Restart without the option conform.Restartable. "+
-			"Pass the option to the application:\n"+
-			"\tconform.Restartable(func(h *conform.Handle[%[3]v], s %[3]v) %[3]v { … })",
-			ErrOption, h.check.ID, reflect.TypeFor[S]()))
+	if h.config.doors.Restart == nil {
+		h.lacks("Restart", "conform.Restartable", "func(h *conform.Handle[%[1]v], s %[1]v) %[1]v { … }")
 		return s
 	}
-	return h.build(func(h *Handle[S]) S { return h.config.restart(h, s) })
+	return h.build(func(h *Handle[S]) S { return h.config.doors.Restart(h, s) })
+}
+
+// Crash runs call against s and crashes the medium of s while call runs,
+// through the option [Crashable] or the door Crash of a planted defect. It
+// returns the subject over the medium as the crash left it. Without the door
+// it ends the check with a fault that wraps [ErrOption]. A seat that takes the
+// fault and goes on gets s after call runs without a crash.
+func (h *Handle[S]) Crash(s S, call func()) S {
+	h.Helper()
+	if h.config.doors.Crash == nil {
+		h.lacks("Crash", "conform.Crashable", "func(h *conform.Handle[%[1]v], s %[1]v, call func()) %[1]v { … }")
+		call()
+		return s
+	}
+	return h.build(func(h *Handle[S]) S { return h.config.doors.Crash(h, s, call) })
+}
+
+// lacks ends the check with the fault of the door that the handle lacks. The
+// fault of a handle on a planted defect contains the door of the check, and
+// the fault of any other handle contains the option of the application.
+// signature is the signature of the door, where %[1]v is the type of the
+// subjects.
+func (h *Handle[S]) lacks(door, option, signature string) {
+	h.Helper()
+	subjects := reflect.TypeFor[S]()
+	fn := fmt.Sprintf(signature, subjects)
+	if h.config.defect {
+		assert.Fault(h, fmt.Errorf("%w: %s calls %s on its planted defect, and the check has no door %s. "+
+			"Give the check the door:\n\tconform.Doors[%v]{%s: %s}",
+			ErrOption, h.check.ID, door, door, subjects, door, fn))
+		return
+	}
+	assert.Fault(h, fmt.Errorf("%w: %s calls %s without the option %s. Pass the option to the application:\n\t%s(%s)",
+		ErrOption, h.check.ID, door, option, option, fn))
 }
 
 // Clock returns the controlled clock of the check. A factory builds a

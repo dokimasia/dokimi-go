@@ -220,6 +220,14 @@ func TestRun(t *testing.T) {
 					"Property"},
 			},
 			{
+				name: "reports a check with options and without a property",
+				giveSuite: broken(func(c *conform.Check[Store]) {
+					c.Options = func(*conform.Handle[Store]) []prop.Option { return nil }
+				}),
+				wantErrors: []string{"the check Store.Get/keeps-the-value has options and no function Property, " +
+					"and the options of a check apply to its property run"},
+			},
+			{
 				name:       "reports the option Cases with fewer than one case",
 				giveSuite:  suite,
 				giveOpts:   []conform.Option[Store]{conform.Cases[Store](0)},
