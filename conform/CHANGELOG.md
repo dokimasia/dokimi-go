@@ -1,5 +1,16 @@
 # go.dokimi.dev/conform
 
+## 0.8.0
+
+### Minor Changes
+
+- 1e30595: Add the field `Check.Around` to run each run of a check inside an environment, such as a `testing/synctest` bubble.
+- e7e97e0: Add the field `Call.Waits` and report a benchmark, a budget or a ceiling of such a call as a problem of the application.
+
+### Patch Changes
+
+- 2aad14c: Fix the verdict of the isolation to name the message alone for a check whose case fails outside an assertion.
+
 ## 0.7.0
 
 ### Minor Changes
