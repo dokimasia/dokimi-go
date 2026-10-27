@@ -43,8 +43,10 @@
 // [BenchParallel] measures a callable that admits concurrent calls on
 // GOMAXPROCS goroutines at once. [Falsify] applies each ceiling of bytes and
 // latency to its planted defect. The option [Ceilings] states a budget for
-// one application. [Fuzz] registers the fuzz target of the property checks of
-// one callable.
+// one application. A call that waits for another call, which the field Waits
+// of a [Call] marks, has no benchmark and no budget, because both repeat its
+// calls on one subject. [Fuzz] registers the fuzz target of the property
+// checks of one callable.
 //
 // A generated suite states the values of the channels and of the interfaces
 // of package io in its inputs. [Stream] generates a channel that a subject

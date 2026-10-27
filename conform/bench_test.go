@@ -251,6 +251,19 @@ func TestBench(t *testing.T) {
 				expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")
 			})
 		}
+
+		t.Run("reports a call that waits for another call", func(t *testing.T) {
+			t.Parallel()
+
+			suite := budgeted(conform.Budget{})
+			suite.Calls[0].Waits = true
+			var built atomic.Int32
+			b := measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, counting(&built)) })
+			expect.Equal(t, b.Messages(),
+				[]string{"the call of Store.Get waits for another call, and a benchmark repeats it on one subject"},
+				"the benchmark reports the call that waits")
+			expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")
+		})
 	})
 }
 
@@ -404,6 +417,18 @@ func TestBenchProcess(t *testing.T) {
 			_, failed := parallel(t, func(b *testing.B) {
 				b.Helper()
 				conform.BenchParallel(b, concurrent(getCalls), storePut, counting(&built))
+			})
+			expect.True(t, failed, "the benchmark fails")
+			expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")
+		})
+
+		t.Run("reports a call that waits for another call", func(t *testing.T) {
+			suite := concurrent(getCalls)
+			suite.Calls[0].Waits = true
+			var built atomic.Int32
+			_, failed := parallel(t, func(b *testing.B) {
+				b.Helper()
+				conform.BenchParallel(b, suite, storeGet, counting(&built))
 			})
 			expect.True(t, failed, "the benchmark fails")
 			expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")

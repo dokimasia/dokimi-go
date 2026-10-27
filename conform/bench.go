@@ -56,7 +56,8 @@ type B interface {
 //
 // Bench reports every problem of the application on b, as [Run] does, and
 // stops b when it finds one. A callable without a call in the suite is a
-// problem. The contract leaves out each ceiling that the options excuse. Bench
+// problem. A call with Waits is a problem too, because Bench repeats the calls
+// on one subject. The contract leaves out each ceiling that the options excuse. Bench
 // falsifies each ceiling that the option [Ceilings] adds before it measures the
 // callable, as [Falsify] falsifies the ceilings of the declaration. In a run
 // that does not check allocation ceilings, it falsifies no ceiling of
@@ -142,9 +143,15 @@ func benchmarked[S any](
 	cfg := configure(suite.overrides(b), opts)
 	found := validate(name, suite, cfg)
 	for i := range suite.Calls {
-		if suite.Calls[i].Callable == callable {
-			return cfg, &suite.Calls[i], found
+		call := &suite.Calls[i]
+		if call.Callable != callable {
+			continue
 		}
+		if call.Waits {
+			found = append(found, fmt.Sprintf("the call of %s waits for another call, and a benchmark repeats it "+
+				"on one subject", callable))
+		}
+		return cfg, call, found
 	}
 	return cfg, nil, append(found, fmt.Sprintf("%s has no call of %s", name, callable))
 }

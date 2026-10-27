@@ -297,7 +297,8 @@ func ceilingIDs[S any](calls []Call[S], ceilings []stated[S]) []ID[S] {
 // no two calls have one callable. A budget with a mean has a p99 as well, and
 // a warm-up of a budget is 0 iterations or more. The option Ceilings states
 // one budget of a callable of a call, and only for a callable whose
-// declaration states none.
+// declaration states none. A call with Waits has no budget, and the option
+// Ceilings states none for it.
 func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) []string {
 	var found []string
 	byCallable := make(map[Callable[S]]*Call[S], len(calls))
@@ -313,6 +314,10 @@ func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) [
 			found = append(found, fmt.Sprintf("two calls of %s have the callable %s", name, c.Callable))
 		}
 		byCallable[c.Callable] = c
+		if c.Waits && c.Budget != (Budget{}) {
+			found = append(found, fmt.Sprintf("the budget of %s repeats a call that waits for another call",
+				c.Callable))
+		}
 		budget, _ := budgetOf(c, ceilings)
 		if budget.Mean != 0 && budget.Latency == 0 {
 			found = append(found, fmt.Sprintf("the budget of %s states a mean and no p99, and a mean alone passes "+
@@ -332,6 +337,9 @@ func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) [
 		case !called:
 			found = append(found, fmt.Sprintf("the option Ceilings states a budget of %s, and %s has no call of it",
 				s.callable, name))
+		case c.Waits:
+			found = append(found, fmt.Sprintf("the ceiling of %s repeats a call that waits for another call",
+				s.callable))
 		case c.Budget != (Budget{}):
 			found = append(found, fmt.Sprintf("the option Ceilings states a budget of %s, whose declaration states "+
 				"a budget. Excuse the checks of the declaration instead", s.callable))

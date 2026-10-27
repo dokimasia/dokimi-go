@@ -80,6 +80,12 @@ type Call[S any] struct {
 	// Concurrent reports that the callable admits concurrent calls, so a
 	// parallel benchmark measures it.
 	Concurrent bool
+
+	// Waits reports that a call can wait until another call changes the state
+	// of the subject, as the mixin waits states. A benchmark and the check of
+	// a ceiling repeat the calls of a callable on one subject, so a benchmark
+	// of the call and a ceiling of the call are problems of the application.
+	Waits bool
 }
 
 // Budget is the budget of one call of a callable. A nil Allocs or Bytes, and a
