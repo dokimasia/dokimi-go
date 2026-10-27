@@ -1,5 +1,17 @@
 # go.dokimi.dev/conform
 
+## 0.7.0
+
+### Minor Changes
+
+- 3321c36: Add `conform.Crashable` and `Handle.Crash` to crash the medium of a subject during a call.
+- 3321c36: Add `conform.Doors` and the field `Check.Doors` to supply the doors of a planted defect under falsification.
+- 3321c36: Add the field `Check.Options` to state the options of the property run of a check in an application.
+
+### Patch Changes
+
+- 3321c36: Change the text of `conform.ErrOption` to "conform: the handle lacks the door".
+
 ## 0.6.0
 
 ### Minor Changes
