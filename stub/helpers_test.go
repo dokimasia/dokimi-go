@@ -48,7 +48,10 @@ var origin = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 func arms() stub.Arms[call, ret] {
 	return stub.Arms[call, ret]{
 		Fault: func(err error) ret { return ret{Err: err} },
-		Stamp: func(c *call, r ret) { c.Err = r.Err },
+		Stamp: func(c call, r ret) call {
+			c.Err = r.Err
+			return c
+		},
 	}
 }
 
@@ -73,14 +76,14 @@ func (f *fake) Get(key string) (string, error) {
 		a.Invoke = func() ret { return ret{Err: f.fn(key)} }
 	}
 	a.Default = f.defaults
-	r := stub.Answer(f.on, &call{Key: key}, a)
+	r := stub.Answer(f.on, call{Key: key}, a)
 	return r.Value, r.Err
 }
 
 // get calls Store.Get with key through s and the arms of a double without a
 // function and a fixed result, and returns the error of the results.
 func get(s *stub.MethodStub[call], key string) error {
-	return stub.Answer(s, &call{Key: key}, arms()).Err
+	return stub.Answer(s, call{Key: key}, arms()).Err
 }
 
 // assertFailedChecks runs the test of t alone in a child process of the test

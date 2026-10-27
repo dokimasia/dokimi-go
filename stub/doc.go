@@ -12,7 +12,7 @@
 //
 //	func (s *StoreStub) Get(ctx context.Context, id string) (Item, error) {
 //		call := StoreGetCall{Ctx: ctx, ID: id}
-//		r := stub.Answer(s.OnGet.MethodStub, &call, stub.Arms[StoreGetCall, StoreGetReturn]{
+//		r := stub.Answer(s.OnGet.MethodStub, call, stub.Arms[StoreGetCall, StoreGetReturn]{
 //			Invoke:   s.OnGet.invoke(ctx, id),
 //			Fallback: s.OnGet.fallback,
 //			Fault:    func(err error) StoreGetReturn { return StoreGetReturn{Err: err} },

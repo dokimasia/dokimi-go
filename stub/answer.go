@@ -23,9 +23,9 @@ type Arms[C, R any] struct {
 	// Fault returns the results with err in the error result of the method.
 	// It is nil for a method without an error result.
 	Fault func(err error) R
-	// Stamp copies the results onto the recorded call, so the log contains
-	// the results of each call.
-	Stamp func(call *C, result R)
+	// Stamp returns the call with the results copied onto it, so the log
+	// contains the results of each call.
+	Stamp func(call C, result R) C
 }
 
 // Answer returns the results of one call of the method of s, and records the
@@ -44,14 +44,19 @@ type Arms[C, R any] struct {
 // [MethodStub.FailUnfaultable]. A call that the test did not configure
 // stops the test in strict mode through [MethodStub.FailUnexpectedCall], and
 // still returns the default or the zero results.
-func Answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R]) R {
+//
+// # Allocation contract
+//
+// In bench mode, Answer allocates only what the armed fault and the arm that
+// applies allocate.
+func Answer[C, R any](s *MethodStub[C], call C, arms Arms[C, R]) R {
 	s.SleepLatency()
 
-	if failed, err := s.ShouldFaultFor(*call); failed {
+	if failed, err := s.ShouldFaultFor(call); failed {
 		if arms.Fault != nil {
 			return answer(s, call, arms, arms.Fault(err))
 		}
-		s.FailUnfaultable(*call, err)
+		s.FailUnfaultable(call, err)
 	}
 	if arms.Invoke != nil {
 		return answer(s, call, arms, arms.Invoke())
@@ -59,7 +64,7 @@ func Answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R]) R {
 	if arms.Fallback != nil {
 		return answer(s, call, arms, *arms.Fallback)
 	}
-	s.FailUnexpectedCall(*call)
+	s.FailUnexpectedCall(call)
 	if arms.Default != nil {
 		return answer(s, call, arms, arms.Default())
 	}
@@ -68,10 +73,10 @@ func Answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R]) R {
 }
 
 // answer stamps result onto call, records the call and returns result.
-func answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R], result R) R {
+func answer[C, R any](s *MethodStub[C], call C, arms Arms[C, R], result R) R {
 	if arms.Stamp != nil {
-		arms.Stamp(call, result)
+		call = arms.Stamp(call, result)
 	}
-	s.Record(*call)
+	s.Record(call)
 	return result
 }

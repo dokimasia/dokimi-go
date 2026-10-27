@@ -61,7 +61,7 @@ func TestAnswer(t *testing.T) {
 				}
 				a := arms()
 				a.Invoke, a.Fallback, a.Default = tt.giveInvoke, tt.giveFallback, tt.giveDefaults
-				got := stub.Answer(s, &call{Key: "k"}, a)
+				got := stub.Answer(s, call{Key: "k"}, a)
 				expect.Equal(t, got, ret{Value: tt.wantValue, Err: tt.wantErr},
 					"the results are the results of the first arm that applies")
 				expect.Equal(t, s.AssertCalledOnce(t, "the arm records the call"), call{Key: "k", Err: tt.wantErr},
@@ -77,7 +77,7 @@ func TestAnswer(t *testing.T) {
 			s.Faults(errTest, 1)
 			a := arms()
 			a.Fault, a.Fallback = nil, &ret{Value: "fallback"}
-			got := stub.Answer(s, &call{}, a)
+			got := stub.Answer(s, call{}, a)
 			expect.True(t, r.Failed(), "a fault that the method cannot report stops the test")
 			expect.Equal(t, got.Value, "fallback", "the call still returns its fixed result")
 		})
@@ -89,7 +89,7 @@ func TestAnswer(t *testing.T) {
 			s := stub.NewMethodStub[call](r, getName)
 			a := arms()
 			a.Fault, a.Fallback = nil, &ret{Value: "fallback"}
-			got := stub.Answer(s, &call{}, a)
+			got := stub.Answer(s, call{}, a)
 			expect.False(t, r.Failed(), "a method that cannot fail without a fault reports nothing")
 			expect.Equal(t, got.Value, "fallback", "the call returns its fixed result")
 		})
@@ -100,7 +100,7 @@ func TestAnswer(t *testing.T) {
 			r := assert.NewRecorder()
 			s := stub.NewMethodStub[call](r, getName)
 			s.Strict()
-			stub.Answer(s, &call{}, arms())
+			stub.Answer(s, call{}, arms())
 			assert.True(t, r.Failed(), "strict mode refuses an unconfigured call")
 		})
 
@@ -112,7 +112,7 @@ func TestAnswer(t *testing.T) {
 			s.Strict()
 			a := arms()
 			a.Default = func() ret { return ret{Value: "default"} }
-			got := stub.Answer(s, &call{}, a)
+			got := stub.Answer(s, call{}, a)
 			expect.True(t, r.Failed(), "strict mode refuses an unconfigured call that has default results")
 			expect.Equal(t, got.Value, "default", "the refused call still returns its default results")
 		})
@@ -121,8 +121,25 @@ func TestAnswer(t *testing.T) {
 			t.Parallel()
 
 			s := stub.NewMethodStub[call](t, getName)
-			stub.Answer(s, &call{Key: "k"}, stub.Arms[call, struct{}]{})
+			stub.Answer(s, call{Key: "k"}, stub.Arms[call, struct{}]{})
 			assert.Equal(t, s.AssertCalledOnce(t, "the call is recorded"), call{Key: "k"}, "the call keeps its key")
+		})
+	})
+}
+
+// The allocation ceiling of a call counts the allocations of the whole
+// process, so neither the test nor its subtests run in parallel.
+func TestAnswerAllocs(t *testing.T) {
+	t.Run("Answer", func(t *testing.T) {
+		t.Run("does not allocate in bench mode", func(t *testing.T) {
+			if checked, reason := assert.AllocsChecked(); !checked {
+				t.Skipf("the run does not check allocation ceilings: %s", reason)
+			}
+			f := newFake(nil)
+			f.on.BenchMode()
+			f.fn = func(string) error { return nil }
+			assert.MaxAllocs(t, func() { _, _ = f.Get("k") }, 0,
+				"a call of a double in bench mode allocates only what its function allocates")
 		})
 	})
 }
