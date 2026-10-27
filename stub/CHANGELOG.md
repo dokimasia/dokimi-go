@@ -1,5 +1,11 @@
 # go.dokimi.dev/stub
 
+## 0.2.0
+
+### Minor Changes
+
+- b481d12: **Breaking:** Pass the call to `stub.Answer` by value and return the stamped call from `Arms.Stamp`, so a call of a double in bench mode does not allocate its record.
+
 ## 0.1.1
 
 ### Patch Changes
