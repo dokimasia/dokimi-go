@@ -424,6 +424,23 @@ func TestCheck(t *testing.T) {
 				"the message lists the property check with the assertion of its smallest case")
 		})
 
+		t.Run("lists a property check of the options that the defect stops through Fatalf", func(t *testing.T) {
+			t.Parallel()
+
+			c := misses()
+			c.Defect = scrambles
+			stopping := keepsEvery()
+			stopping.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				_ = pc.Draw(prop.String(), "key")
+				if _, isScrambled := h.Subject().(scrambled); isScrambled {
+					h.Fatalf("the store is %s", "closed")
+				}
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb, conform.With(stopping)) })
+			assert.Contains(t, r.Message(), "\n\tStore.Get/keeps-every-value fails with the message \"the store is "+
+				"closed\"\n", "the message lists the property check with the failure of its case")
+		})
+
 		t.Run("applies the check to its defect with the doors of the options", func(t *testing.T) {
 			t.Parallel()
 

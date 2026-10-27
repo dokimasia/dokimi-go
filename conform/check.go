@@ -205,7 +205,8 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) {
 // falsification applies a check. It returns the verdict of the check and
 // whether the check fails. A check that panics fails with the value of the
 // panic, and a check that ends with a fault does not fail. A failure of a
-// property check names the assertion of its smallest case.
+// property check names the assertion of its smallest case. A failure outside
+// an assertion names its message alone.
 func (c *Check[S]) against(defect func(h *Handle[S]) S, cfg *config[S]) (string, bool) {
 	seat := assert.NewRecorder().WithGoexit()
 	var panicked any
@@ -225,6 +226,9 @@ func (c *Check[S]) against(defect func(h *Handle[S]) S, cfg *config[S]) (string,
 		first := seat.Failures()[0]
 		if inner, isCase := first.CaseFailure(); isCase {
 			first = inner
+		}
+		if first.Assertion == "" {
+			return fmt.Sprintf("%s fails with the message %q", c.ID, first.Contract), true
 		}
 		return fmt.Sprintf("%s fails at the assertion %s with the message %q", c.ID, first.Assertion,
 			first.Contract), true
