@@ -238,11 +238,16 @@ func RefusesTheInvalid[S, V any](h *conform.Handle[S], call, validate func(ctx c
 	assert.HasError(h, err, h.Statement())
 }
 
-// RefusesWhatThePredicateRejects calls match, which reports whether the
-// predicate accepts the value of call, then call, and fails when call
-// succeeds. A predicate that accepts the value or fails ends the probe.
+// RefusesWhatThePredicateRejects calls call, which writes a first value. It
+// then calls match, which reports whether the predicate accepts the value of
+// the second call, then call again, and fails when the second call succeeds.
+// A first call that fails ends the probe, and so does a predicate that
+// accepts the value or fails.
 func RefusesWhatThePredicateRejects[S any](h *conform.Handle[S], call Act, match Call[bool]) {
 	h.Helper()
+	if call(h.Context()) != nil {
+		return
+	}
 	if accepted, err := match(h.Context()); err != nil || accepted {
 		return
 	}

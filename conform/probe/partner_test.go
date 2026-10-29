@@ -398,11 +398,13 @@ func TestPartner(t *testing.T) {
 			giveBreak: "match", want: spec.UnmatchedWrite,
 			giveApply: func(h *conform.Handle[*store]) {
 				match := func(context.Context) (bool, error) { return false, nil }
+				calls := 0
 				call := act(h, func(s *store) error {
-					if s.broken != "match" {
+					calls++
+					if calls > 1 && s.broken != "match" {
 						return errOther
 					}
-					return s.put(1, 2)
+					return s.put(1, calls)
 				})
 				probe.RefusesWhatThePredicateRejects(h, call, match)
 			},
@@ -688,6 +690,21 @@ func TestPartner(t *testing.T) {
 			giveApply: func(h *conform.Handle[*store]) {
 				accept := func(context.Context, int) error { return nil }
 				probe.RefusesTheInvalid(h, accept, accept, -1)
+			},
+		},
+		{
+			name:      "RefusesWhatThePredicateRejects passes a first write that fails",
+			giveProbe: spec.RefusesWhatThePredicateRejects,
+			giveApply: func(h *conform.Handle[*store]) {
+				calls := 0
+				failsFirst := func(context.Context) error {
+					calls++
+					if calls == 1 {
+						return errOther
+					}
+					return nil
+				}
+				probe.RefusesWhatThePredicateRejects(h, failsFirst, returning(false))
 			},
 		},
 		{
