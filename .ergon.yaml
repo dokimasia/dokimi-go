@@ -275,7 +275,8 @@ go:
     args: [-fuzzminimizetime=5s]
   # bench-go runs each benchmark whose name matches the regular expression match, count times, for
   # time each, with args. It leaves out the packages of the patterns of skip, which go list resolves
-  # in each module. benchstat states a 95% confidence interval from 6 runs.
+  # in each module, and skips a module in which skip lists every package. benchstat states a 95%
+  # confidence interval from 6 runs.
   bench:
     match: .
     time: 1s
@@ -284,7 +285,9 @@ go:
     count: 6
   # mutate-go runs dokimi-mutate-go with workers mutants of a module at a time and args, and ends
   # the run after timeout. A timeout of 0s sets no limit. It tests no mutant of the packages of the
-  # patterns of skip, such as ./internal/fixture/..., which go list resolves in each module.
+  # patterns of skip, such as ./internal/fixture/..., which go list resolves in each module. It
+  # skips a module in which skip lists every package. The pattern example.com/fixtures/... lists
+  # every package of the module example.com/fixtures.
   mutate:
     timeout: 0s
     args: []
@@ -353,7 +356,7 @@ spec:
   # What the repository is to spec: definition for the repository of a conformance definition, and
   # implementation for a repository with copies of definitions. Each role needs its section of
   # .spec.yaml, definition or implements. A repository without a role gets no target or job of spec.
-  roles: []
+  roles: [implementation]
   # The limit in minutes of the job spec of ci.yml and of the job propose-spec of nightly.yml. The
   # jobs run spec through ergon, and they do not run an action of their own.
   ci:

@@ -1,5 +1,5 @@
 {
-  "ergon": "0.15.0",
+  "ergon": "0.16.0",
   "files": [
     {
       "path": ".commitlint.yaml",
@@ -64,7 +64,7 @@
     {
       "path": ".github/workflows/ci.yml",
       "producer": "github",
-      "sha256": "f3c6dc611200c39dead228510d2b5c3d975cdc6dd1582e5eda24dc12d0e2c9dc"
+      "sha256": "5c26a7f019d99490cf4113d03a09d1311be56d0cee46483a62c1c88ce1ae7914"
     },
     {
       "path": ".github/workflows/codeql.yml",
@@ -74,7 +74,7 @@
     {
       "path": ".github/workflows/nightly.yml",
       "producer": "github",
-      "sha256": "aa27282a8853966dc5393d2b46901bc2250129cf1a743f20324539bbaf027349"
+      "sha256": "c4c47115ac11e43101e159b8d323803fda70af87590f0c5dd9c2dc13c3e4d360"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -99,8 +99,8 @@
     {
       "path": ".golangci.yml",
       "producer": "go",
-      "local": "3f6d82c5eebb7c44977c3a260f840e7b7162867c1037b889a542b070edb2f8c8",
-      "sha256": "3e29d136bbf0d489f1ab85c14481fde2351b4556b7218fc938015f5b05eaf062"
+      "local": "03bde352e08c0c493f7363404a562bee1be20d57a2126cf55b9c1c86e8d4aae8",
+      "sha256": "6adbb65f40b07a99676b3b6156c45c8d9dab9c9a37d4034d83c16b1adf3910cf"
     },
     {
       "path": ".markdownlint.yml",
@@ -130,7 +130,7 @@
     {
       "path": "Makefile",
       "producer": "common",
-      "sha256": "07718b69b3de80c29d241b279c0d49bb0df6957534a0cf9b6e07547d3bdac62f"
+      "sha256": "e30b87ce345090be579313a7615fb8fd5a4153980dd7d368e3ece5016d23ab8a"
     }
   ],
   "settings": {

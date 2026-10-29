@@ -205,6 +205,36 @@ jobs:
         run: |
           ergon license check
 
+  spec:
+    name: Spec
+    needs: skip
+    if: "needs.skip.outputs.skip != 'true'"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-ergon
+      - name: Keep the tools of ergon
+        id: ergon-tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: "ergon-tools-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ hashFiles('.ergon.yaml', '.ergon/init.lock') }}"
+          path: "${{ runner.os == 'Windows' && '~/AppData/Local/ergon/tools' || runner.os == 'macOS' && '~/Library/Caches/ergon/tools' || '~/.cache/ergon/tools' }}"
+          restore-keys: "ergon-tools-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-"
+      - name: Check the copies of the definitions
+        env:
+          GITHUB_TOKEN: "${{ github.token }}"
+        run: |
+          ergon tool run spec.spec -- check --remote
+      - name: Prune the tools of ergon
+        if: "steps.ergon-tools.outputs.cache-hit != 'true'"
+        run: |
+          ergon tool prune
+
   check-go:
     name: "Go (${{ matrix.os }})"
     needs: skip
@@ -256,7 +286,7 @@ jobs:
   result:
     name: Result
     if: always()
-    needs: [skip, docs, commits, changeset, baseline, workflows, license, check-go]
+    needs: [skip, docs, commits, changeset, baseline, workflows, license, spec, check-go]
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions: {}
