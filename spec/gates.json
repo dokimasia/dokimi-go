@@ -15,6 +15,13 @@
       "since": "1.0.0"
     },
     {
+      "id": "returns-unaided",
+      "passes": "The callable has no mixin waits, so a call on a fresh subject returns without the call of another callable.",
+      "why": "{callable} waits for the call of another callable on a fresh subject",
+      "remedy": "remove the mixin waits where {callable} returns on a fresh subject",
+      "since": "1.0.0"
+    },
+    {
       "id": "cancellation",
       "passes": "A parameter has the role context.",
       "why": "{callable} takes no context",

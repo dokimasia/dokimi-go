@@ -36,6 +36,13 @@
       "min-steps": 1
     },
     {
+      "id": "ignores-the-predicate",
+      "changes": "callable",
+      "does": "The callable applies its first call, and returns the zero value of each value result and no error on every later call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
       "id": "refuses-repeat",
       "changes": "callable",
       "does": "The callable succeeds on its first call and fails on every later call.",
@@ -172,6 +179,13 @@
       "id": "verify-silent",
       "changes": "partner:verify",
       "does": "The verify returns no error on every call.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "settles-twice",
+      "changes": "partner:rollback",
+      "does": "The rollback returns no error on every call, also for a transaction that a commit settled.",
       "since": "1.0.0",
       "min-steps": 3
     },

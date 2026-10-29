@@ -407,6 +407,10 @@
         "go": "ForgetsWrites",
         "typescript": "forgetsWrites"
       },
+      "ignores-the-predicate": {
+        "go": "IgnoresThePredicate",
+        "typescript": "ignoresThePredicate"
+      },
       "invents-a-pointer": {
         "go": "InventsAPointer",
         "typescript": "inventsAPointer"
@@ -494,6 +498,10 @@
       "serves-one-page": {
         "go": "ServesOnePage",
         "typescript": "servesOnePage"
+      },
+      "settles-twice": {
+        "go": "SettlesTwice",
+        "typescript": "settlesTwice"
       },
       "shares-a-text": {
         "go": "SharesAText",
@@ -620,6 +628,10 @@
       "returns-beside-error": {
         "go": "ReturnsBesideError",
         "typescript": "returnsBesideError"
+      },
+      "returns-unaided": {
+        "go": "ReturnsUnaided",
+        "typescript": "returnsUnaided"
       },
       "rewritable": {
         "go": "Rewritable",
