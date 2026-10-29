@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "gates": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "passes": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "remedy": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "passes",
+          "why",
+          "remedy",
+          "since"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "gates"
+  ],
+  "additionalProperties": false
+}

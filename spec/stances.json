@@ -1,0 +1,266 @@
+{
+  "stances": [
+    {
+      "id": "silent",
+      "meaning": "The classification implies nothing that a check could falsify, such as a call that returns nothing.",
+      "closes": "Nothing.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "needs",
+      "meaning": "The claim needs a machinery that the run does not supply.",
+      "closes": "The param machineries on the declaration, or a runtime that supplies the machinery.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "declines",
+      "meaning": "dokimi could build the check and rules it out because of its cost.",
+      "closes": "A cheaper check.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "blocked",
+      "meaning": "The check would read a part of the declaration that no generator can read.",
+      "closes": "A change of the vocabulary of the shape catalog.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "gap",
+      "meaning": "The classification implies something that no claim witnesses.",
+      "closes": "A new claim in the spec.",
+      "since": "1.0.0"
+    }
+  ],
+  "unclaimed": [
+    {
+      "id": "shape:writer",
+      "stance": "silent",
+      "note": "A write is an input of the other checks, and its result is an error alone."
+    },
+    {
+      "id": "shape:composite-writer",
+      "stance": "silent",
+      "note": "A write is an input of the other checks, and its result is an error alone."
+    },
+    {
+      "id": "shape:multi-arg-writer",
+      "stance": "silent",
+      "note": "A write is an input of the other checks, and its result is an error alone."
+    },
+    {
+      "id": "shape:mutator",
+      "stance": "silent",
+      "note": "A mutation is an input of the other checks, and its result is an error alone."
+    },
+    {
+      "id": "shape:deleter",
+      "stance": "silent",
+      "note": "A delete is an input of the other checks, and its result is an error alone."
+    },
+    {
+      "id": "shape:closer",
+      "stance": "silent",
+      "note": "A close returns nothing that a check could compare."
+    },
+    {
+      "id": "shape:lifecycle",
+      "stance": "silent",
+      "note": "A lifecycle call returns nothing that a check could compare."
+    },
+    {
+      "id": "mixin:deprecated",
+      "stance": "silent",
+      "note": "The mixin documents the callable."
+    },
+    {
+      "id": "mixin:errors",
+      "stance": "silent",
+      "note": "The mixin documents the errors of the callable."
+    },
+    {
+      "id": "mixin:scope",
+      "stance": "silent",
+      "note": "The mixin documents the scope of the callable."
+    },
+    {
+      "id": "mixin:integration-only",
+      "stance": "silent",
+      "note": "The mixin documents that the callable needs a real dependency."
+    },
+    {
+      "id": "mixin:sample",
+      "stance": "silent",
+      "note": "The mixin documents the sample of a value."
+    },
+    {
+      "id": "mixin:waits",
+      "stance": "silent",
+      "note": "The mixin documents that the callable can wait for another call."
+    },
+    {
+      "id": "mixin:concurrent",
+      "stance": "needs",
+      "note": "The claims of the mixin need concurrent callers."
+    },
+    {
+      "id": "mixin:concurrent-readers",
+      "stance": "needs",
+      "note": "The claims of the mixin need concurrent callers."
+    },
+    {
+      "id": "mixin:atomic",
+      "stance": "needs",
+      "note": "The claims of the mixin need concurrent callers."
+    },
+    {
+      "id": "mixin:serializable",
+      "stance": "needs",
+      "note": "The claims of the mixin need concurrent callers."
+    },
+    {
+      "id": "mixin:snapshot-isolation",
+      "stance": "needs",
+      "note": "The claims of the mixin need concurrent callers."
+    },
+    {
+      "id": "contract:single-flight/fn",
+      "stance": "needs",
+      "note": "The claims of the contract need concurrent callers."
+    },
+    {
+      "id": "mixin:associative",
+      "stance": "needs",
+      "note": "The claims of the mixin need generated sequences."
+    },
+    {
+      "id": "mixin:commutative",
+      "stance": "needs",
+      "note": "The claims of the mixin need generated sequences."
+    },
+    {
+      "id": "mixin:bounded",
+      "stance": "needs",
+      "note": "The claims of the mixin need generated sequences."
+    },
+    {
+      "id": "mixin:conservative",
+      "stance": "needs",
+      "note": "The claims of the mixin need generated sequences."
+    },
+    {
+      "id": "mixin:crdt-merge",
+      "stance": "needs",
+      "note": "The claims of the mixin need generated sequences."
+    },
+    {
+      "id": "mixin:stream-reflects-mutations",
+      "stance": "needs",
+      "note": "The claims of the mixin need generated sequences."
+    },
+    {
+      "id": "contract:outbox/append",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:outbox/subscribe",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:publisher/publish",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:publisher/subscribe",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:publisher/redeliver",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:watcher/watch",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:watcher/trigger",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:workflow/fn",
+      "stance": "needs",
+      "note": "The claims of the contract need generated sequences."
+    },
+    {
+      "id": "contract:circuit-breaker/fn",
+      "stance": "needs",
+      "note": "The claims of the contract need a call that fails on demand."
+    },
+    {
+      "id": "mixin:durable",
+      "stance": "needs",
+      "note": "The claims of the mixin need a killable process or a breakable medium."
+    },
+    {
+      "id": "mixin:default-on-error",
+      "stance": "blocked",
+      "note": "The mixin declares no default value for a check to compare."
+    },
+    {
+      "id": "shape:batch-reader",
+      "stance": "gap",
+      "note": "No claim states what a batch read returns for a key that it does not find."
+    },
+    {
+      "id": "shape:stream-reader",
+      "stance": "gap",
+      "note": "No claim states what a stream returns after its end."
+    },
+    {
+      "id": "shape:poison-accessor",
+      "stance": "gap",
+      "note": "No claim states what the accessor of a poisoned subject returns."
+    },
+    {
+      "id": "mixin:indexed",
+      "stance": "gap",
+      "note": "No claim states that a read by index returns the element at that index."
+    },
+    {
+      "id": "mixin:leak-free",
+      "stance": "gap",
+      "note": "No claim states that the callable leaves no goroutine or task behind."
+    },
+    {
+      "id": "mixin:sticky",
+      "stance": "gap",
+      "note": "No claim states that a value stays once the callable set it."
+    },
+    {
+      "id": "mixin:wrapped-via",
+      "stance": "gap",
+      "note": "No claim states that the error of the callable wraps the declared error."
+    },
+    {
+      "id": "contract:chain/verify",
+      "stance": "gap",
+      "note": "No claim states that the verify of a chain refuses a chain that an append did not produce."
+    },
+    {
+      "id": "contract:lease/release",
+      "stance": "gap",
+      "note": "No claim states that a released lease is granted again."
+    },
+    {
+      "id": "contract:pool/stats",
+      "stance": "gap",
+      "note": "No claim states that the stats of a pool count each loan and each return."
+    }
+  ]
+}

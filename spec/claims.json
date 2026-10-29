@@ -1,0 +1,3465 @@
+{
+  "claims": [
+    {
+      "id": "smoke",
+      "generator": "suite",
+      "licences": [
+        {
+          "callable": true
+        }
+      ],
+      "law": "no-panic-on-any-input",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns without a panic for derived inputs",
+      "probe": "survives",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "panics",
+        "clause": "a {declaration} whose {callable} panics",
+        "reason": "panicked"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "cancel",
+      "generator": "suite",
+      "licences": [
+        {
+          "context": true
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "cancelled-context-is-reported",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns an error for a cancelled context",
+      "probe": "under-cancelled",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} ignores the context",
+        "reason": "ignored-cancel"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "zero-on-error",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "reader"
+        },
+        {
+          "shape": "aggregator"
+        },
+        {
+          "shape": "answering-writer"
+        },
+        {
+          "shape": "stream-consumer"
+        }
+      ],
+      "unless": {
+        "mixin": "default-on-error"
+      },
+      "gates": [
+        "failure",
+        "returns-beside-error",
+        "one-value",
+        "value-samples"
+      ],
+      "law": "no-value-beside-an-error",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the zero value beside an error",
+      "probe": "zero-beside-error",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "zero",
+          "from": "zero"
+        }
+      ],
+      "defect": {
+        "form": "value-beside",
+        "clause": "a {declaration} whose {callable} returns a value beside an error",
+        "reason": "value-beside-error"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "zeroes-on-error",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "multi-reader"
+        },
+        {
+          "shape": "multi-aggregator"
+        }
+      ],
+      "gates": [
+        "failure",
+        "returns-beside-error",
+        "two-values",
+        "value-samples"
+      ],
+      "law": "no-value-beside-an-error",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the zero values beside an error",
+      "probe": "zero-pair-beside-error",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "zero",
+          "from": "zero"
+        }
+      ],
+      "defect": {
+        "form": "values-beside",
+        "clause": "a {declaration} whose {callable} returns values beside an error",
+        "reason": "value-beside-error"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "zero-on-miss",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "reader-with-bool"
+        }
+      ],
+      "gates": [
+        "presence-flag",
+        "one-value",
+        "value-samples"
+      ],
+      "law": "no-value-beside-a-false-flag",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the zero value beside a false presence flag",
+      "probe": "zero-beside-false",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "zero",
+          "from": "zero"
+        }
+      ],
+      "defect": {
+        "form": "value-beside-a-false-flag",
+        "clause": "a {declaration} whose {callable} returns a value beside a false presence flag",
+        "reason": "value-beside-false"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "zeroes-on-miss",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "lookup"
+        }
+      ],
+      "gates": [
+        "presence-flag",
+        "two-values",
+        "value-samples"
+      ],
+      "law": "no-value-beside-a-false-flag",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the zero values beside a false presence flag",
+      "probe": "zero-pair-beside-false",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "zero",
+          "from": "zero"
+        }
+      ],
+      "defect": {
+        "form": "values-beside-a-false-flag",
+        "clause": "a {declaration} whose {callable} returns values beside a false presence flag",
+        "reason": "value-beside-false"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "nil-on-miss",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "pointer-reader"
+        }
+      ],
+      "gates": [
+        "one-value",
+        "optional-value"
+      ],
+      "law": "miss-returns-the-zero",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns nil for an input that nothing stored",
+      "probe": "nil-beside-a-miss",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "invents-a-pointer",
+        "clause": "a {declaration} whose {callable} returns a value for an input that nothing stored",
+        "reason": "non-nil-miss"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "miss-is-zero",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "reader-no-error"
+        }
+      ],
+      "gates": [
+        "one-value",
+        "value-samples"
+      ],
+      "law": "miss-returns-the-zero",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the zero value for an input that nothing stored",
+      "probe": "zero-beside-a-miss",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "zero",
+          "from": "zero"
+        }
+      ],
+      "defect": {
+        "form": "invents-a-value",
+        "clause": "a {declaration} whose {callable} returns a value for an input that nothing stored",
+        "reason": "non-zero-miss"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "deterministic",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "computation"
+        }
+      ],
+      "gates": [
+        "one-value",
+        "value-samples"
+      ],
+      "law": "repeat-returns-alike",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the same value for the same inputs",
+      "probe": "repeat-agrees",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another value on the repeat",
+        "reason": "unstable-repeat"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "predicate",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "predicate"
+        }
+      ],
+      "gates": [
+        "one-value"
+      ],
+      "law": "repeat-returns-alike",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the same answer twice for an unchanged subject",
+      "probe": "repeat-agrees",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another answer on the repeat",
+        "reason": "unstable-repeat"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "repeat-survives",
+      "generator": "suite",
+      "licences": [
+        {
+          "shape": "void-lifecycle"
+        }
+      ],
+      "gates": [
+        "no-value"
+      ],
+      "law": "repeated-call-survives",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns without a panic when it is called twice",
+      "probe": "survives-repeat",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "panics-on-repeat",
+        "clause": "a {declaration} whose {callable} panics on the repeat",
+        "reason": "panicked-repeat"
+      },
+      "since": "1.0.0",
+      "entails": [
+        "smoke"
+      ]
+    },
+    {
+      "id": "miss",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "not-found"
+        }
+      ],
+      "gates": [
+        "failure",
+        "one-value"
+      ],
+      "law": "miss-reports-the-declared-sentinel",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} fails with the declared sentinel for an input that nothing stored",
+      "probe": "reports-sentinel",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "sentinel"
+        }
+      ],
+      "defect": {
+        "form": "reports-another-error",
+        "clause": "a {declaration} whose {callable} fails with another error for a miss",
+        "reason": "wrong-sentinel"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "idempotent",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "idempotent"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "repeat-is-accepted",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a second identical {callable} succeeds after the first",
+      "probe": "repeat-is-quiet",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "refuses-repeat",
+        "clause": "a {declaration} whose {callable} fails on the second call",
+        "reason": "refused-repeat"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "cacheable",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "cacheable"
+        }
+      ],
+      "gates": [
+        "one-value"
+      ],
+      "law": "repeat-returns-alike",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the same value on a repeat",
+      "probe": "repeat-agrees",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another value on the repeat",
+        "reason": "unstable-repeat"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "pure",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "pure"
+        }
+      ],
+      "gates": [
+        "one-value"
+      ],
+      "law": "repeat-returns-alike",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the same value on a repeat",
+      "probe": "repeat-agrees",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another value on the repeat",
+        "reason": "unstable-repeat"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "read-after-write",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "read-after-write"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "named",
+          "param": "write"
+        }
+      ],
+      "law": "read-returns-the-write-before-it",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns what {write} stored before it",
+      "probe": "write-then-read",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "forgets-writes",
+        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "reason": "unobserved-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "causal",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "causal"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "derived",
+          "param": "version"
+        }
+      ],
+      "law": "read-observes-its-causal-past",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} observes the write of {write} that it causally follows",
+      "probe": "write-then-read",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "forgets-writes",
+        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "reason": "unobserved-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "read-your-writes",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "read-your-writes"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "derived",
+          "param": "version"
+        }
+      ],
+      "law": "read-observes-its-own-writes",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} observes the preceding {write} of the same client",
+      "probe": "write-then-read",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "forgets-writes",
+        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "reason": "unobserved-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "monotonic-writes",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "monotonic-writes"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "derived",
+          "param": "version"
+        }
+      ],
+      "law": "writes-apply-in-issue-order",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} observes the state that the ordered writes of {write} produced",
+      "probe": "write-then-read",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "forgets-writes",
+        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "reason": "unobserved-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "point-in-time",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "point-in-time"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "interposed",
+          "param": "write"
+        }
+      ],
+      "law": "read-keeps-its-snapshot",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the same value twice across a {write} between the reads",
+      "probe": "pinned-across-write",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another value on the second read",
+        "reason": "unpinned-read"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "no-duplicates",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "no-duplicates"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "list-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "no-element-is-drained-twice",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "no element appears twice in one {callable}",
+      "probe": "no-element-twice",
+      "inputs": [
+        {
+          "name": "drain",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "drains-twice",
+        "clause": "a {declaration} whose {callable} returns one element twice",
+        "reason": "repeated-element"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "stable-order",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "stable-order"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "list-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "two-drains-agree-on-order",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "two calls of {callable} return the elements in the same order",
+      "probe": "drains-in-one-order",
+      "inputs": [
+        {
+          "name": "drain",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "reorders-drain",
+        "clause": "a {declaration} whose {callable} reorders the elements between calls",
+        "reason": "reordered-drain"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "permutation",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "permutation"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "list-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "drain-gains-exactly-what-went-in",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} gains exactly the elements that {write} wrote between two of its calls",
+      "probe": "gains-what-went-in",
+      "inputs": [
+        {
+          "name": "drain",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "drains-nothing",
+        "clause": "a {declaration} whose {callable} loses what {write} wrote",
+        "reason": "miscounted-drain"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "over-match",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "over-match"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "list-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "drain-keeps-what-went-in",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} gains at least the elements that {write} wrote between two of its calls",
+      "probe": "keeps-what-went-in",
+      "inputs": [
+        {
+          "name": "drain",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "drains-nothing",
+        "clause": "a {declaration} whose {callable} loses what {write} wrote",
+        "reason": "shrunk-drain"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "monotonic",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "monotonic"
+        }
+      ],
+      "gates": [
+        "one-value",
+        "ordered-value",
+        "value-samples"
+      ],
+      "law": "results-never-decrease",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} never returns less than it returned before",
+      "probe": "never-decreases",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "descends",
+        "clause": "a {declaration} whose {callable} returns less than its previous result",
+        "reason": "regressed"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "monotonic-reads",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "monotonic-reads"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value",
+        "value-samples"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "derived",
+          "param": "version"
+        }
+      ],
+      "law": "reads-never-go-backwards",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} never returns an older version than one that it returned before",
+      "probe": "reads-never-regress",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        },
+        {
+          "name": "version",
+          "from": "param",
+          "param": "version"
+        }
+      ],
+      "defect": {
+        "form": "version-descends",
+        "clause": "a {declaration} whose {callable} returns an older version on the second read",
+        "reason": "regressed"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "writes-follow-reads",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "writes-follow-reads"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value",
+        "value-samples"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "derived",
+          "param": "version"
+        }
+      ],
+      "law": "write-follows-the-read-before-it",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a {write} after {callable} has a version above the version that {callable} returned",
+      "probe": "writes-advance",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        },
+        {
+          "name": "version",
+          "from": "param",
+          "param": "version"
+        }
+      ],
+      "defect": {
+        "form": "answers-a-sample",
+        "clause": "a {declaration} whose {write} is not ordered after the read before it",
+        "reason": "unordered-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "xss-safe",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "xss-safe"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "law": "unsafe-value-does-not-survive",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} does not return the value that its directive declares unsafe",
+      "probe": "escapes-the-unsafe",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "unsafe",
+          "from": "param",
+          "param": "unsafe"
+        }
+      ],
+      "defect": {
+        "form": "echoes",
+        "clause": "a {declaration} whose {callable} returns its input unchanged",
+        "reason": "unescaped-output"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "injection-safe",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "injection-safe"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "reader",
+          "param": "read"
+        }
+      ],
+      "law": "unsafe-value-is-kept-as-data",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{read} returns the value that the directive of {callable} declares unsafe, unchanged",
+      "probe": "write-then-read",
+      "inputs": [
+        {
+          "name": "write",
+          "from": "callable"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "stores-nothing",
+        "clause": "a {declaration} whose {callable} returns success and stores nothing",
+        "reason": "unobserved-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "total",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "total",
+          "needs-param": "edge"
+        }
+      ],
+      "law": "call-accepts-its-declared-domain",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} succeeds for the input that its directive declares at the edge of the domain",
+      "probe": "accepts-the-edge",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "edge",
+          "from": "param",
+          "param": "edge"
+        }
+      ],
+      "defect": {
+        "form": "fails-always",
+        "clause": "a {declaration} whose {callable} fails at the edge of its domain",
+        "reason": "refused-the-edge"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "validates",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "validates"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "validate",
+          "mode": "named",
+          "param": "fn"
+        }
+      ],
+      "law": "declared-invalid-value-is-refused",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} refuses the value that {validate} refuses",
+      "probe": "refuses-the-invalid",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "validate",
+          "from": "partner",
+          "partner": "validate"
+        },
+        {
+          "name": "invalid",
+          "from": "param",
+          "param": "invalid"
+        }
+      ],
+      "defect": {
+        "form": "accepts-the-invalid",
+        "clause": "a {declaration} whose {callable} accepts a value that {validate} refuses",
+        "reason": "unscreened-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "nil-safe",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "nil-safe"
+        }
+      ],
+      "gates": [
+        "optional-input"
+      ],
+      "law": "nil-argument-is-accepted",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns without a panic for a nil argument",
+      "probe": "survives",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "panics",
+        "clause": "a {declaration} whose {callable} panics on nil",
+        "reason": "panicked"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "lifecycle-after-close",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "lifecycle-after-close"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "close",
+          "mode": "named",
+          "param": "close"
+        }
+      ],
+      "law": "work-after-close-is-refused",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} fails with the declared sentinel after {close}",
+      "probe": "reports-sealed",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "close",
+          "from": "partner",
+          "partner": "close"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "sentinel"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} works on after {close}",
+        "reason": "alive-after-close"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "order-after",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "order-after"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "call-refuses-before-its-predecessor",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} fails with the declared unready sentinel before its declared predecessor",
+      "probe": "refuses-early",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "unready"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} succeeds before its predecessor ran",
+        "reason": "accepted-early"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "ready-after",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "order-after"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "ready",
+          "mode": "named",
+          "param": "fn"
+        }
+      ],
+      "law": "call-works-after-its-predecessor",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} succeeds once {ready} has run",
+      "probe": "works-after",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "ready",
+          "from": "partner",
+          "partner": "ready"
+        }
+      ],
+      "defect": {
+        "form": "fails-always",
+        "clause": "a {declaration} whose {callable} fails also after {ready}",
+        "reason": "never-ready"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "settles",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "eventually"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "settle",
+          "mode": "named",
+          "param": "settle"
+        },
+        {
+          "name": "observe",
+          "mode": "named",
+          "param": "observe"
+        }
+      ],
+      "law": "effect-arrives-once-settled",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the effect of {callable} reaches {observe} once {settle} has run",
+      "probe": "settles-then-observes",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "settle",
+          "from": "partner",
+          "partner": "settle"
+        },
+        {
+          "name": "observe",
+          "from": "partner",
+          "partner": "observe"
+        }
+      ],
+      "defect": {
+        "form": "observation-unmoved",
+        "clause": "a {declaration} whose {observe} returns nothing, settled or not",
+        "reason": "unsettled-effect"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "within",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "timeout"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "call-returns-within-its-budget",
+      "machineries": [
+        "clock-the-run-advances"
+      ],
+      "statement": "{callable} returns before the clock passes the declared budget",
+      "probe": "returns-within",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "budget",
+          "from": "param",
+          "param": "duration"
+        },
+        {
+          "name": "clock",
+          "from": "clock"
+        }
+      ],
+      "defect": {
+        "form": "slow",
+        "clause": "a {declaration} whose {callable} waits longer than its budget",
+        "reason": "overran-budget"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "windowed",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "windowed"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "count",
+          "mode": "named",
+          "param": "count"
+        }
+      ],
+      "law": "count-covers-a-bounded-window",
+      "machineries": [
+        "clock-the-run-advances"
+      ],
+      "statement": "{count} includes a {callable} inside the declared window and not after it",
+      "probe": "counts-within-window",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "count",
+          "from": "partner",
+          "partner": "count"
+        },
+        {
+          "name": "window",
+          "from": "param",
+          "param": "window"
+        },
+        {
+          "name": "clock",
+          "from": "clock"
+        }
+      ],
+      "defect": {
+        "form": "count-drifts",
+        "clause": "a {declaration} whose {count} keeps every {callable} however far the clock moves",
+        "reason": "misread-window"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "scheduled",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "scheduled"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "count",
+          "mode": "named",
+          "param": "runs"
+        }
+      ],
+      "law": "task-runs-once-its-instant-passes",
+      "machineries": [
+        "clock-the-run-advances"
+      ],
+      "statement": "a task that {callable} registers runs once the clock passes its instant, and not before",
+      "probe": "runs-on-schedule",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "count",
+          "from": "partner",
+          "partner": "count"
+        },
+        {
+          "name": "clock",
+          "from": "clock"
+        }
+      ],
+      "defect": {
+        "form": "count-drifts",
+        "clause": "a {declaration} that runs each task of {callable} the moment it registers",
+        "reason": "off-schedule"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "time-aware",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "time-aware"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "put",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "result-depends-on-the-clock",
+      "machineries": [
+        "clock-the-run-advances"
+      ],
+      "statement": "{callable} returns another value once the clock has moved far enough",
+      "probe": "moves-with-the-clock",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "put",
+          "from": "partner",
+          "partner": "put"
+        },
+        {
+          "name": "clock",
+          "from": "clock"
+        }
+      ],
+      "defect": {
+        "form": "answers-a-sample",
+        "clause": "a {declaration} whose {callable} returns the same value however far the clock moves",
+        "reason": "unmoved-by-the-clock"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "steady",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "time-aware"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "put",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "result-is-stable-while-the-clock-stops",
+      "machineries": [
+        "clock-the-run-advances"
+      ],
+      "statement": "{callable} returns the same value twice while the clock does not move",
+      "probe": "steady-while-the-clock-stops",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "put",
+          "from": "partner",
+          "partner": "put"
+        },
+        {
+          "name": "clock",
+          "from": "clock"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another value while nothing moved",
+        "reason": "drifted-without-clock"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "expires",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "ttl"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "named",
+          "param": "put"
+        }
+      ],
+      "law": "entry-lapses-on-the-clock",
+      "machineries": [
+        "clock-the-run-advances"
+      ],
+      "statement": "{callable} fails with the declared sentinel once the clock passes the declared lifetime",
+      "probe": "expires-after",
+      "inputs": [
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        },
+        {
+          "name": "lifetime",
+          "from": "param",
+          "param": "duration"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "not-found"
+        },
+        {
+          "name": "clock",
+          "from": "clock"
+        }
+      ],
+      "defect": {
+        "form": "answers-a-sample",
+        "clause": "a {declaration} whose {callable} returns an entry after its lifetime",
+        "reason": "not-expired"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "delete-removes",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "delete-removes"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "named",
+          "param": "read"
+        },
+        {
+          "name": "put",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "delete-makes-the-key-unreadable",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{read} fails with the declared sentinel for a key after {callable}",
+      "probe": "removes-on-delete",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "put",
+          "from": "partner",
+          "partner": "put"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "sentinel"
+        }
+      ],
+      "defect": {
+        "form": "read-survives-delete",
+        "clause": "a {declaration} whose {read} returns a key after {callable}",
+        "reason": "readable-after-delete"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "side-effect",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "side-effect"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "observe",
+          "mode": "named",
+          "param": "observe"
+        }
+      ],
+      "law": "call-moves-the-named-observation",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} changes what {observe} returns",
+      "probe": "moves-observation",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "observe",
+          "from": "partner",
+          "partner": "observe"
+        }
+      ],
+      "defect": {
+        "form": "observation-unmoved",
+        "clause": "a {declaration} whose {callable} leaves {observe} unchanged",
+        "reason": "unmoved-observation"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "poisonable",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "poisonable"
+        }
+      ],
+      "gates": [
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "induce",
+          "mode": "named",
+          "param": "induce"
+        }
+      ],
+      "law": "induced-failure-latches",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} fails after {induce}, and keeps failing",
+      "probe": "remains-poisoned",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "induce",
+          "from": "partner",
+          "partner": "induce"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} succeeds after {induce}",
+        "reason": "healthy-after-induce"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "tamper-evident",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "tamper-evident"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "tamper",
+          "mode": "named",
+          "param": "tamper"
+        },
+        {
+          "name": "verify",
+          "mode": "named",
+          "param": "verify"
+        }
+      ],
+      "law": "tamper-is-detected",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{verify} fails for a value of {callable} after {tamper}",
+      "probe": "detects-tamper",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "verify",
+          "from": "partner",
+          "partner": "verify"
+        },
+        {
+          "name": "tamper",
+          "from": "partner",
+          "partner": "tamper"
+        }
+      ],
+      "defect": {
+        "form": "verify-silent",
+        "clause": "a {declaration} whose {verify} returns no error after {tamper}",
+        "reason": "silent-tamper"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "retry-succeeds-tx",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "retry-succeeds",
+          "with": {
+            "contract": "tx",
+            "role": "commit"
+          },
+          "needs-param": "attempts"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "begin",
+          "mode": "role",
+          "role": "begin"
+        }
+      ],
+      "law": "call-converges-once-its-scope-is-open",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} succeeds within the declared attempts once {begin} has opened its transaction",
+      "probe": "converges-after",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "begin",
+          "from": "partner",
+          "partner": "begin"
+        },
+        {
+          "name": "attempts",
+          "from": "param",
+          "param": "attempts"
+        }
+      ],
+      "defect": {
+        "form": "fails-always",
+        "clause": "a {declaration} whose {callable} never succeeds",
+        "reason": "never-converged"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "retry-succeeds",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "retry-succeeds",
+          "needs-param": "attempts",
+          "conflicts": [
+            {
+              "contract": "tx",
+              "role": "commit"
+            }
+          ]
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "call-converges-within-the-declared-attempts",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} succeeds within the declared attempts",
+      "probe": "succeeds-within",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "attempts",
+          "from": "param",
+          "param": "attempts"
+        }
+      ],
+      "defect": {
+        "form": "fails-always",
+        "clause": "a {declaration} whose {callable} never succeeds",
+        "reason": "never-converged"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "hooks",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "hooks"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "register",
+          "mode": "named",
+          "param": "register"
+        }
+      ],
+      "law": "registered-hook-runs",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} runs a hook that {register} installed",
+      "probe": "runs-the-hook",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "register",
+          "from": "partner",
+          "partner": "register"
+        }
+      ],
+      "defect": {
+        "form": "swallows-hooks",
+        "clause": "a {declaration} whose {register} never installs the hook",
+        "reason": "hook-not-run"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "accumulates",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "accumulates"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "observe",
+          "mode": "named",
+          "param": "observe"
+        }
+      ],
+      "law": "repeated-calls-compound",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a second {callable} changes what {observe} returns again",
+      "probe": "each-call-compounds",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "observe",
+          "from": "partner",
+          "partner": "observe"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose repeated {callable} has one effect",
+        "reason": "uncompounded"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "partition",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "partition"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "named",
+          "param": "read"
+        }
+      ],
+      "law": "one-partition-does-not-serve-another",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{read} does not return in one partition what {callable} wrote in another",
+      "probe": "keeps-partitions-apart",
+      "inputs": [
+        {
+          "name": "write",
+          "from": "callable"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} keeps no partition",
+        "reason": "crossed-partitions"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "persister",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "persister",
+          "role": "writer"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "role",
+          "role": "reader"
+        }
+      ],
+      "law": "read-returns-the-write-before-it",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{read} returns what {callable} stored",
+      "probe": "write-then-read",
+      "inputs": [
+        {
+          "name": "write",
+          "from": "callable"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "stores-nothing",
+        "clause": "a {declaration} whose {callable} returns success and stores nothing",
+        "reason": "unobserved-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "chain-causal",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "chain",
+          "role": "append",
+          "with": {
+            "mixin": "causal"
+          }
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "replay",
+          "mode": "role",
+          "role": "replay"
+        }
+      ],
+      "law": "history-replays-in-its-stamped-order",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{replay} returns the entries of {callable} in the order of their stamps",
+      "probe": "replays-in-stamp-order",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "replay",
+          "from": "partner",
+          "partner": "replay"
+        }
+      ],
+      "defect": {
+        "form": "replays-reversed",
+        "clause": "a {declaration} whose {replay} returns the history of {callable} reversed",
+        "reason": "unordered-history"
+      },
+      "since": "1.0.0",
+      "entails": [
+        "chain"
+      ]
+    },
+    {
+      "id": "chain",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "chain",
+          "role": "append"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "replay",
+          "mode": "role",
+          "role": "replay"
+        }
+      ],
+      "law": "admitted-entry-grows-the-replay",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} grows {replay} by the entry that it admits",
+      "probe": "replay-grows",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "replay",
+          "from": "partner",
+          "partner": "replay"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} returns success and appends nothing",
+        "reason": "replay-not-grown"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "appender",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "appender",
+          "role": "fn"
+        }
+      ],
+      "gates": [
+        "one-value",
+        "ordered-value",
+        "value-samples"
+      ],
+      "law": "append-returns-above-the-last",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns a position above the position of the append before it",
+      "probe": "repeat-ascends",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "descends",
+        "clause": "a {declaration} whose {callable} returns a position that is not above the last",
+        "reason": "not-ascending"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "codec",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "codec",
+          "role": "forward"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "inverse",
+          "mode": "role",
+          "role": "inverse"
+        }
+      ],
+      "law": "encoding-survives-its-round-trip",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{inverse} returns what went into {callable}",
+      "probe": "round-trips",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "inverse",
+          "from": "partner",
+          "partner": "inverse"
+        }
+      ],
+      "defect": {
+        "form": "drifts",
+        "clause": "a {declaration} whose {callable} returns another encoding on every call",
+        "reason": "broken-round-trip"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "if-absent",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "if-absent",
+          "role": "writer",
+          "conflicts": [
+            {
+              "mixin": "idempotent"
+            }
+          ]
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "write-is-refused-where-its-key-exists",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a second {callable} for one key fails with the declared conflict",
+      "probe": "refuses-the-second-write",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "conflict"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} accepts the duplicate",
+        "reason": "unguarded-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "lease",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "lease",
+          "role": "acquire",
+          "conflicts": [
+            {
+              "mixin": "idempotent"
+            }
+          ]
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "granted-lease-is-not-granted-twice",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a second {callable} for one key fails with the declared sentinel",
+      "probe": "refuses-the-second-write",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "taken"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} grants a lease that it holds",
+        "reason": "unguarded-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "cas",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "cas",
+          "role": "writer",
+          "conflicts": [
+            {
+              "mixin": "idempotent"
+            }
+          ]
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "write-is-refused-on-a-stale-version",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a second {callable} with the same version fails with the declared mismatch",
+      "probe": "refuses-the-second-write",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "mismatch"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} accepts a write on a version that it has moved past",
+        "reason": "unguarded-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "if-match",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "if-match",
+          "role": "writer"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "match",
+          "mode": "role",
+          "role": "match"
+        }
+      ],
+      "law": "write-is-refused-where-the-predicate-rejects-it",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} refuses a value that {match} rejects",
+      "probe": "refuses-what-the-predicate-rejects",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "match",
+          "from": "partner",
+          "partner": "match"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} accepts a write that {match} rejects",
+        "reason": "unmatched-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "cursor",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "cursor",
+          "role": "next"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "close",
+          "mode": "role",
+          "role": "close"
+        }
+      ],
+      "law": "work-after-close-is-refused",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} fails with the declared sentinel after {close}",
+      "probe": "reports-sealed",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "close",
+          "from": "partner",
+          "partner": "close"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "sentinel"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} keeps draining after {close}",
+        "reason": "alive-after-close"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "cursor-open",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "cursor",
+          "role": "open"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "work-after-close-is-refused",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the cursor of {callable} fails with the declared sentinel once it is closed",
+      "probe": "seals-after-close",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "close",
+          "from": "param",
+          "param": "close-method"
+        },
+        {
+          "name": "after",
+          "from": "param",
+          "param": "next-method"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "sentinel"
+        }
+      ],
+      "defect": {
+        "form": "opens-a-live-handle",
+        "clause": "a {declaration} whose {callable} returns a cursor that drains after its close",
+        "reason": "alive-after-close"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "rate-limit",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "rate-limit",
+          "role": "fn"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "burst-is-spent-then-refused",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} admits its declared burst and refuses the call after it",
+      "probe": "refuses-past-the-burst",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "burst",
+          "from": "param",
+          "param": "burst"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "limited"
+        }
+      ],
+      "defect": {
+        "form": "succeeds-always",
+        "clause": "a {declaration} whose {callable} admits calls past the declared burst",
+        "reason": "past-the-burst"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "leader-election",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "leader-election",
+          "role": "campaign"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "resign",
+          "mode": "role",
+          "role": "resign"
+        },
+        {
+          "name": "leading",
+          "mode": "role",
+          "role": "is-leader"
+        }
+      ],
+      "law": "resigned-leadership-is-released",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{leading} reports no leadership that {callable} took once {resign} has run",
+      "probe": "resigns-leadership",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "resign",
+          "from": "partner",
+          "partner": "resign"
+        },
+        {
+          "name": "leading",
+          "from": "partner",
+          "partner": "leading"
+        }
+      ],
+      "defect": {
+        "form": "leads-on",
+        "clause": "a {declaration} whose {leading} reports leadership after {resign}",
+        "reason": "still-leading"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "transaction",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "transaction",
+          "role": "fn"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "named",
+          "param": "write"
+        },
+        {
+          "name": "read",
+          "mode": "named",
+          "param": "read"
+        }
+      ],
+      "law": "failed-scope-leaves-nothing",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{read} finds nothing that a failed {callable} wrote through {write}",
+      "probe": "rolls-back-on-failure",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "not-found"
+        }
+      ],
+      "defect": {
+        "form": "keeps-failed-writes",
+        "clause": "a {declaration} whose {callable} keeps what a failed body wrote",
+        "reason": "not-rolled-back"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "cache",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "cache",
+          "role": "cache"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value",
+        "value-samples"
+      ],
+      "partners": [
+        {
+          "name": "backing",
+          "mode": "role",
+          "role": "backing"
+        },
+        {
+          "name": "put",
+          "mode": "establishing",
+          "shape": "writer"
+        }
+      ],
+      "law": "cache-agrees-with-its-backing",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns what {backing} returns",
+      "probe": "agrees-with-the-backing",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "backing",
+          "from": "partner",
+          "partner": "backing"
+        },
+        {
+          "name": "put",
+          "from": "partner",
+          "partner": "put"
+        }
+      ],
+      "defect": {
+        "form": "answers-a-sample",
+        "clause": "a {declaration} whose {callable} returns a value that {backing} never had",
+        "reason": "cache-disagrees"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "tx",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "tx",
+          "role": "begin"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value",
+        "value-samples"
+      ],
+      "partners": [
+        {
+          "name": "commit",
+          "mode": "role",
+          "role": "commit"
+        },
+        {
+          "name": "rollback",
+          "mode": "role",
+          "role": "rollback"
+        }
+      ],
+      "law": "settled-transaction-is-not-settled-again",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{rollback} of a transaction that {callable} opened and {commit} settled fails with the declared sentinel",
+      "probe": "seals-after-close",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "close",
+          "from": "partner",
+          "partner": "commit"
+        },
+        {
+          "name": "after",
+          "from": "partner",
+          "partner": "rollback"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "closed"
+        }
+      ],
+      "defect": {
+        "form": "answers-a-sample",
+        "clause": "a {declaration} whose {callable} opens a transaction that settles twice",
+        "reason": "alive-after-close"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "pool",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "pool",
+          "role": "get"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "put",
+          "mode": "role",
+          "role": "put"
+        }
+      ],
+      "law": "borrowed-value-is-taken-back",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{put} takes back what {callable} lent",
+      "probe": "takes-back-what-it-lent",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "put",
+          "from": "partner",
+          "partner": "put"
+        }
+      ],
+      "defect": {
+        "form": "put-refuses",
+        "clause": "a {declaration} whose {put} refuses what {callable} lent",
+        "reason": "unreturned-loan"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "pagination",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "pagination",
+          "role": "reader",
+          "needs-param": "cursor"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "law": "walk-resumes-where-it-left-off",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} resumes from the cursor of its own page",
+      "probe": "continues-from-the-cursor",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "cursor",
+          "from": "param",
+          "param": "cursor"
+        }
+      ],
+      "defect": {
+        "form": "serves-one-page",
+        "clause": "a {declaration} whose {callable} returns the first page to every cursor",
+        "reason": "repeated-page"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "saga",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "saga",
+          "role": "step"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "compensate",
+          "mode": "role",
+          "role": "compensate"
+        }
+      ],
+      "law": "compensation-accepts-its-step",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{compensate} accepts what {callable} applied",
+      "probe": "compensates-the-step",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "compensate",
+          "from": "partner",
+          "partner": "compensate"
+        }
+      ],
+      "defect": {
+        "form": "compensation-refuses",
+        "clause": "a {declaration} whose {compensate} refuses the step of {callable}",
+        "reason": "uncompensated-step"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "batch-writer",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "batch-writer",
+          "role": "writer",
+          "needs-param": "refused"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "reader",
+          "mode": "role",
+          "role": "reader"
+        }
+      ],
+      "law": "refused-write-leaves-nothing",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{reader} finds no part of a value that {callable} refuses",
+      "probe": "refused-leaves-nothing",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "reader",
+          "from": "partner",
+          "partner": "reader"
+        },
+        {
+          "name": "refused",
+          "from": "param",
+          "param": "refused"
+        },
+        {
+          "name": "zero",
+          "from": "zero"
+        }
+      ],
+      "defect": {
+        "form": "files-refused-write",
+        "clause": "a {declaration} whose {callable} files a part of a write that it refused",
+        "reason": "partial-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "updater",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "updater",
+          "role": "writer"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "rewriter",
+          "role": "reader"
+        }
+      ],
+      "law": "second-write-replaces-the-first",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a second {callable} for one key replaces the first",
+      "probe": "second-write-replaces",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "stores-nothing",
+        "clause": "a {declaration} whose {callable} keeps the first write",
+        "reason": "unreplaced-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "upserter",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "upserter",
+          "role": "writer"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "rewriter",
+          "role": "reader"
+        }
+      ],
+      "law": "repeated-write-keeps-one-key",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "a repeated {callable} updates the key and adds no other",
+      "probe": "second-write-replaces",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "read",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "stores-nothing",
+        "clause": "a {declaration} whose second {callable} lands where {read} cannot find it",
+        "reason": "unreplaced-write"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "values-in-order",
+      "generator": "enum",
+      "gates": [
+        "members"
+      ],
+      "law": "variants-are-listed-in-order",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the list of the variants of {declaration} contains each variant once, in the order of the declaration",
+      "probe": "lists-the-members",
+      "inputs": [
+        {
+          "name": "members",
+          "from": "members"
+        }
+      ],
+      "defect": {
+        "form": "drops-a-variant",
+        "clause": "a {declaration} whose list lacks its last variant",
+        "reason": "misordered-members"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "distinct-names",
+      "generator": "enum",
+      "gates": [
+        "two-members"
+      ],
+      "law": "each-variant-has-its-own-text",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "each variant of {declaration} renders its own text",
+      "probe": "names-differ",
+      "inputs": [
+        {
+          "name": "members",
+          "from": "members"
+        },
+        {
+          "name": "name",
+          "from": "name"
+        }
+      ],
+      "defect": {
+        "form": "shares-a-text",
+        "clause": "a {declaration} whose second variant renders the text of the first",
+        "reason": "shared-text"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "valid-members",
+      "generator": "enum",
+      "gates": [
+        "members"
+      ],
+      "law": "only-the-variants-are-valid",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "each variant of {declaration} is valid, and a value outside the variants is not",
+      "probe": "judges-validity",
+      "inputs": [
+        {
+          "name": "members",
+          "from": "members"
+        }
+      ],
+      "defect": {
+        "form": "rejects-a-variant",
+        "clause": "a {declaration} whose last variant is not valid",
+        "reason": "misjudged-validity"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "parses-back",
+      "generator": "enum",
+      "gates": [
+        "members",
+        "parse-function"
+      ],
+      "law": "text-parses-to-its-variant",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the text of each variant of {declaration} parses back to the variant",
+      "probe": "parses-each-text",
+      "inputs": [
+        {
+          "name": "members",
+          "from": "members"
+        },
+        {
+          "name": "parse",
+          "from": "parse"
+        }
+      ],
+      "defect": {
+        "form": "parses-to-the-first",
+        "clause": "a {declaration} whose parse function returns the first variant for every text",
+        "reason": "unparsed-text"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "encodes-text",
+      "generator": "enum",
+      "gates": [
+        "members",
+        "text-encoding"
+      ],
+      "law": "variant-encodes-its-text",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "each variant of {declaration} encodes its own text",
+      "probe": "encodes-each-variant",
+      "inputs": [
+        {
+          "name": "members",
+          "from": "members"
+        }
+      ],
+      "defect": {
+        "form": "encodes-the-first-text",
+        "clause": "a {declaration} whose every variant encodes the text of the first",
+        "reason": "mismarshalled-text"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "decodes-text",
+      "generator": "enum",
+      "gates": [
+        "members",
+        "text-encoding"
+      ],
+      "law": "text-decodes-to-its-variant",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the text of each variant of {declaration} decodes to the variant",
+      "probe": "decodes-each-text",
+      "inputs": [
+        {
+          "name": "members",
+          "from": "members"
+        }
+      ],
+      "defect": {
+        "form": "decodes-to-the-first",
+        "clause": "a {declaration} whose every text decodes to the first variant",
+        "reason": "unmarshalled-wrong"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "error-messages",
+      "generator": "sentinel",
+      "unless": {
+        "param": "prefix",
+        "value": "off"
+      },
+      "gates": [
+        "error-values"
+      ],
+      "law": "error-value-has-its-own-message",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "each error value of {declaration} has a message of its own with the opening",
+      "probe": "messages-differ",
+      "inputs": [
+        {
+          "name": "values",
+          "from": "error-values"
+        },
+        {
+          "name": "opening",
+          "from": "param",
+          "param": "prefix"
+        }
+      ],
+      "defect": {
+        "form": "repeats-a-message",
+        "clause": "a {declaration} whose second error value has the message of the first",
+        "reason": "wrong-message"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "distinct-errors",
+      "generator": "sentinel",
+      "gates": [
+        "two-error-values"
+      ],
+      "law": "error-values-are-distinct",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "no error value of {declaration} matches another",
+      "probe": "errors-differ",
+      "inputs": [
+        {
+          "name": "values",
+          "from": "error-values"
+        },
+        {
+          "name": "neighbours",
+          "from": "param",
+          "param": "no-overlap-with"
+        }
+      ],
+      "defect": {
+        "form": "repeated-error",
+        "clause": "a {declaration} whose second error value is its first",
+        "reason": "shared-identity"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "error-type-messages",
+      "generator": "sentinel",
+      "unless": {
+        "param": "prefix",
+        "value": "off"
+      },
+      "gates": [
+        "error-types"
+      ],
+      "law": "error-type-has-its-own-message",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the message of each error type of {declaration} opens with the opening and contains each member of text",
+      "probe": "type-message",
+      "inputs": [
+        {
+          "name": "types",
+          "from": "error-types"
+        },
+        {
+          "name": "opening",
+          "from": "param",
+          "param": "prefix"
+        }
+      ],
+      "defect": {
+        "form": "drops-the-opening",
+        "clause": "a {declaration} whose error type has a message without the opening",
+        "reason": "wrong-message"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "is-agrees",
+      "generator": "sentinel",
+      "gates": [
+        "self-comparing-type"
+      ],
+      "law": "self-compared-type-agrees-with-identity",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "the hook Is of each error type of {declaration} agrees with the identity of the language",
+      "probe": "compares-with-identity",
+      "inputs": [
+        {
+          "name": "types",
+          "from": "error-types"
+        },
+        {
+          "name": "values",
+          "from": "error-values"
+        }
+      ],
+      "defect": {
+        "form": "matches-everything",
+        "clause": "a {declaration} whose error type matches every error",
+        "reason": "disagreeing-is"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "unwraps-the-cause",
+      "generator": "sentinel",
+      "gates": [
+        "error-cause"
+      ],
+      "law": "error-type-returns-its-cause",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "each error type of {declaration} with a cause returns the cause that it was given",
+      "probe": "returns-the-cause",
+      "inputs": [
+        {
+          "name": "causes",
+          "from": "causes"
+        }
+      ],
+      "defect": {
+        "form": "loses-the-cause",
+        "clause": "a {declaration} whose error type returns no cause",
+        "reason": "lost-cause"
+      },
+      "since": "1.0.0"
+    },
+    {
+      "id": "distinct-error-types",
+      "generator": "sentinel",
+      "gates": [
+        "two-error-types"
+      ],
+      "law": "error-types-are-distinct",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "no value of an error type of {declaration} matches another error type",
+      "probe": "types-differ",
+      "inputs": [
+        {
+          "name": "types",
+          "from": "error-types"
+        }
+      ],
+      "defect": {
+        "form": "matches-other-types",
+        "clause": "a {declaration} whose error type matches a value of another error type",
+        "reason": "shared-identity"
+      },
+      "since": "1.0.0"
+    }
+  ]
+}

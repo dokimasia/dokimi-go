@@ -1,0 +1,74 @@
+{
+  "machineries": [
+    {
+      "id": "nothing-beyond-a-caller",
+      "supplies": "A fixed sequence of calls on one subject, with derived inputs.",
+      "by": "runtime",
+      "since": "1.0.0"
+    },
+    {
+      "id": "clock-the-run-advances",
+      "supplies": "The controlled clock of the assert library, which the check advances.",
+      "by": "runtime",
+      "since": "1.0.0"
+    },
+    {
+      "id": "generated-inputs",
+      "supplies": "Inputs of the calls of a check that the property engine generates and shrinks.",
+      "by": "runtime",
+      "since": "1.0.0"
+    },
+    {
+      "id": "benchmark-run",
+      "supplies": "A run of the benchmarks of the test runner, such as go test -bench or vitest bench.",
+      "by": "runtime",
+      "since": "1.0.0"
+    },
+    {
+      "id": "generated-sequences",
+      "supplies": "Sequences of calls that the property engine produces and shrinks.",
+      "by": "runtime",
+      "since": "1.0.0"
+    },
+    {
+      "id": "concurrent-callers",
+      "supplies": "Calls from several callers at once, recorded as a history.",
+      "by": "runtime",
+      "since": "1.0.0"
+    },
+    {
+      "id": "call-that-fails-on-demand",
+      "supplies": "A subject whose dependencies fail when the check asks for it.",
+      "by": "consumer",
+      "param": "faults",
+      "since": "1.0.0"
+    },
+    {
+      "id": "reference-implementation",
+      "supplies": "A second implementation that gives the expected results.",
+      "by": "consumer",
+      "param": "reference",
+      "since": "1.0.0"
+    },
+    {
+      "id": "second-subject",
+      "supplies": "Another implementation that receives the same calls.",
+      "by": "consumer",
+      "param": "second",
+      "since": "1.0.0"
+    },
+    {
+      "id": "killable-process-or-breakable-medium",
+      "supplies": "A process that the run can kill, and storage that the run can break.",
+      "by": "consumer",
+      "param": "medium",
+      "since": "1.0.0"
+    },
+    {
+      "id": "simulated-system",
+      "supplies": "Every machine of a system on one goroutine, with virtual clocks, faults at the network, the dependencies and the processes, and a trace of every step.",
+      "by": "sim",
+      "since": "1.0.0"
+    }
+  ]
+}

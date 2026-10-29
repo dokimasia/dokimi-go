@@ -1,0 +1,1572 @@
+{
+  "names": {
+    "claims": {
+      "accumulates": {
+        "go": "Accumulates",
+        "typescript": "accumulates"
+      },
+      "appender": {
+        "go": "Appender",
+        "typescript": "appender"
+      },
+      "batch-writer": {
+        "go": "BatchWriter",
+        "typescript": "batchWriter"
+      },
+      "cache": {
+        "go": "Cache",
+        "typescript": "cache"
+      },
+      "cacheable": {
+        "go": "Cacheable",
+        "typescript": "cacheable"
+      },
+      "cancel": {
+        "go": "Cancel",
+        "typescript": "cancel"
+      },
+      "cas": {
+        "go": "Cas",
+        "typescript": "cas"
+      },
+      "causal": {
+        "go": "Causal",
+        "typescript": "causal"
+      },
+      "chain": {
+        "go": "Chain",
+        "typescript": "chain"
+      },
+      "chain-causal": {
+        "go": "ChainCausal",
+        "typescript": "chainCausal"
+      },
+      "codec": {
+        "go": "Codec",
+        "typescript": "codec"
+      },
+      "cursor": {
+        "go": "Cursor",
+        "typescript": "cursor"
+      },
+      "cursor-open": {
+        "go": "CursorOpen",
+        "typescript": "cursorOpen"
+      },
+      "decodes-text": {
+        "go": "DecodesText",
+        "typescript": "decodesText"
+      },
+      "delete-removes": {
+        "go": "DeleteRemoves",
+        "typescript": "deleteRemoves"
+      },
+      "deterministic": {
+        "go": "Deterministic",
+        "typescript": "deterministic"
+      },
+      "distinct-error-types": {
+        "go": "DistinctErrorTypes",
+        "typescript": "distinctErrorTypes"
+      },
+      "distinct-errors": {
+        "go": "DistinctErrors",
+        "typescript": "distinctErrors"
+      },
+      "distinct-names": {
+        "go": "DistinctNames",
+        "typescript": "distinctNames"
+      },
+      "encodes-text": {
+        "go": "EncodesText",
+        "typescript": "encodesText"
+      },
+      "error-messages": {
+        "go": "ErrorMessages",
+        "typescript": "errorMessages"
+      },
+      "error-type-messages": {
+        "go": "ErrorTypeMessages",
+        "typescript": "errorTypeMessages"
+      },
+      "expires": {
+        "go": "Expires",
+        "typescript": "expires"
+      },
+      "hooks": {
+        "go": "Hooks",
+        "typescript": "hooks"
+      },
+      "idempotent": {
+        "go": "Idempotent",
+        "typescript": "idempotent"
+      },
+      "if-absent": {
+        "go": "IfAbsent",
+        "typescript": "ifAbsent"
+      },
+      "if-match": {
+        "go": "IfMatch",
+        "typescript": "ifMatch"
+      },
+      "injection-safe": {
+        "go": "InjectionSafe",
+        "typescript": "injectionSafe"
+      },
+      "is-agrees": {
+        "go": "IsAgrees",
+        "typescript": "isAgrees"
+      },
+      "leader-election": {
+        "go": "LeaderElection",
+        "typescript": "leaderElection"
+      },
+      "lease": {
+        "go": "Lease",
+        "typescript": "lease"
+      },
+      "lifecycle-after-close": {
+        "go": "LifecycleAfterClose",
+        "typescript": "lifecycleAfterClose"
+      },
+      "miss": {
+        "go": "Miss",
+        "typescript": "miss"
+      },
+      "miss-is-zero": {
+        "go": "MissIsZero",
+        "typescript": "missIsZero"
+      },
+      "monotonic": {
+        "go": "Monotonic",
+        "typescript": "monotonic"
+      },
+      "monotonic-reads": {
+        "go": "MonotonicReads",
+        "typescript": "monotonicReads"
+      },
+      "monotonic-writes": {
+        "go": "MonotonicWrites",
+        "typescript": "monotonicWrites"
+      },
+      "nil-on-miss": {
+        "go": "NilOnMiss",
+        "typescript": "nilOnMiss"
+      },
+      "nil-safe": {
+        "go": "NilSafe",
+        "typescript": "nilSafe"
+      },
+      "no-duplicates": {
+        "go": "NoDuplicates",
+        "typescript": "noDuplicates"
+      },
+      "order-after": {
+        "go": "OrderAfter",
+        "typescript": "orderAfter"
+      },
+      "over-match": {
+        "go": "OverMatch",
+        "typescript": "overMatch"
+      },
+      "pagination": {
+        "go": "Pagination",
+        "typescript": "pagination"
+      },
+      "parses-back": {
+        "go": "ParsesBack",
+        "typescript": "parsesBack"
+      },
+      "partition": {
+        "go": "Partition",
+        "typescript": "partition"
+      },
+      "permutation": {
+        "go": "Permutation",
+        "typescript": "permutation"
+      },
+      "persister": {
+        "go": "Persister",
+        "typescript": "persister"
+      },
+      "point-in-time": {
+        "go": "PointInTime",
+        "typescript": "pointInTime"
+      },
+      "poisonable": {
+        "go": "Poisonable",
+        "typescript": "poisonable"
+      },
+      "pool": {
+        "go": "Pool",
+        "typescript": "pool"
+      },
+      "predicate": {
+        "go": "Predicate",
+        "typescript": "predicate"
+      },
+      "pure": {
+        "go": "Pure",
+        "typescript": "pure"
+      },
+      "rate-limit": {
+        "go": "RateLimit",
+        "typescript": "rateLimit"
+      },
+      "read-after-write": {
+        "go": "ReadAfterWrite",
+        "typescript": "readAfterWrite"
+      },
+      "read-your-writes": {
+        "go": "ReadYourWrites",
+        "typescript": "readYourWrites"
+      },
+      "ready-after": {
+        "go": "ReadyAfter",
+        "typescript": "readyAfter"
+      },
+      "repeat-survives": {
+        "go": "RepeatSurvives",
+        "typescript": "repeatSurvives"
+      },
+      "retry-succeeds": {
+        "go": "RetrySucceeds",
+        "typescript": "retrySucceeds"
+      },
+      "retry-succeeds-tx": {
+        "go": "RetrySucceedsTx",
+        "typescript": "retrySucceedsTx"
+      },
+      "saga": {
+        "go": "Saga",
+        "typescript": "saga"
+      },
+      "scheduled": {
+        "go": "Scheduled",
+        "typescript": "scheduled"
+      },
+      "settles": {
+        "go": "Settles",
+        "typescript": "settles"
+      },
+      "side-effect": {
+        "go": "SideEffect",
+        "typescript": "sideEffect"
+      },
+      "smoke": {
+        "go": "Smoke",
+        "typescript": "smoke"
+      },
+      "stable-order": {
+        "go": "StableOrder",
+        "typescript": "stableOrder"
+      },
+      "steady": {
+        "go": "Steady",
+        "typescript": "steady"
+      },
+      "tamper-evident": {
+        "go": "TamperEvident",
+        "typescript": "tamperEvident"
+      },
+      "time-aware": {
+        "go": "TimeAware",
+        "typescript": "timeAware"
+      },
+      "total": {
+        "go": "Total",
+        "typescript": "total"
+      },
+      "transaction": {
+        "go": "Transaction",
+        "typescript": "transaction"
+      },
+      "tx": {
+        "go": "Tx",
+        "typescript": "tx"
+      },
+      "unwraps-the-cause": {
+        "go": "UnwrapsTheCause",
+        "typescript": "unwrapsTheCause"
+      },
+      "updater": {
+        "go": "Updater",
+        "typescript": "updater"
+      },
+      "upserter": {
+        "go": "Upserter",
+        "typescript": "upserter"
+      },
+      "valid-members": {
+        "go": "ValidMembers",
+        "typescript": "validMembers"
+      },
+      "validates": {
+        "go": "Validates",
+        "typescript": "validates"
+      },
+      "values-in-order": {
+        "go": "ValuesInOrder",
+        "typescript": "valuesInOrder"
+      },
+      "windowed": {
+        "go": "Windowed",
+        "typescript": "windowed"
+      },
+      "within": {
+        "go": "Within",
+        "typescript": "within"
+      },
+      "writes-follow-reads": {
+        "go": "WritesFollowReads",
+        "typescript": "writesFollowReads"
+      },
+      "xss-safe": {
+        "go": "XSSSafe",
+        "typescript": "xssSafe"
+      },
+      "zero-on-error": {
+        "go": "ZeroOnError",
+        "typescript": "zeroOnError"
+      },
+      "zero-on-miss": {
+        "go": "ZeroOnMiss",
+        "typescript": "zeroOnMiss"
+      },
+      "zeroes-on-error": {
+        "go": "ZeroesOnError",
+        "typescript": "zeroesOnError"
+      },
+      "zeroes-on-miss": {
+        "go": "ZeroesOnMiss",
+        "typescript": "zeroesOnMiss"
+      }
+    },
+    "forms": {
+      "accepts-the-invalid": {
+        "go": "AcceptsTheInvalid",
+        "typescript": "acceptsTheInvalid"
+      },
+      "answers-a-sample": {
+        "go": "AnswersASample",
+        "typescript": "answersASample"
+      },
+      "compensation-refuses": {
+        "go": "CompensationRefuses",
+        "typescript": "compensationRefuses"
+      },
+      "count-drifts": {
+        "go": "CountDrifts",
+        "typescript": "countDrifts"
+      },
+      "decodes-to-the-first": {
+        "go": "DecodesToTheFirst",
+        "typescript": "decodesToTheFirst"
+      },
+      "descends": {
+        "go": "Descends",
+        "typescript": "descends"
+      },
+      "drains-nothing": {
+        "go": "DrainsNothing",
+        "typescript": "drainsNothing"
+      },
+      "drains-twice": {
+        "go": "DrainsTwice",
+        "typescript": "drainsTwice"
+      },
+      "drifts": {
+        "go": "Drifts",
+        "typescript": "drifts"
+      },
+      "drops-a-variant": {
+        "go": "DropsAVariant",
+        "typescript": "dropsAVariant"
+      },
+      "drops-the-opening": {
+        "go": "DropsTheOpening",
+        "typescript": "dropsTheOpening"
+      },
+      "echoes": {
+        "go": "Echoes",
+        "typescript": "echoes"
+      },
+      "encodes-the-first-text": {
+        "go": "EncodesTheFirstText",
+        "typescript": "encodesTheFirstText"
+      },
+      "fails-always": {
+        "go": "FailsAlways",
+        "typescript": "failsAlways"
+      },
+      "files-refused-write": {
+        "go": "FilesRefusedWrite",
+        "typescript": "filesRefusedWrite"
+      },
+      "forgets-writes": {
+        "go": "ForgetsWrites",
+        "typescript": "forgetsWrites"
+      },
+      "invents-a-pointer": {
+        "go": "InventsAPointer",
+        "typescript": "inventsAPointer"
+      },
+      "invents-a-value": {
+        "go": "InventsAValue",
+        "typescript": "inventsAValue"
+      },
+      "keeps-failed-writes": {
+        "go": "KeepsFailedWrites",
+        "typescript": "keepsFailedWrites"
+      },
+      "leads-on": {
+        "go": "LeadsOn",
+        "typescript": "leadsOn"
+      },
+      "loses-the-cause": {
+        "go": "LosesTheCause",
+        "typescript": "losesTheCause"
+      },
+      "matches-everything": {
+        "go": "MatchesEverything",
+        "typescript": "matchesEverything"
+      },
+      "matches-other-types": {
+        "go": "MatchesOtherTypes",
+        "typescript": "matchesOtherTypes"
+      },
+      "observation-unmoved": {
+        "go": "ObservationUnmoved",
+        "typescript": "observationUnmoved"
+      },
+      "opens-a-live-handle": {
+        "go": "OpensALiveHandle",
+        "typescript": "opensALiveHandle"
+      },
+      "panics": {
+        "go": "Panics",
+        "typescript": "panics"
+      },
+      "panics-on-repeat": {
+        "go": "PanicsOnRepeat",
+        "typescript": "panicsOnRepeat"
+      },
+      "parses-to-the-first": {
+        "go": "ParsesToTheFirst",
+        "typescript": "parsesToTheFirst"
+      },
+      "put-refuses": {
+        "go": "PutRefuses",
+        "typescript": "putRefuses"
+      },
+      "read-survives-delete": {
+        "go": "ReadSurvivesDelete",
+        "typescript": "readSurvivesDelete"
+      },
+      "refuses-repeat": {
+        "go": "RefusesRepeat",
+        "typescript": "refusesRepeat"
+      },
+      "rejects-a-variant": {
+        "go": "RejectsAVariant",
+        "typescript": "rejectsAVariant"
+      },
+      "reorders-drain": {
+        "go": "ReordersDrain",
+        "typescript": "reordersDrain"
+      },
+      "repeated-error": {
+        "go": "RepeatedError",
+        "typescript": "repeatedError"
+      },
+      "repeats-a-message": {
+        "go": "RepeatsAMessage",
+        "typescript": "repeatsAMessage"
+      },
+      "replays-reversed": {
+        "go": "ReplaysReversed",
+        "typescript": "replaysReversed"
+      },
+      "reports-another-error": {
+        "go": "ReportsAnotherError",
+        "typescript": "reportsAnotherError"
+      },
+      "serves-one-page": {
+        "go": "ServesOnePage",
+        "typescript": "servesOnePage"
+      },
+      "shares-a-text": {
+        "go": "SharesAText",
+        "typescript": "sharesAText"
+      },
+      "slow": {
+        "go": "Slow",
+        "typescript": "slow"
+      },
+      "stores-nothing": {
+        "go": "StoresNothing",
+        "typescript": "storesNothing"
+      },
+      "succeeds-always": {
+        "go": "SucceedsAlways",
+        "typescript": "succeedsAlways"
+      },
+      "swallows-hooks": {
+        "go": "SwallowsHooks",
+        "typescript": "swallowsHooks"
+      },
+      "value-beside": {
+        "go": "ValueBeside",
+        "typescript": "valueBeside"
+      },
+      "value-beside-a-false-flag": {
+        "go": "ValueBesideAFalseFlag",
+        "typescript": "valueBesideAFalseFlag"
+      },
+      "values-beside": {
+        "go": "ValuesBeside",
+        "typescript": "valuesBeside"
+      },
+      "values-beside-a-false-flag": {
+        "go": "ValuesBesideAFalseFlag",
+        "typescript": "valuesBesideAFalseFlag"
+      },
+      "verify-silent": {
+        "go": "VerifySilent",
+        "typescript": "verifySilent"
+      },
+      "version-descends": {
+        "go": "VersionDescends",
+        "typescript": "versionDescends"
+      }
+    },
+    "gates": {
+      "cancellation": {
+        "go": "Cancellation",
+        "typescript": "cancellation"
+      },
+      "error-cause": {
+        "go": "ErrorCause",
+        "typescript": "errorCause"
+      },
+      "error-types": {
+        "go": "ErrorTypes",
+        "typescript": "errorTypes"
+      },
+      "error-values": {
+        "go": "ErrorValues",
+        "typescript": "errorValues"
+      },
+      "failure": {
+        "go": "Failure",
+        "typescript": "failure"
+      },
+      "list-value": {
+        "go": "ListValue",
+        "typescript": "listValue"
+      },
+      "members": {
+        "go": "Members",
+        "typescript": "members"
+      },
+      "no-value": {
+        "go": "NoValue",
+        "typescript": "noValue"
+      },
+      "one-partner": {
+        "go": "OnePartner",
+        "typescript": "onePartner"
+      },
+      "one-value": {
+        "go": "OneValue",
+        "typescript": "oneValue"
+      },
+      "optional-input": {
+        "go": "OptionalInput",
+        "typescript": "optionalInput"
+      },
+      "optional-value": {
+        "go": "OptionalValue",
+        "typescript": "optionalValue"
+      },
+      "ordered-value": {
+        "go": "OrderedValue",
+        "typescript": "orderedValue"
+      },
+      "parse-function": {
+        "go": "ParseFunction",
+        "typescript": "parseFunction"
+      },
+      "partner-arguments": {
+        "go": "PartnerArguments",
+        "typescript": "partnerArguments"
+      },
+      "partner-found": {
+        "go": "PartnerFound",
+        "typescript": "partnerFound"
+      },
+      "presence-flag": {
+        "go": "PresenceFlag",
+        "typescript": "presenceFlag"
+      },
+      "returns-beside-error": {
+        "go": "ReturnsBesideError",
+        "typescript": "returnsBesideError"
+      },
+      "rewritable": {
+        "go": "Rewritable",
+        "typescript": "rewritable"
+      },
+      "self-comparing-type": {
+        "go": "SelfComparingType",
+        "typescript": "selfComparingType"
+      },
+      "text-encoding": {
+        "go": "TextEncoding",
+        "typescript": "textEncoding"
+      },
+      "two-error-types": {
+        "go": "TwoErrorTypes",
+        "typescript": "twoErrorTypes"
+      },
+      "two-error-values": {
+        "go": "TwoErrorValues",
+        "typescript": "twoErrorValues"
+      },
+      "two-members": {
+        "go": "TwoMembers",
+        "typescript": "twoMembers"
+      },
+      "two-values": {
+        "go": "TwoValues",
+        "typescript": "twoValues"
+      },
+      "value-samples": {
+        "go": "ValueSamples",
+        "typescript": "valueSamples"
+      }
+    },
+    "laws": {
+      "admitted-entry-grows-the-replay": {
+        "go": "AdmittedEntryGrowsTheReplay",
+        "typescript": "admittedEntryGrowsTheReplay"
+      },
+      "append-returns-above-the-last": {
+        "go": "AppendReturnsAboveTheLast",
+        "typescript": "appendReturnsAboveTheLast"
+      },
+      "borrowed-value-is-taken-back": {
+        "go": "BorrowedValueIsTakenBack",
+        "typescript": "borrowedValueIsTakenBack"
+      },
+      "burst-is-spent-then-refused": {
+        "go": "BurstIsSpentThenRefused",
+        "typescript": "burstIsSpentThenRefused"
+      },
+      "cache-agrees-with-its-backing": {
+        "go": "CacheAgreesWithItsBacking",
+        "typescript": "cacheAgreesWithItsBacking"
+      },
+      "call-accepts-its-declared-domain": {
+        "go": "CallAcceptsItsDeclaredDomain",
+        "typescript": "callAcceptsItsDeclaredDomain"
+      },
+      "call-converges-once-its-scope-is-open": {
+        "go": "CallConvergesOnceItsScopeIsOpen",
+        "typescript": "callConvergesOnceItsScopeIsOpen"
+      },
+      "call-converges-within-the-declared-attempts": {
+        "go": "CallConvergesWithinTheDeclaredAttempts",
+        "typescript": "callConvergesWithinTheDeclaredAttempts"
+      },
+      "call-moves-the-named-observation": {
+        "go": "CallMovesTheNamedObservation",
+        "typescript": "callMovesTheNamedObservation"
+      },
+      "call-refuses-before-its-predecessor": {
+        "go": "CallRefusesBeforeItsPredecessor",
+        "typescript": "callRefusesBeforeItsPredecessor"
+      },
+      "call-returns-within-its-budget": {
+        "go": "CallReturnsWithinItsBudget",
+        "typescript": "callReturnsWithinItsBudget"
+      },
+      "call-works-after-its-predecessor": {
+        "go": "CallWorksAfterItsPredecessor",
+        "typescript": "callWorksAfterItsPredecessor"
+      },
+      "cancelled-context-is-reported": {
+        "go": "CancelledContextIsReported",
+        "typescript": "cancelledContextIsReported"
+      },
+      "compensation-accepts-its-step": {
+        "go": "CompensationAcceptsItsStep",
+        "typescript": "compensationAcceptsItsStep"
+      },
+      "count-covers-a-bounded-window": {
+        "go": "CountCoversABoundedWindow",
+        "typescript": "countCoversABoundedWindow"
+      },
+      "declared-invalid-value-is-refused": {
+        "go": "DeclaredInvalidValueIsRefused",
+        "typescript": "declaredInvalidValueIsRefused"
+      },
+      "delete-makes-the-key-unreadable": {
+        "go": "DeleteMakesTheKeyUnreadable",
+        "typescript": "deleteMakesTheKeyUnreadable"
+      },
+      "drain-gains-exactly-what-went-in": {
+        "go": "DrainGainsExactlyWhatWentIn",
+        "typescript": "drainGainsExactlyWhatWentIn"
+      },
+      "drain-keeps-what-went-in": {
+        "go": "DrainKeepsWhatWentIn",
+        "typescript": "drainKeepsWhatWentIn"
+      },
+      "each-variant-has-its-own-text": {
+        "go": "EachVariantHasItsOwnText",
+        "typescript": "eachVariantHasItsOwnText"
+      },
+      "effect-arrives-once-settled": {
+        "go": "EffectArrivesOnceSettled",
+        "typescript": "effectArrivesOnceSettled"
+      },
+      "encoding-survives-its-round-trip": {
+        "go": "EncodingSurvivesItsRoundTrip",
+        "typescript": "encodingSurvivesItsRoundTrip"
+      },
+      "entry-lapses-on-the-clock": {
+        "go": "EntryLapsesOnTheClock",
+        "typescript": "entryLapsesOnTheClock"
+      },
+      "error-type-has-its-own-message": {
+        "go": "ErrorTypeHasItsOwnMessage",
+        "typescript": "errorTypeHasItsOwnMessage"
+      },
+      "error-type-returns-its-cause": {
+        "go": "ErrorTypeReturnsItsCause",
+        "typescript": "errorTypeReturnsItsCause"
+      },
+      "error-types-are-distinct": {
+        "go": "ErrorTypesAreDistinct",
+        "typescript": "errorTypesAreDistinct"
+      },
+      "error-value-has-its-own-message": {
+        "go": "ErrorValueHasItsOwnMessage",
+        "typescript": "errorValueHasItsOwnMessage"
+      },
+      "error-values-are-distinct": {
+        "go": "ErrorValuesAreDistinct",
+        "typescript": "errorValuesAreDistinct"
+      },
+      "failed-scope-leaves-nothing": {
+        "go": "FailedScopeLeavesNothing",
+        "typescript": "failedScopeLeavesNothing"
+      },
+      "granted-lease-is-not-granted-twice": {
+        "go": "GrantedLeaseIsNotGrantedTwice",
+        "typescript": "grantedLeaseIsNotGrantedTwice"
+      },
+      "history-replays-in-its-stamped-order": {
+        "go": "HistoryReplaysInItsStampedOrder",
+        "typescript": "historyReplaysInItsStampedOrder"
+      },
+      "induced-failure-latches": {
+        "go": "InducedFailureLatches",
+        "typescript": "inducedFailureLatches"
+      },
+      "miss-reports-the-declared-sentinel": {
+        "go": "MissReportsTheDeclaredSentinel",
+        "typescript": "missReportsTheDeclaredSentinel"
+      },
+      "miss-returns-the-zero": {
+        "go": "MissReturnsTheZero",
+        "typescript": "missReturnsTheZero"
+      },
+      "nil-argument-is-accepted": {
+        "go": "NilArgumentIsAccepted",
+        "typescript": "nilArgumentIsAccepted"
+      },
+      "no-element-is-drained-twice": {
+        "go": "NoElementIsDrainedTwice",
+        "typescript": "noElementIsDrainedTwice"
+      },
+      "no-panic-on-any-input": {
+        "go": "NoPanicOnAnyInput",
+        "typescript": "noPanicOnAnyInput"
+      },
+      "no-value-beside-a-false-flag": {
+        "go": "NoValueBesideAFalseFlag",
+        "typescript": "noValueBesideAFalseFlag"
+      },
+      "no-value-beside-an-error": {
+        "go": "NoValueBesideAnError",
+        "typescript": "noValueBesideAnError"
+      },
+      "one-partition-does-not-serve-another": {
+        "go": "OnePartitionDoesNotServeAnother",
+        "typescript": "onePartitionDoesNotServeAnother"
+      },
+      "only-the-variants-are-valid": {
+        "go": "OnlyTheVariantsAreValid",
+        "typescript": "onlyTheVariantsAreValid"
+      },
+      "read-keeps-its-snapshot": {
+        "go": "ReadKeepsItsSnapshot",
+        "typescript": "readKeepsItsSnapshot"
+      },
+      "read-observes-its-causal-past": {
+        "go": "ReadObservesItsCausalPast",
+        "typescript": "readObservesItsCausalPast"
+      },
+      "read-observes-its-own-writes": {
+        "go": "ReadObservesItsOwnWrites",
+        "typescript": "readObservesItsOwnWrites"
+      },
+      "read-returns-the-write-before-it": {
+        "go": "ReadReturnsTheWriteBeforeIt",
+        "typescript": "readReturnsTheWriteBeforeIt"
+      },
+      "reads-never-go-backwards": {
+        "go": "ReadsNeverGoBackwards",
+        "typescript": "readsNeverGoBackwards"
+      },
+      "refused-write-leaves-nothing": {
+        "go": "RefusedWriteLeavesNothing",
+        "typescript": "refusedWriteLeavesNothing"
+      },
+      "registered-hook-runs": {
+        "go": "RegisteredHookRuns",
+        "typescript": "registeredHookRuns"
+      },
+      "repeat-is-accepted": {
+        "go": "RepeatIsAccepted",
+        "typescript": "repeatIsAccepted"
+      },
+      "repeat-returns-alike": {
+        "go": "RepeatReturnsAlike",
+        "typescript": "repeatReturnsAlike"
+      },
+      "repeated-call-survives": {
+        "go": "RepeatedCallSurvives",
+        "typescript": "repeatedCallSurvives"
+      },
+      "repeated-calls-compound": {
+        "go": "RepeatedCallsCompound",
+        "typescript": "repeatedCallsCompound"
+      },
+      "repeated-write-keeps-one-key": {
+        "go": "RepeatedWriteKeepsOneKey",
+        "typescript": "repeatedWriteKeepsOneKey"
+      },
+      "resigned-leadership-is-released": {
+        "go": "ResignedLeadershipIsReleased",
+        "typescript": "resignedLeadershipIsReleased"
+      },
+      "result-depends-on-the-clock": {
+        "go": "ResultDependsOnTheClock",
+        "typescript": "resultDependsOnTheClock"
+      },
+      "result-is-stable-while-the-clock-stops": {
+        "go": "ResultIsStableWhileTheClockStops",
+        "typescript": "resultIsStableWhileTheClockStops"
+      },
+      "results-never-decrease": {
+        "go": "ResultsNeverDecrease",
+        "typescript": "resultsNeverDecrease"
+      },
+      "second-write-replaces-the-first": {
+        "go": "SecondWriteReplacesTheFirst",
+        "typescript": "secondWriteReplacesTheFirst"
+      },
+      "self-compared-type-agrees-with-identity": {
+        "go": "SelfComparedTypeAgreesWithIdentity",
+        "typescript": "selfComparedTypeAgreesWithIdentity"
+      },
+      "settled-transaction-is-not-settled-again": {
+        "go": "SettledTransactionIsNotSettledAgain",
+        "typescript": "settledTransactionIsNotSettledAgain"
+      },
+      "tamper-is-detected": {
+        "go": "TamperIsDetected",
+        "typescript": "tamperIsDetected"
+      },
+      "task-runs-once-its-instant-passes": {
+        "go": "TaskRunsOnceItsInstantPasses",
+        "typescript": "taskRunsOnceItsInstantPasses"
+      },
+      "text-decodes-to-its-variant": {
+        "go": "TextDecodesToItsVariant",
+        "typescript": "textDecodesToItsVariant"
+      },
+      "text-parses-to-its-variant": {
+        "go": "TextParsesToItsVariant",
+        "typescript": "textParsesToItsVariant"
+      },
+      "two-drains-agree-on-order": {
+        "go": "TwoDrainsAgreeOnOrder",
+        "typescript": "twoDrainsAgreeOnOrder"
+      },
+      "unsafe-value-does-not-survive": {
+        "go": "UnsafeValueDoesNotSurvive",
+        "typescript": "unsafeValueDoesNotSurvive"
+      },
+      "unsafe-value-is-kept-as-data": {
+        "go": "UnsafeValueIsKeptAsData",
+        "typescript": "unsafeValueIsKeptAsData"
+      },
+      "variant-encodes-its-text": {
+        "go": "VariantEncodesItsText",
+        "typescript": "variantEncodesItsText"
+      },
+      "variants-are-listed-in-order": {
+        "go": "VariantsAreListedInOrder",
+        "typescript": "variantsAreListedInOrder"
+      },
+      "walk-resumes-where-it-left-off": {
+        "go": "WalkResumesWhereItLeftOff",
+        "typescript": "walkResumesWhereItLeftOff"
+      },
+      "work-after-close-is-refused": {
+        "go": "WorkAfterCloseIsRefused",
+        "typescript": "workAfterCloseIsRefused"
+      },
+      "write-follows-the-read-before-it": {
+        "go": "WriteFollowsTheReadBeforeIt",
+        "typescript": "writeFollowsTheReadBeforeIt"
+      },
+      "write-is-refused-on-a-stale-version": {
+        "go": "WriteIsRefusedOnAStaleVersion",
+        "typescript": "writeIsRefusedOnAStaleVersion"
+      },
+      "write-is-refused-where-its-key-exists": {
+        "go": "WriteIsRefusedWhereItsKeyExists",
+        "typescript": "writeIsRefusedWhereItsKeyExists"
+      },
+      "write-is-refused-where-the-predicate-rejects-it": {
+        "go": "WriteIsRefusedWhereThePredicateRejectsIt",
+        "typescript": "writeIsRefusedWhereThePredicateRejectsIt"
+      },
+      "writes-apply-in-issue-order": {
+        "go": "WritesApplyInIssueOrder",
+        "typescript": "writesApplyInIssueOrder"
+      }
+    },
+    "machineries": {
+      "benchmark-run": {
+        "go": "BenchmarkRun",
+        "typescript": "benchmarkRun"
+      },
+      "call-that-fails-on-demand": {
+        "go": "CallThatFailsOnDemand",
+        "typescript": "callThatFailsOnDemand"
+      },
+      "clock-the-run-advances": {
+        "go": "ClockTheRunAdvances",
+        "typescript": "clockTheRunAdvances"
+      },
+      "concurrent-callers": {
+        "go": "ConcurrentCallers",
+        "typescript": "concurrentCallers"
+      },
+      "generated-inputs": {
+        "go": "GeneratedInputs",
+        "typescript": "generatedInputs"
+      },
+      "generated-sequences": {
+        "go": "GeneratedSequences",
+        "typescript": "generatedSequences"
+      },
+      "killable-process-or-breakable-medium": {
+        "go": "KillableProcessOrBreakableMedium",
+        "typescript": "killableProcessOrBreakableMedium"
+      },
+      "nothing-beyond-a-caller": {
+        "go": "NothingBeyondACaller",
+        "typescript": "nothingBeyondACaller"
+      },
+      "reference-implementation": {
+        "go": "ReferenceImplementation",
+        "typescript": "referenceImplementation"
+      },
+      "second-subject": {
+        "go": "SecondSubject",
+        "typescript": "secondSubject"
+      },
+      "simulated-system": {
+        "go": "SimulatedSystem",
+        "typescript": "simulatedSystem"
+      }
+    },
+    "probes": {
+      "accepts-the-edge": {
+        "go": "AcceptsTheEdge",
+        "typescript": "acceptsTheEdge"
+      },
+      "agrees-with-the-backing": {
+        "go": "AgreesWithTheBacking",
+        "typescript": "agreesWithTheBacking"
+      },
+      "compares-with-identity": {
+        "go": "ComparesWithIdentity",
+        "typescript": "comparesWithIdentity"
+      },
+      "compensates-the-step": {
+        "go": "CompensatesTheStep",
+        "typescript": "compensatesTheStep"
+      },
+      "continues-from-the-cursor": {
+        "go": "ContinuesFromTheCursor",
+        "typescript": "continuesFromTheCursor"
+      },
+      "converges-after": {
+        "go": "ConvergesAfter",
+        "typescript": "convergesAfter"
+      },
+      "counts-within-window": {
+        "go": "CountsWithinWindow",
+        "typescript": "countsWithinWindow"
+      },
+      "decodes-each-text": {
+        "go": "DecodesEachText",
+        "typescript": "decodesEachText"
+      },
+      "detects-tamper": {
+        "go": "DetectsTamper",
+        "typescript": "detectsTamper"
+      },
+      "drains-in-one-order": {
+        "go": "DrainsInOneOrder",
+        "typescript": "drainsInOneOrder"
+      },
+      "each-call-compounds": {
+        "go": "EachCallCompounds",
+        "typescript": "eachCallCompounds"
+      },
+      "encodes-each-variant": {
+        "go": "EncodesEachVariant",
+        "typescript": "encodesEachVariant"
+      },
+      "errors-differ": {
+        "go": "ErrorsDiffer",
+        "typescript": "errorsDiffer"
+      },
+      "escapes-the-unsafe": {
+        "go": "EscapesTheUnsafe",
+        "typescript": "escapesTheUnsafe"
+      },
+      "expires-after": {
+        "go": "ExpiresAfter",
+        "typescript": "expiresAfter"
+      },
+      "gains-what-went-in": {
+        "go": "GainsWhatWentIn",
+        "typescript": "gainsWhatWentIn"
+      },
+      "judges-validity": {
+        "go": "JudgesValidity",
+        "typescript": "judgesValidity"
+      },
+      "keeps-partitions-apart": {
+        "go": "KeepsPartitionsApart",
+        "typescript": "keepsPartitionsApart"
+      },
+      "keeps-what-went-in": {
+        "go": "KeepsWhatWentIn",
+        "typescript": "keepsWhatWentIn"
+      },
+      "lists-the-members": {
+        "go": "ListsTheMembers",
+        "typescript": "listsTheMembers"
+      },
+      "messages-differ": {
+        "go": "MessagesDiffer",
+        "typescript": "messagesDiffer"
+      },
+      "moves-observation": {
+        "go": "MovesObservation",
+        "typescript": "movesObservation"
+      },
+      "moves-with-the-clock": {
+        "go": "MovesWithTheClock",
+        "typescript": "movesWithTheClock"
+      },
+      "names-differ": {
+        "go": "NamesDiffer",
+        "typescript": "namesDiffer"
+      },
+      "never-decreases": {
+        "go": "NeverDecreases",
+        "typescript": "neverDecreases"
+      },
+      "nil-beside-a-miss": {
+        "go": "NilBesideAMiss",
+        "typescript": "nilBesideAMiss"
+      },
+      "no-element-twice": {
+        "go": "NoElementTwice",
+        "typescript": "noElementTwice"
+      },
+      "parses-each-text": {
+        "go": "ParsesEachText",
+        "typescript": "parsesEachText"
+      },
+      "pinned-across-write": {
+        "go": "PinnedAcrossWrite",
+        "typescript": "pinnedAcrossWrite"
+      },
+      "reads-never-regress": {
+        "go": "ReadsNeverRegress",
+        "typescript": "readsNeverRegress"
+      },
+      "refused-leaves-nothing": {
+        "go": "RefusedLeavesNothing",
+        "typescript": "refusedLeavesNothing"
+      },
+      "refuses-early": {
+        "go": "RefusesEarly",
+        "typescript": "refusesEarly"
+      },
+      "refuses-past-the-burst": {
+        "go": "RefusesPastTheBurst",
+        "typescript": "refusesPastTheBurst"
+      },
+      "refuses-the-invalid": {
+        "go": "RefusesTheInvalid",
+        "typescript": "refusesTheInvalid"
+      },
+      "refuses-the-second-write": {
+        "go": "RefusesTheSecondWrite",
+        "typescript": "refusesTheSecondWrite"
+      },
+      "refuses-what-the-predicate-rejects": {
+        "go": "RefusesWhatThePredicateRejects",
+        "typescript": "refusesWhatThePredicateRejects"
+      },
+      "remains-poisoned": {
+        "go": "RemainsPoisoned",
+        "typescript": "remainsPoisoned"
+      },
+      "removes-on-delete": {
+        "go": "RemovesOnDelete",
+        "typescript": "removesOnDelete"
+      },
+      "repeat-agrees": {
+        "go": "RepeatAgrees",
+        "typescript": "repeatAgrees"
+      },
+      "repeat-ascends": {
+        "go": "RepeatAscends",
+        "typescript": "repeatAscends"
+      },
+      "repeat-is-quiet": {
+        "go": "RepeatIsQuiet",
+        "typescript": "repeatIsQuiet"
+      },
+      "replay-grows": {
+        "go": "ReplayGrows",
+        "typescript": "replayGrows"
+      },
+      "replays-in-stamp-order": {
+        "go": "ReplaysInStampOrder",
+        "typescript": "replaysInStampOrder"
+      },
+      "reports-sealed": {
+        "go": "ReportsSealed",
+        "typescript": "reportsSealed"
+      },
+      "reports-sentinel": {
+        "go": "ReportsSentinel",
+        "typescript": "reportsSentinel"
+      },
+      "resigns-leadership": {
+        "go": "ResignsLeadership",
+        "typescript": "resignsLeadership"
+      },
+      "returns-the-cause": {
+        "go": "ReturnsTheCause",
+        "typescript": "returnsTheCause"
+      },
+      "returns-within": {
+        "go": "ReturnsWithin",
+        "typescript": "returnsWithin"
+      },
+      "rolls-back-on-failure": {
+        "go": "RollsBackOnFailure",
+        "typescript": "rollsBackOnFailure"
+      },
+      "round-trips": {
+        "go": "RoundTrips",
+        "typescript": "roundTrips"
+      },
+      "runs-on-schedule": {
+        "go": "RunsOnSchedule",
+        "typescript": "runsOnSchedule"
+      },
+      "runs-the-hook": {
+        "go": "RunsTheHook",
+        "typescript": "runsTheHook"
+      },
+      "seals-after-close": {
+        "go": "SealsAfterClose",
+        "typescript": "sealsAfterClose"
+      },
+      "second-write-replaces": {
+        "go": "SecondWriteReplaces",
+        "typescript": "secondWriteReplaces"
+      },
+      "settles-then-observes": {
+        "go": "SettlesThenObserves",
+        "typescript": "settlesThenObserves"
+      },
+      "steady-while-the-clock-stops": {
+        "go": "SteadyWhileTheClockStops",
+        "typescript": "steadyWhileTheClockStops"
+      },
+      "succeeds-within": {
+        "go": "SucceedsWithin",
+        "typescript": "succeedsWithin"
+      },
+      "survives": {
+        "go": "Survives",
+        "typescript": "survives"
+      },
+      "survives-repeat": {
+        "go": "SurvivesRepeat",
+        "typescript": "survivesRepeat"
+      },
+      "takes-back-what-it-lent": {
+        "go": "TakesBackWhatItLent",
+        "typescript": "takesBackWhatItLent"
+      },
+      "type-message": {
+        "go": "TypeMessage",
+        "typescript": "typeMessage"
+      },
+      "types-differ": {
+        "go": "TypesDiffer",
+        "typescript": "typesDiffer"
+      },
+      "under-cancelled": {
+        "go": "UnderCancelled",
+        "typescript": "underCancelled"
+      },
+      "works-after": {
+        "go": "WorksAfter",
+        "typescript": "worksAfter"
+      },
+      "write-then-read": {
+        "go": "WriteThenRead",
+        "typescript": "writeThenRead"
+      },
+      "writes-advance": {
+        "go": "WritesAdvance",
+        "typescript": "writesAdvance"
+      },
+      "zero-beside-a-miss": {
+        "go": "ZeroBesideAMiss",
+        "typescript": "zeroBesideAMiss"
+      },
+      "zero-beside-error": {
+        "go": "ZeroBesideError",
+        "typescript": "zeroBesideError"
+      },
+      "zero-beside-false": {
+        "go": "ZeroBesideFalse",
+        "typescript": "zeroBesideFalse"
+      },
+      "zero-pair-beside-error": {
+        "go": "ZeroPairBesideError",
+        "typescript": "zeroPairBesideError"
+      },
+      "zero-pair-beside-false": {
+        "go": "ZeroPairBesideFalse",
+        "typescript": "zeroPairBesideFalse"
+      }
+    },
+    "reasons": {
+      "accepted-early": {
+        "go": "AcceptedEarly",
+        "typescript": "acceptedEarly"
+      },
+      "alive-after-close": {
+        "go": "AliveAfterClose",
+        "typescript": "aliveAfterClose"
+      },
+      "broken-round-trip": {
+        "go": "BrokenRoundTrip",
+        "typescript": "brokenRoundTrip"
+      },
+      "cache-disagrees": {
+        "go": "CacheDisagrees",
+        "typescript": "cacheDisagrees"
+      },
+      "crossed-partitions": {
+        "go": "CrossedPartitions",
+        "typescript": "crossedPartitions"
+      },
+      "disagreeing-is": {
+        "go": "DisagreeingIs",
+        "typescript": "disagreeingIs"
+      },
+      "drifted-without-clock": {
+        "go": "DriftedWithoutClock",
+        "typescript": "driftedWithoutClock"
+      },
+      "healthy-after-induce": {
+        "go": "HealthyAfterInduce",
+        "typescript": "healthyAfterInduce"
+      },
+      "hook-not-run": {
+        "go": "HookNotRun",
+        "typescript": "hookNotRun"
+      },
+      "ignored-cancel": {
+        "go": "IgnoredCancel",
+        "typescript": "ignoredCancel"
+      },
+      "lost-cause": {
+        "go": "LostCause",
+        "typescript": "lostCause"
+      },
+      "miscounted-drain": {
+        "go": "MiscountedDrain",
+        "typescript": "miscountedDrain"
+      },
+      "misjudged-validity": {
+        "go": "MisjudgedValidity",
+        "typescript": "misjudgedValidity"
+      },
+      "mismarshalled-text": {
+        "go": "MismarshalledText",
+        "typescript": "mismarshalledText"
+      },
+      "misordered-members": {
+        "go": "MisorderedMembers",
+        "typescript": "misorderedMembers"
+      },
+      "misread-window": {
+        "go": "MisreadWindow",
+        "typescript": "misreadWindow"
+      },
+      "never-converged": {
+        "go": "NeverConverged",
+        "typescript": "neverConverged"
+      },
+      "never-ready": {
+        "go": "NeverReady",
+        "typescript": "neverReady"
+      },
+      "non-nil-miss": {
+        "go": "NonNilMiss",
+        "typescript": "nonNilMiss"
+      },
+      "non-zero-miss": {
+        "go": "NonZeroMiss",
+        "typescript": "nonZeroMiss"
+      },
+      "not-ascending": {
+        "go": "NotAscending",
+        "typescript": "notAscending"
+      },
+      "not-expired": {
+        "go": "NotExpired",
+        "typescript": "notExpired"
+      },
+      "not-rolled-back": {
+        "go": "NotRolledBack",
+        "typescript": "notRolledBack"
+      },
+      "off-schedule": {
+        "go": "OffSchedule",
+        "typescript": "offSchedule"
+      },
+      "overran-budget": {
+        "go": "OverranBudget",
+        "typescript": "overranBudget"
+      },
+      "panicked": {
+        "go": "Panicked",
+        "typescript": "panicked"
+      },
+      "panicked-repeat": {
+        "go": "PanickedRepeat",
+        "typescript": "panickedRepeat"
+      },
+      "partial-write": {
+        "go": "PartialWrite",
+        "typescript": "partialWrite"
+      },
+      "past-the-burst": {
+        "go": "PastTheBurst",
+        "typescript": "pastTheBurst"
+      },
+      "readable-after-delete": {
+        "go": "ReadableAfterDelete",
+        "typescript": "readableAfterDelete"
+      },
+      "refused-repeat": {
+        "go": "RefusedRepeat",
+        "typescript": "refusedRepeat"
+      },
+      "refused-the-edge": {
+        "go": "RefusedTheEdge",
+        "typescript": "refusedTheEdge"
+      },
+      "regressed": {
+        "go": "Regressed",
+        "typescript": "regressed"
+      },
+      "reordered-drain": {
+        "go": "ReorderedDrain",
+        "typescript": "reorderedDrain"
+      },
+      "repeated-element": {
+        "go": "RepeatedElement",
+        "typescript": "repeatedElement"
+      },
+      "repeated-page": {
+        "go": "RepeatedPage",
+        "typescript": "repeatedPage"
+      },
+      "replay-not-grown": {
+        "go": "ReplayNotGrown",
+        "typescript": "replayNotGrown"
+      },
+      "shared-identity": {
+        "go": "SharedIdentity",
+        "typescript": "sharedIdentity"
+      },
+      "shared-text": {
+        "go": "SharedText",
+        "typescript": "sharedText"
+      },
+      "shrunk-drain": {
+        "go": "ShrunkDrain",
+        "typescript": "shrunkDrain"
+      },
+      "silent-tamper": {
+        "go": "SilentTamper",
+        "typescript": "silentTamper"
+      },
+      "still-leading": {
+        "go": "StillLeading",
+        "typescript": "stillLeading"
+      },
+      "uncompensated-step": {
+        "go": "UncompensatedStep",
+        "typescript": "uncompensatedStep"
+      },
+      "uncompounded": {
+        "go": "Uncompounded",
+        "typescript": "uncompounded"
+      },
+      "unescaped-output": {
+        "go": "UnescapedOutput",
+        "typescript": "unescapedOutput"
+      },
+      "unguarded-write": {
+        "go": "UnguardedWrite",
+        "typescript": "unguardedWrite"
+      },
+      "unmarshalled-wrong": {
+        "go": "UnmarshalledWrong",
+        "typescript": "unmarshalledWrong"
+      },
+      "unmatched-write": {
+        "go": "UnmatchedWrite",
+        "typescript": "unmatchedWrite"
+      },
+      "unmoved-by-the-clock": {
+        "go": "UnmovedByTheClock",
+        "typescript": "unmovedByTheClock"
+      },
+      "unmoved-observation": {
+        "go": "UnmovedObservation",
+        "typescript": "unmovedObservation"
+      },
+      "unobserved-write": {
+        "go": "UnobservedWrite",
+        "typescript": "unobservedWrite"
+      },
+      "unordered-history": {
+        "go": "UnorderedHistory",
+        "typescript": "unorderedHistory"
+      },
+      "unordered-write": {
+        "go": "UnorderedWrite",
+        "typescript": "unorderedWrite"
+      },
+      "unparsed-text": {
+        "go": "UnparsedText",
+        "typescript": "unparsedText"
+      },
+      "unpinned-read": {
+        "go": "UnpinnedRead",
+        "typescript": "unpinnedRead"
+      },
+      "unreplaced-write": {
+        "go": "UnreplacedWrite",
+        "typescript": "unreplacedWrite"
+      },
+      "unreturned-loan": {
+        "go": "UnreturnedLoan",
+        "typescript": "unreturnedLoan"
+      },
+      "unscreened-write": {
+        "go": "UnscreenedWrite",
+        "typescript": "unscreenedWrite"
+      },
+      "unsettled-effect": {
+        "go": "UnsettledEffect",
+        "typescript": "unsettledEffect"
+      },
+      "unstable-repeat": {
+        "go": "UnstableRepeat",
+        "typescript": "unstableRepeat"
+      },
+      "value-beside-error": {
+        "go": "ValueBesideError",
+        "typescript": "valueBesideError"
+      },
+      "value-beside-false": {
+        "go": "ValueBesideFalse",
+        "typescript": "valueBesideFalse"
+      },
+      "wrong-message": {
+        "go": "WrongMessage",
+        "typescript": "wrongMessage"
+      },
+      "wrong-sentinel": {
+        "go": "WrongSentinel",
+        "typescript": "wrongSentinel"
+      }
+    },
+    "stances": {
+      "blocked": {
+        "go": "Blocked",
+        "typescript": "blocked"
+      },
+      "declines": {
+        "go": "Declines",
+        "typescript": "declines"
+      },
+      "gap": {
+        "go": "Gap",
+        "typescript": "gap"
+      },
+      "needs": {
+        "go": "Needs",
+        "typescript": "needs"
+      },
+      "silent": {
+        "go": "Silent",
+        "typescript": "silent"
+      }
+    }
+  },
+  "languages": [
+    "go",
+    "typescript"
+  ]
+}

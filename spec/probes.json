@@ -1,0 +1,1405 @@
+{
+  "probes": [
+    {
+      "id": "survives",
+      "summary": "A call returns without a panic.",
+      "vacuous": "Never, because every call either returns or panics.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "panicked"
+      ]
+    },
+    {
+      "id": "under-cancelled",
+      "summary": "A call with a cancelled context returns an error.",
+      "vacuous": "Never, because the probe cancels the context itself.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "ignored-cancel"
+      ]
+    },
+    {
+      "id": "zero-beside-error",
+      "summary": "A call that fails returns the zero value of its result.",
+      "vacuous": "No call fails, with the sample inputs or with a cancelled context.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "zero",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "value-beside-error"
+      ]
+    },
+    {
+      "id": "zero-pair-beside-error",
+      "summary": "A call that fails returns the zero value of each of its two results.",
+      "vacuous": "No call fails, with the sample inputs or with a cancelled context.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "zero",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "value-beside-error"
+      ]
+    },
+    {
+      "id": "zero-beside-false",
+      "summary": "A call that returns a false presence flag returns the zero value of its result.",
+      "vacuous": "The call returns a true presence flag for an input that nothing stored.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "zero",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "value-beside-false"
+      ]
+    },
+    {
+      "id": "zero-pair-beside-false",
+      "summary": "A call that returns a false presence flag returns the zero value of each of its two results.",
+      "vacuous": "The call returns a true presence flag for an input that nothing stored.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "zero",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "value-beside-false"
+      ]
+    },
+    {
+      "id": "nil-beside-a-miss",
+      "summary": "A read of an input that nothing stored returns nil.",
+      "vacuous": "Never, because the subject is fresh and nothing stored the input.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "non-nil-miss"
+      ]
+    },
+    {
+      "id": "zero-beside-a-miss",
+      "summary": "A read of an input that nothing stored returns the zero value.",
+      "vacuous": "Never, because the subject is fresh and nothing stored the input.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "zero",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "non-zero-miss"
+      ]
+    },
+    {
+      "id": "repeat-agrees",
+      "summary": "Two calls with the same inputs return the same value.",
+      "vacuous": "The first call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unstable-repeat"
+      ]
+    },
+    {
+      "id": "survives-repeat",
+      "summary": "A second call returns without a panic after a first call.",
+      "vacuous": "The first call panics, which is the failure of the check of a single call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "panicked-repeat"
+      ]
+    },
+    {
+      "id": "reports-sentinel",
+      "summary": "A read of an input that nothing stored fails with the declared sentinel.",
+      "vacuous": "Never, because the subject is fresh and nothing stored the input.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "wrong-sentinel"
+      ]
+    },
+    {
+      "id": "repeat-is-quiet",
+      "summary": "A second identical call succeeds after a first call that succeeded.",
+      "vacuous": "The first call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "refused-repeat"
+      ]
+    },
+    {
+      "id": "write-then-read",
+      "summary": "A read after a write returns the value of the write.",
+      "vacuous": "The write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unobserved-write"
+      ]
+    },
+    {
+      "id": "pinned-across-write",
+      "summary": "Two reads of one snapshot return the same value across a write between them.",
+      "vacuous": "The first read or the write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unpinned-read"
+      ]
+    },
+    {
+      "id": "no-element-twice",
+      "summary": "One drain after two writes returns each element at most once.",
+      "vacuous": "The drain returns fewer than two elements.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "drain",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "repeated-element"
+      ]
+    },
+    {
+      "id": "drains-in-one-order",
+      "summary": "Two drains after two writes return the elements in the same order.",
+      "vacuous": "The first drain returns fewer than two elements.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "drain",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "reordered-drain"
+      ]
+    },
+    {
+      "id": "gains-what-went-in",
+      "summary": "A drain gains exactly the elements that two writes wrote since the drain before it.",
+      "vacuous": "A write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "drain",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "miscounted-drain"
+      ]
+    },
+    {
+      "id": "keeps-what-went-in",
+      "summary": "A drain gains at least the elements that two writes wrote since the drain before it.",
+      "vacuous": "A write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "drain",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "shrunk-drain"
+      ]
+    },
+    {
+      "id": "never-decreases",
+      "summary": "The second result of a call is at least the first.",
+      "vacuous": "The first call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "regressed"
+      ]
+    },
+    {
+      "id": "reads-never-regress",
+      "summary": "A second read after a write returns a version that is at least the version of the first read.",
+      "vacuous": "The write or the first read fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "regressed"
+      ]
+    },
+    {
+      "id": "writes-advance",
+      "summary": "A write after a read has a version above the version that the read returned.",
+      "vacuous": "The first write or the read fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unordered-write"
+      ]
+    },
+    {
+      "id": "escapes-the-unsafe",
+      "summary": "A call with the declared unsafe value returns an output that does not contain it.",
+      "vacuous": "The call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "unsafe",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "unescaped-output"
+      ]
+    },
+    {
+      "id": "accepts-the-edge",
+      "summary": "A call with the declared input at the edge of the domain succeeds.",
+      "vacuous": "Never, because the input is the declared edge.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "edge",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "refused-the-edge"
+      ]
+    },
+    {
+      "id": "refuses-the-invalid",
+      "summary": "A call with the value that the declared validator refuses fails.",
+      "vacuous": "The validator accepts the declared invalid value.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "validate",
+          "kind": "call"
+        },
+        {
+          "name": "invalid",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "unscreened-write"
+      ]
+    },
+    {
+      "id": "reports-sealed",
+      "summary": "A call after the close fails with the declared sentinel.",
+      "vacuous": "The close fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "close",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "alive-after-close"
+      ]
+    },
+    {
+      "id": "refuses-early",
+      "summary": "A call on a fresh subject, before its declared predecessor, fails with the declared sentinel.",
+      "vacuous": "Never, because the subject is fresh and the predecessor has not run.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "accepted-early"
+      ]
+    },
+    {
+      "id": "works-after",
+      "summary": "A call after its declared predecessor succeeds.",
+      "vacuous": "The predecessor fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "ready",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "never-ready"
+      ]
+    },
+    {
+      "id": "settles-then-observes",
+      "summary": "The named observation changes after a call and the settle that follows it.",
+      "vacuous": "The call or the settle fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "settle",
+          "kind": "call"
+        },
+        {
+          "name": "observe",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unsettled-effect"
+      ]
+    },
+    {
+      "id": "returns-within",
+      "summary": "A call returns before the clock of the run passes its declared budget.",
+      "vacuous": "Never, because the probe advances the clock past the budget.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "budget",
+          "kind": "duration"
+        },
+        {
+          "name": "clock",
+          "kind": "clock"
+        }
+      ],
+      "reasons": [
+        "overran-budget"
+      ]
+    },
+    {
+      "id": "counts-within-window",
+      "summary": "A count includes an occurrence inside the declared window and not after it.",
+      "vacuous": "The call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "count",
+          "kind": "call"
+        },
+        {
+          "name": "window",
+          "kind": "duration"
+        },
+        {
+          "name": "clock",
+          "kind": "clock"
+        }
+      ],
+      "reasons": [
+        "misread-window"
+      ]
+    },
+    {
+      "id": "runs-on-schedule",
+      "summary": "A registered task has not run halfway to its instant and has run once the clock passes it.",
+      "vacuous": "The registration fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "count",
+          "kind": "call"
+        },
+        {
+          "name": "clock",
+          "kind": "clock"
+        }
+      ],
+      "reasons": [
+        "off-schedule"
+      ]
+    },
+    {
+      "id": "moves-with-the-clock",
+      "summary": "A result changes once the clock moves in doubling steps far enough.",
+      "vacuous": "The establishing write or the first call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "put",
+          "kind": "call"
+        },
+        {
+          "name": "clock",
+          "kind": "clock"
+        }
+      ],
+      "reasons": [
+        "unmoved-by-the-clock"
+      ]
+    },
+    {
+      "id": "steady-while-the-clock-stops",
+      "summary": "Two calls return the same value while the clock does not move.",
+      "vacuous": "The establishing write or the first call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "put",
+          "kind": "call"
+        },
+        {
+          "name": "clock",
+          "kind": "clock"
+        }
+      ],
+      "reasons": [
+        "drifted-without-clock"
+      ]
+    },
+    {
+      "id": "expires-after",
+      "summary": "A read of a written entry fails with the declared sentinel once the clock passes its lifetime.",
+      "vacuous": "The write fails, or the read fails before the clock moves.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        },
+        {
+          "name": "lifetime",
+          "kind": "duration"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        },
+        {
+          "name": "clock",
+          "kind": "clock"
+        }
+      ],
+      "reasons": [
+        "not-expired"
+      ]
+    },
+    {
+      "id": "removes-on-delete",
+      "summary": "A read of a written key fails with the declared sentinel after its delete.",
+      "vacuous": "The write or the delete fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "put",
+          "kind": "call"
+        },
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "readable-after-delete"
+      ]
+    },
+    {
+      "id": "moves-observation",
+      "summary": "The named observation changes after a call.",
+      "vacuous": "The call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "observe",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unmoved-observation"
+      ]
+    },
+    {
+      "id": "remains-poisoned",
+      "summary": "Each call after the induced failure fails.",
+      "vacuous": "Never, because the probe induces the failure itself.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "induce",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "healthy-after-induce"
+      ]
+    },
+    {
+      "id": "detects-tamper",
+      "summary": "The verify of a value fails after its tamper.",
+      "vacuous": "The call fails, or the verify fails before the tamper.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "verify",
+          "kind": "call"
+        },
+        {
+          "name": "tamper",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "silent-tamper"
+      ]
+    },
+    {
+      "id": "converges-after",
+      "summary": "A call inside an open transaction succeeds within the declared attempts.",
+      "vacuous": "The begin fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "begin",
+          "kind": "call"
+        },
+        {
+          "name": "attempts",
+          "kind": "count"
+        }
+      ],
+      "reasons": [
+        "never-converged"
+      ]
+    },
+    {
+      "id": "succeeds-within",
+      "summary": "A call succeeds within the declared attempts.",
+      "vacuous": "Never, because the probe makes every attempt.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "attempts",
+          "kind": "count"
+        }
+      ],
+      "reasons": [
+        "never-converged"
+      ]
+    },
+    {
+      "id": "runs-the-hook",
+      "summary": "A call runs the hook that the registrar installed before it.",
+      "vacuous": "The registrar or the call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "register",
+          "kind": "hook"
+        }
+      ],
+      "reasons": [
+        "hook-not-run"
+      ]
+    },
+    {
+      "id": "each-call-compounds",
+      "summary": "Each of two calls changes the named observation.",
+      "vacuous": "A call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "observe",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "uncompounded"
+      ]
+    },
+    {
+      "id": "keeps-partitions-apart",
+      "summary": "A read in one partition after writes in two partitions returns the value of its own partition.",
+      "vacuous": "A write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "write",
+          "kind": "call"
+        },
+        {
+          "name": "read",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "crossed-partitions"
+      ]
+    },
+    {
+      "id": "replays-in-stamp-order",
+      "summary": "The replay after two appends returns the entries in the order of their stamps.",
+      "vacuous": "An append fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "replay",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unordered-history"
+      ]
+    },
+    {
+      "id": "replay-grows",
+      "summary": "The replay after an admitted append has one entry more than the replay before it.",
+      "vacuous": "The append fails, or the replay fails before it.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "replay",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "replay-not-grown"
+      ]
+    },
+    {
+      "id": "repeat-ascends",
+      "summary": "The second of two appends returns a position above the first.",
+      "vacuous": "The first append fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "not-ascending"
+      ]
+    },
+    {
+      "id": "round-trips",
+      "summary": "The inverse returns the value that went into the forward call.",
+      "vacuous": "The forward call fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "inverse",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "broken-round-trip"
+      ]
+    },
+    {
+      "id": "refuses-the-second-write",
+      "summary": "A second write meets the condition that the first write established and fails with the declared sentinel.",
+      "vacuous": "The first write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "unguarded-write"
+      ]
+    },
+    {
+      "id": "refuses-what-the-predicate-rejects",
+      "summary": "A write of a value that the predicate rejects fails.",
+      "vacuous": "The predicate accepts both values.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "match",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unmatched-write"
+      ]
+    },
+    {
+      "id": "seals-after-close",
+      "summary": "A second settlement or a call after the close of a handle fails with the declared sentinel.",
+      "vacuous": "The call opens no handle, or the close fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "close",
+          "kind": "call"
+        },
+        {
+          "name": "after",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "alive-after-close"
+      ]
+    },
+    {
+      "id": "refuses-past-the-burst",
+      "summary": "A call after the declared burst fails with the declared sentinel.",
+      "vacuous": "A call inside the burst fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "burst",
+          "kind": "count"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "past-the-burst"
+      ]
+    },
+    {
+      "id": "resigns-leadership",
+      "summary": "The leadership read reports no leadership after a campaign and its resign.",
+      "vacuous": "The campaign or the resign fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "resign",
+          "kind": "call"
+        },
+        {
+          "name": "leading",
+          "kind": "predicate"
+        }
+      ],
+      "reasons": [
+        "still-leading"
+      ]
+    },
+    {
+      "id": "rolls-back-on-failure",
+      "summary": "A read after a scope whose body wrote and then failed fails with the declared sentinel.",
+      "vacuous": "The scope does not run its body, or the write inside it fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "scope"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        },
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "not-rolled-back"
+      ]
+    },
+    {
+      "id": "agrees-with-the-backing",
+      "summary": "The cache returns the value that its backing returns, after an establishing write.",
+      "vacuous": "The establishing write or the read of the backing fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "backing",
+          "kind": "call"
+        },
+        {
+          "name": "put",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "cache-disagrees"
+      ]
+    },
+    {
+      "id": "takes-back-what-it-lent",
+      "summary": "The put accepts the value that the get lent.",
+      "vacuous": "The get lends nothing.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "put",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unreturned-loan"
+      ]
+    },
+    {
+      "id": "continues-from-the-cursor",
+      "summary": "A read with the cursor of the first page returns another page.",
+      "vacuous": "The first page returns no cursor.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "cursor",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "repeated-page"
+      ]
+    },
+    {
+      "id": "compensates-the-step",
+      "summary": "The compensation accepts the step that the call applied.",
+      "vacuous": "The step fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "compensate",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "uncompensated-step"
+      ]
+    },
+    {
+      "id": "refused-leaves-nothing",
+      "summary": "The reader finds nothing after a write of the declared refused value fails.",
+      "vacuous": "The write of the refused value succeeds.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "reader",
+          "kind": "call"
+        },
+        {
+          "name": "refused",
+          "kind": "value"
+        },
+        {
+          "name": "zero",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "partial-write"
+      ]
+    },
+    {
+      "id": "second-write-replaces",
+      "summary": "A read after two writes for one key returns the value of the second write.",
+      "vacuous": "A write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "read",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unreplaced-write"
+      ]
+    },
+    {
+      "id": "lists-the-members",
+      "summary": "The list of the variants contains each variant once, in the order of the declaration.",
+      "vacuous": "Never, because the probe compares the whole list.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "members",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "misordered-members"
+      ]
+    },
+    {
+      "id": "names-differ",
+      "summary": "Each variant renders its declared text, and no two variants and no value outside them render one text.",
+      "vacuous": "Never, because the probe renders every variant.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "members",
+          "kind": "values"
+        },
+        {
+          "name": "name",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "shared-text"
+      ]
+    },
+    {
+      "id": "judges-validity",
+      "summary": "Each variant is valid, and a value outside the variants is not.",
+      "vacuous": "Never, because the probe judges every variant.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "members",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "misjudged-validity"
+      ]
+    },
+    {
+      "id": "parses-each-text",
+      "summary": "The text of each variant parses to the variant, and the text of no variant fails with the error of the parse function.",
+      "vacuous": "Never, because the probe parses the text of every variant.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "members",
+          "kind": "values"
+        },
+        {
+          "name": "parse",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "unparsed-text"
+      ]
+    },
+    {
+      "id": "encodes-each-variant",
+      "summary": "Each variant encodes its own text.",
+      "vacuous": "Never, because the probe encodes every variant.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "members",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "mismarshalled-text"
+      ]
+    },
+    {
+      "id": "decodes-each-text",
+      "summary": "The text of each variant decodes to the variant, and the text of no variant fails to decode.",
+      "vacuous": "Never, because the probe decodes the text of every variant.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "members",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "unmarshalled-wrong"
+      ]
+    },
+    {
+      "id": "messages-differ",
+      "summary": "Each error value has a message with the opening, and no message equals or opens with the whole message of another.",
+      "vacuous": "Never, because the probe reads every error value.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "values",
+          "kind": "values"
+        },
+        {
+          "name": "opening",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "wrong-message"
+      ]
+    },
+    {
+      "id": "errors-differ",
+      "summary": "No error value matches another error value of the package or of a package under no-overlap-with.",
+      "vacuous": "Never, because the probe compares every pair of error values.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "values",
+          "kind": "values"
+        },
+        {
+          "name": "neighbours",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "shared-identity"
+      ]
+    },
+    {
+      "id": "type-message",
+      "summary": "The message of a value of each error type opens with the opening and contains each member of text.",
+      "vacuous": "Never, because the probe reads a value of every error type.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "types",
+          "kind": "values"
+        },
+        {
+          "name": "opening",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "wrong-message"
+      ]
+    },
+    {
+      "id": "compares-with-identity",
+      "summary": "The hook Is of an error type that compares itself agrees with the identity of the language on each error value.",
+      "vacuous": "Never, because the gate selects a type that compares itself.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "types",
+          "kind": "values"
+        },
+        {
+          "name": "values",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "disagreeing-is"
+      ]
+    },
+    {
+      "id": "returns-the-cause",
+      "summary": "An error type with a cause returns the cause that the check gives it.",
+      "vacuous": "Never, because the gate selects a type with a cause.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "causes",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "lost-cause"
+      ]
+    },
+    {
+      "id": "types-differ",
+      "summary": "No value of an error type matches another error type of the package.",
+      "vacuous": "Never, because the probe compares every pair of error types.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "types",
+          "kind": "values"
+        }
+      ],
+      "reasons": [
+        "shared-identity"
+      ]
+    }
+  ]
+}

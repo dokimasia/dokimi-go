@@ -1,0 +1,273 @@
+{
+  "type": "object",
+  "properties": {
+    "claims": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "generator": {
+            "type": "string"
+          },
+          "licences": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "shape": {
+                  "type": "string"
+                },
+                "mixin": {
+                  "type": "string"
+                },
+                "contract": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "with": {
+                  "type": [
+                    "null",
+                    "object"
+                  ],
+                  "properties": {
+                    "shape": {
+                      "type": "string"
+                    },
+                    "mixin": {
+                      "type": "string"
+                    },
+                    "contract": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "needs-param": {
+                  "type": "string"
+                },
+                "conflicts": {
+                  "type": [
+                    "null",
+                    "array"
+                  ],
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "shape": {
+                        "type": "string"
+                      },
+                      "mixin": {
+                        "type": "string"
+                      },
+                      "contract": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "callable": {
+                  "type": "boolean"
+                },
+                "context": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "unless": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "mixin": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "scope": {
+            "type": "string"
+          },
+          "gates": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+            }
+          },
+          "partners": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "param": {
+                  "type": "string"
+                },
+                "shape": {
+                  "type": "string"
+                },
+                "mixin": {
+                  "type": "string"
+                },
+                "contract": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "mode"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "law": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "machineries": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+            }
+          },
+          "statement": {
+            "type": "string"
+          },
+          "probe": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "inputs": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "from": {
+                  "type": "string"
+                },
+                "param": {
+                  "type": "string"
+                },
+                "partner": {
+                  "type": "string"
+                },
+                "sample": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "from"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "defect": {
+            "type": "object",
+            "properties": {
+              "form": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+              },
+              "clause": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+              }
+            },
+            "required": [
+              "form",
+              "clause",
+              "reason"
+            ],
+            "additionalProperties": false
+          },
+          "since": {
+            "type": "string"
+          },
+          "entails": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "generator",
+          "law",
+          "machineries",
+          "statement",
+          "probe",
+          "inputs",
+          "defect",
+          "since"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "claims"
+  ],
+  "additionalProperties": false
+}

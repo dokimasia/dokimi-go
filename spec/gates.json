@@ -1,0 +1,186 @@
+{
+  "gates": [
+    {
+      "id": "failure",
+      "passes": "The error model of the callable is not none.",
+      "why": "{callable} cannot fail",
+      "remedy": "give {callable} an error result",
+      "since": "1.0.0"
+    },
+    {
+      "id": "returns-beside-error",
+      "passes": "The error model of the callable is last-return, so a failed call returns its values beside the error.",
+      "why": "{callable} returns no value when it fails",
+      "remedy": "remove the classification, because a failed call of {callable} returns no value",
+      "since": "1.0.0"
+    },
+    {
+      "id": "cancellation",
+      "passes": "A parameter has the role context.",
+      "why": "{callable} takes no context",
+      "remedy": "add a context parameter to {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "one-value",
+      "passes": "The callable returns exactly one value.",
+      "why": "{callable} does not return exactly one value",
+      "remedy": "return one value from {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "two-values",
+      "passes": "The callable returns exactly two values.",
+      "why": "{callable} does not return exactly two values",
+      "remedy": "return two values from {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "no-value",
+      "passes": "The callable returns no value.",
+      "why": "{callable} returns a value",
+      "remedy": "remove the classification, or return nothing from {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "presence-flag",
+      "passes": "A return has the role ok-bool.",
+      "why": "{callable} returns no presence flag",
+      "remedy": "return a presence flag beside the value of {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "optional-value",
+      "passes": "The value result has the optional form.",
+      "why": "the result of {callable} is not optional",
+      "remedy": "return an optional value from {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "list-value",
+      "passes": "The value result is a list, or a return has the role stream.",
+      "why": "{callable} returns no list and no stream",
+      "remedy": "return a list or a stream from {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "ordered-value",
+      "passes": "The value result is an integer, a float or a string.",
+      "why": "the result of {callable} has no order",
+      "remedy": "return an integer, a float or a string from {callable}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "value-samples",
+      "passes": "eidos derives two distinct samples of each value result.",
+      "why": "eidos derives no sample of a result of {callable}",
+      "remedy": "author a sample of the result type with the directive sample",
+      "since": "1.0.0"
+    },
+    {
+      "id": "optional-input",
+      "passes": "A parameter in the role input has the optional form.",
+      "why": "{callable} takes no optional input",
+      "remedy": "remove the mixin nil-safe, or give {callable} an optional parameter",
+      "since": "1.0.0"
+    },
+    {
+      "id": "partner-found",
+      "passes": "The partner mode of the claim binds a callable of the declaration.",
+      "why": "no callable of the declaration is the partner {partner} of {callable}",
+      "remedy": "name the partner of {callable} with the param of the classification",
+      "since": "1.0.0"
+    },
+    {
+      "id": "one-partner",
+      "passes": "The partner mode of the claim binds exactly one callable of the declaration.",
+      "why": "two callables of the declaration can be the partner {partner} of {callable}",
+      "remedy": "name the partner of {callable} with the param of the classification",
+      "since": "1.0.0"
+    },
+    {
+      "id": "partner-arguments",
+      "passes": "Each parameter of the read is a parameter of the write with the same name and type, a field of the written value with its name and type, or the context.",
+      "why": "a parameter of the read of {callable} selects neither a value that {partner} takes nor a field of the written value",
+      "remedy": "align the name of the parameter of the read with a parameter or a field of the write",
+      "since": "1.0.0"
+    },
+    {
+      "id": "rewritable",
+      "passes": "The written value has a field that the read does not select by, so a second write can change what the read returns.",
+      "why": "the read selects by every field of the value that {callable} writes",
+      "remedy": "write a value with a field that the read does not select by",
+      "since": "1.0.0"
+    },
+    {
+      "id": "members",
+      "passes": "The enumeration has a variant.",
+      "why": "{declaration} has no variant",
+      "remedy": "declare a variant of {declaration}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "two-members",
+      "passes": "The enumeration has two variants.",
+      "why": "{declaration} has fewer than two variants",
+      "remedy": "declare a second variant of {declaration}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "parse-function",
+      "passes": "The enumeration has a parse function, in its surface or in its package.",
+      "why": "{declaration} has no parse function",
+      "remedy": "generate the surface of {declaration}, or declare its parse function",
+      "since": "1.0.0"
+    },
+    {
+      "id": "text-encoding",
+      "passes": "The enumeration encodes and decodes its text, as the surface writes it.",
+      "why": "{declaration} does not encode its text",
+      "remedy": "generate the surface of {declaration} with its text encoding",
+      "since": "1.0.0"
+    },
+    {
+      "id": "error-values",
+      "passes": "The package has an error value.",
+      "why": "{declaration} has no error value",
+      "remedy": "declare an error value in {declaration}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "two-error-values",
+      "passes": "The package has two error values, or one and a package under no-overlap-with.",
+      "why": "{declaration} has fewer than two error values",
+      "remedy": "declare a second error value in {declaration}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "error-types",
+      "passes": "The package has an error type.",
+      "why": "{declaration} has no error type",
+      "remedy": "declare an error type in {declaration}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "two-error-types",
+      "passes": "The package has two error types.",
+      "why": "{declaration} has fewer than two error types",
+      "remedy": "declare a second error type in {declaration}",
+      "since": "1.0.0"
+    },
+    {
+      "id": "self-comparing-type",
+      "passes": "An error type compares itself with a hook Is and has no hook Unwrap.",
+      "why": "no error type of {declaration} compares itself",
+      "remedy": "none, because the claim applies only to an error type that compares itself",
+      "since": "1.0.0"
+    },
+    {
+      "id": "error-cause",
+      "passes": "An error type has a cause.",
+      "why": "no error type of {declaration} has a cause",
+      "remedy": "none, because the claim applies only to an error type with a cause",
+      "since": "1.0.0"
+    }
+  ]
+}

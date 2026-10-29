@@ -15,4 +15,4 @@ formatters:
   settings:
     # The modules of dokimi-go form an import group of their own.
     gci:
-      sections: [standard, default, "prefix(go.dokimi.dev/conform,go.dokimi.dev/fault,go.dokimi.dev/stub)"]
+      sections: [standard, default, "prefix(go.dokimi.dev/conform,go.dokimi.dev/fault,go.dokimi.dev/spec,go.dokimi.dev/stub)"]

@@ -1,0 +1,324 @@
+{
+  "reasons": [
+    {
+      "id": "panicked",
+      "meaning": "The call panicked or threw where it had to return.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "ignored-cancel",
+      "meaning": "The call returned no error for a context that was cancelled before the call.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "value-beside-error",
+      "meaning": "The call failed and returned a value other than the zero value.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "value-beside-false",
+      "meaning": "The call returned a false presence flag and a value other than the zero value.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "non-nil-miss",
+      "meaning": "The call returned a value other than nil for an input that nothing stored.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "non-zero-miss",
+      "meaning": "The call returned a value other than the zero value for an input that nothing stored.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unstable-repeat",
+      "meaning": "Two calls with the same inputs returned different values.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "panicked-repeat",
+      "meaning": "The second of two calls panicked or threw.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "wrong-sentinel",
+      "meaning": "The call returned an error that does not match the declared sentinel.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "refused-repeat",
+      "meaning": "The second of two identical calls failed.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unobserved-write",
+      "meaning": "The read did not return the value of the write before it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unpinned-read",
+      "meaning": "Two reads of one snapshot returned different values across a write.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "repeated-element",
+      "meaning": "One drain returned an element twice.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "reordered-drain",
+      "meaning": "Two drains returned the same elements in different orders.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "miscounted-drain",
+      "meaning": "A drain did not return exactly the elements that were written before it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "shrunk-drain",
+      "meaning": "A drain did not return an element that was written before it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "regressed",
+      "meaning": "A result or a version was below one that came before it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unordered-write",
+      "meaning": "A write after a read had a version that was not above the version that the read returned.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unescaped-output",
+      "meaning": "The call returned the value that its directive declares unsafe.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "refused-the-edge",
+      "meaning": "The call failed or panicked for the input at the edge of its declared domain.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unscreened-write",
+      "meaning": "The call accepted a value that its declared validator refuses.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "alive-after-close",
+      "meaning": "A call after the close or the settlement succeeded where the declared sentinel was due.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "accepted-early",
+      "meaning": "The call succeeded before its declared predecessor ran.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "never-ready",
+      "meaning": "The call failed after its declared predecessor ran.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unsettled-effect",
+      "meaning": "The observation did not change after the subject settled.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "overran-budget",
+      "meaning": "The call had not returned when the clock passed its declared budget.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "misread-window",
+      "meaning": "A count included an occurrence outside its declared window, or left out one inside it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "off-schedule",
+      "meaning": "A task ran before its instant, or had not run once its instant passed.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unmoved-by-the-clock",
+      "meaning": "The result did not change however far the clock moved.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "drifted-without-clock",
+      "meaning": "Two calls returned different values while the clock did not move.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "not-expired",
+      "meaning": "A read returned an entry after the clock passed its lifetime.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "readable-after-delete",
+      "meaning": "A read returned a value for a key after its delete.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unmoved-observation",
+      "meaning": "The named observation did not change after the call.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "healthy-after-induce",
+      "meaning": "The call succeeded after the induced failure.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "silent-tamper",
+      "meaning": "The verify returned no error after the tamper.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "never-converged",
+      "meaning": "The last of the declared attempts failed.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "hook-not-run",
+      "meaning": "The call did not run the hook that the registrar installed.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "uncompounded",
+      "meaning": "A second call did not change the named observation again.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "crossed-partitions",
+      "meaning": "A read in one partition returned the value of another partition.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unordered-history",
+      "meaning": "The replay returned the entries in an order other than the order of their stamps.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "replay-not-grown",
+      "meaning": "The replay did not grow by the entry that the append admitted.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "not-ascending",
+      "meaning": "An append returned a position that was not above the position of the append before it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "broken-round-trip",
+      "meaning": "The inverse did not return the value that went into the forward call.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unguarded-write",
+      "meaning": "The second write succeeded where the guard of the contract was due to refuse it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unmatched-write",
+      "meaning": "The call accepted a value that its predicate rejects.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "past-the-burst",
+      "meaning": "The call succeeded after its declared burst was spent.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "still-leading",
+      "meaning": "The leadership read reported leadership after the resign.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "not-rolled-back",
+      "meaning": "A read found what a failed scope wrote.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "cache-disagrees",
+      "meaning": "The cache returned a value other than the value of its backing.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unreturned-loan",
+      "meaning": "The put refused the value that the get lent.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "repeated-page",
+      "meaning": "The read returned the same page for two cursors.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "uncompensated-step",
+      "meaning": "The compensation refused the step that the call applied.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "partial-write",
+      "meaning": "The reader found a part of a write that the call refused.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unreplaced-write",
+      "meaning": "The read after a second write did not return the value of the second write.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "misordered-members",
+      "meaning": "The list of the variants lacked a variant, repeated one, or broke the order of the declaration.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "shared-text",
+      "meaning": "Two variants rendered one text, or a value outside the variants rendered the text of a variant.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "misjudged-validity",
+      "meaning": "A variant was not valid, or a value outside the variants was valid.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unparsed-text",
+      "meaning": "The text of a variant did not parse back to the variant, or the text of no variant parsed without the error of the parse function.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "mismarshalled-text",
+      "meaning": "A variant encoded a text other than its own.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "unmarshalled-wrong",
+      "meaning": "The text of a variant did not decode to the variant, or the text of no variant decoded.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "wrong-message",
+      "meaning": "An error had no message, a message without the opening, or the message of another error.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "shared-identity",
+      "meaning": "One error matched another error under the identity of the language.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "disagreeing-is",
+      "meaning": "The hook Is of an error type disagreed with the identity of the language.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "lost-cause",
+      "meaning": "The error type did not return the cause that the check gave it.",
+      "since": "1.0.0"
+    }
+  ]
+}

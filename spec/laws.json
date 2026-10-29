@@ -1,0 +1,571 @@
+{
+  "laws": [
+    {
+      "id": "no-panic-on-any-input",
+      "statement": "A call with derived inputs returns without a panic.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "cancelled-context-is-reported",
+      "statement": "A call with a cancelled context returns an error.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-value-beside-an-error",
+      "statement": "A call that fails returns the zero value of each value result.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-value-beside-a-false-flag",
+      "statement": "A call that returns a false presence flag returns the zero value of each value result.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "miss-returns-the-zero",
+      "statement": "A read of an input that nothing stored returns the zero value.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "repeat-returns-alike",
+      "statement": "Two calls with the same inputs on an unchanged subject return the same value.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "repeated-call-survives",
+      "statement": "A second call after a first call returns without a panic.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "no-panic-on-any-input",
+          "case": "A subject that survives the first call and panics on the second."
+        }
+      ]
+    },
+    {
+      "id": "miss-reports-the-declared-sentinel",
+      "statement": "A read of an input that nothing stored fails with the declared sentinel.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "repeat-is-accepted",
+      "statement": "A second identical call succeeds after the first.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "read-returns-the-write-before-it",
+      "statement": "A read returns the value of the write before it.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "read-observes-its-causal-past",
+      "statement": "A read observes every write that it causally follows.",
+      "depth": "concurrent-callers",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "read-observes-its-own-writes",
+      "statement": "A read of a client observes every write of the same client before it.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "writes-apply-in-issue-order",
+      "statement": "The writes of one client apply in the order in which the client issued them.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "read-keeps-its-snapshot",
+      "statement": "Two reads of one snapshot return the same value across a write between them.",
+      "depth": "concurrent-callers",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-element-is-drained-twice",
+      "statement": "One drain returns each element at most once.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "two-drains-agree-on-order",
+      "statement": "Two drains of the same elements return them in the same order.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "drain-gains-exactly-what-went-in",
+      "statement": "A drain gains exactly the elements that were written since the drain before it.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "drain-keeps-what-went-in",
+          "case": "A drain that returns each written element and one element that nobody wrote."
+        }
+      ]
+    },
+    {
+      "id": "drain-keeps-what-went-in",
+      "statement": "A drain gains at least the elements that were written since the drain before it.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "results-never-decrease",
+      "statement": "Each result is at least the result before it.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "reads-never-go-backwards",
+      "statement": "A read of a client never returns a version below a version that the client read before.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "write-follows-the-read-before-it",
+      "statement": "A write after a read has a version above the version that the read returned.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "unsafe-value-does-not-survive",
+      "statement": "The output of a call does not contain the value that the directive declares unsafe.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "unsafe-value-is-kept-as-data",
+      "statement": "A read returns the value that the directive declares unsafe exactly as the write stored it.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "read-returns-the-write-before-it",
+          "case": "A store that returns derived values and changes the control characters of the unsafe value."
+        }
+      ]
+    },
+    {
+      "id": "call-accepts-its-declared-domain",
+      "statement": "A call with the input at the edge of its declared domain succeeds.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "declared-invalid-value-is-refused",
+      "statement": "A call with a value that its declared validator refuses fails.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "nil-argument-is-accepted",
+      "statement": "A call with nil for an optional argument returns without a panic.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "work-after-close-is-refused",
+      "statement": "A call after the close fails with the declared sentinel.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "call-refuses-before-its-predecessor",
+      "statement": "A call before its declared predecessor fails with the declared sentinel.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "call-works-after-its-predecessor",
+          "case": "A subject that refuses every call, before the predecessor and after it."
+        }
+      ]
+    },
+    {
+      "id": "call-works-after-its-predecessor",
+      "statement": "A call after its declared predecessor succeeds.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "effect-arrives-once-settled",
+      "statement": "The named observation shows the effect of a call once the subject has settled.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "call-returns-within-its-budget",
+      "statement": "A call returns before the clock passes its declared budget.",
+      "depth": "clock-the-run-advances",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "count-covers-a-bounded-window",
+      "statement": "A count includes each occurrence inside its declared window and none outside it.",
+      "depth": "clock-the-run-advances",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "task-runs-once-its-instant-passes",
+      "statement": "A registered task runs once the clock passes its instant, and not before.",
+      "depth": "clock-the-run-advances",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "result-depends-on-the-clock",
+      "statement": "A result changes once the clock has moved far enough.",
+      "depth": "clock-the-run-advances",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "result-is-stable-while-the-clock-stops",
+          "case": "A subject that reads the wall clock in place of the clock that it was given."
+        }
+      ]
+    },
+    {
+      "id": "result-is-stable-while-the-clock-stops",
+      "statement": "Two calls return the same value while the clock does not move.",
+      "depth": "clock-the-run-advances",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "entry-lapses-on-the-clock",
+      "statement": "A read of an entry fails with the declared sentinel once the clock passes the lifetime of the entry.",
+      "depth": "clock-the-run-advances",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "delete-makes-the-key-unreadable",
+      "statement": "A read of a key after its delete fails with the declared sentinel.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "call-moves-the-named-observation",
+      "statement": "A call changes the observation that the directive names.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "induced-failure-latches",
+      "statement": "Each call after the induced failure fails.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "tamper-is-detected",
+      "statement": "The verify of a value fails once the value has been tampered with.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "call-converges-once-its-scope-is-open",
+      "statement": "A call inside an open transaction succeeds within the declared attempts.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "call-converges-within-the-declared-attempts",
+      "statement": "A call succeeds within the declared attempts.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "registered-hook-runs",
+      "statement": "A call runs each hook that the registrar installed.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "repeated-calls-compound",
+      "statement": "Each call changes the named observation again.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "one-partition-does-not-serve-another",
+      "statement": "A read in one partition never returns the value of another partition.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "history-replays-in-its-stamped-order",
+      "statement": "The replay returns the entries in the order of their stamps.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "admitted-entry-grows-the-replay",
+      "statement": "An admitted append grows the replay by one entry.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "append-returns-above-the-last",
+      "statement": "An append returns a position above the position of the append before it.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "results-never-decrease",
+          "case": "An append that returns the same position twice."
+        }
+      ]
+    },
+    {
+      "id": "encoding-survives-its-round-trip",
+      "statement": "The inverse returns the value that went into the forward call.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "write-is-refused-where-its-key-exists",
+      "statement": "A write for a key that exists fails with the declared conflict.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "granted-lease-is-not-granted-twice",
+      "statement": "An acquire of a held lease fails with the declared sentinel.",
+      "depth": "concurrent-callers",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "write-is-refused-on-a-stale-version",
+      "statement": "A write that carries a version that the cell has moved past fails with the declared mismatch.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "write-is-refused-where-the-predicate-rejects-it",
+      "statement": "A write of a value that the predicate rejects fails.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "burst-is-spent-then-refused",
+      "statement": "A call after the declared burst fails with the declared sentinel.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "resigned-leadership-is-released",
+      "statement": "The leadership read reports no leadership after the resign.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "failed-scope-leaves-nothing",
+      "statement": "A read finds nothing that a failed scope wrote.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "cache-agrees-with-its-backing",
+      "statement": "The cache returns the value of its backing.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "settled-transaction-is-not-settled-again",
+      "statement": "A second settlement of a transaction fails with the declared sentinel.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "borrowed-value-is-taken-back",
+      "statement": "The put accepts the value that the get lent.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "walk-resumes-where-it-left-off",
+      "statement": "A read with the cursor of a page returns the page after it.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "compensation-accepts-its-step",
+      "statement": "The compensation accepts the step that the call applied.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "refused-write-leaves-nothing",
+      "statement": "The reader finds no part of a write that the call refused.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "second-write-replaces-the-first",
+      "statement": "A read after two writes for one key returns the value of the second write.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "repeated-write-keeps-one-key",
+          "case": "A store that accumulates the two writes under one key."
+        }
+      ]
+    },
+    {
+      "id": "repeated-write-keeps-one-key",
+      "statement": "A second write for one key updates that key and adds no other.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "variants-are-listed-in-order",
+      "statement": "The list of the variants contains each variant once, in the order of the declaration.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "each-variant-has-its-own-text",
+      "statement": "Each variant renders its declared text, and no two variants render one text.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "only-the-variants-are-valid",
+      "statement": "Each variant is valid, and a value outside the variants is not.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "text-parses-to-its-variant",
+      "statement": "The text of each variant parses back to the variant, and the text of no variant fails with the error of the parse function.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "variant-encodes-its-text",
+      "statement": "Each variant encodes its own text.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "text-decodes-to-its-variant",
+      "statement": "The text of each variant decodes to the variant, and the text of no variant fails to decode.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "error-value-has-its-own-message",
+      "statement": "Each error value has a message that opens with the opening of the package and differs from the message of each other error value.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "error-values-are-distinct",
+      "statement": "No error value of a package matches another error value of the package or of a package under no-overlap-with.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "error-type-has-its-own-message",
+      "statement": "The message of an error type opens with the opening of the package and contains each member of text.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "self-compared-type-agrees-with-identity",
+      "statement": "The hook Is of an error type agrees with the identity of the language on each error value of the package.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "error-type-returns-its-cause",
+      "statement": "An error type with a cause returns the cause that it was given.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "error-types-are-distinct",
+      "statement": "No value of an error type matches another error type of the package.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    }
+  ]
+}
