@@ -15,6 +15,8 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+
+	"go.dokimi.dev/spec"
 )
 
 // Check is one check of a suite over subjects of the type S. A check has a
@@ -78,19 +80,55 @@ type Check[S any] struct {
 	// Statement is the sentence that the check proves of a subject.
 	Statement string
 
+	// Claim is the claim of the conformance spec that the check binds, and
+	// empty for a check of the consumer. A check with a claim is a derived
+	// check: an application falsifies it by the reason of its claim before it
+	// applies it, and [Falsify] leaves it out.
+	Claim spec.ClaimID
+
+	// Probe is the probe of the claim, whose reasons [Handle.Expect] accepts,
+	// and empty for a check of the consumer.
+	Probe spec.ProbeID
+
+	// Reason is the reason code of the planted defect of the check, and empty
+	// for a check of the consumer.
+	Reason spec.ReasonID
+
+	// Law is the law that the check witnesses, and empty for a check of the
+	// consumer.
+	Law spec.LawID
+
+	// Machineries are the machineries of the claim, the deepest first, and nil
+	// for a check of the consumer.
+	Machineries []spec.MachineryID
+
+	// Entails are the identities of the shallower checks whose laws the law
+	// of the check implies. Each is an edge that the falsification of the
+	// check proves in both directions.
+	Entails []ID[S]
+
 	// Counted reports that the check counts the allocations of the whole
 	// process, as [assert.MaxAllocs] does. A count in a parallel test includes
 	// the allocations of the tests that run concurrently. [RunBudgets] and
 	// [FalsifyAllocs] therefore run the check in a test that does not run in
 	// parallel, and [Run], [Falsify] and [Fuzz] leave it out.
 	Counted bool
+
+	// Shallow reports that the machineries of the claim do not include the
+	// depth of its law.
+	Shallow bool
 }
 
 // Run applies the check on tb to a subject that newSubject builds on the
 // handle of the check. The doors of the handle and a property run read the
-// options in opts. Run ignores the checks and the excusals that the options
-// add. Run ends tb with a fault that wraps [ErrConfig] for an invalid
-// setting and for a check with Around on a seat without a test.
+// options in opts. A derived check is first falsified on its planted defect,
+// whose [Handle.Fresh] returns a subject of newSubject, and Run applies it to
+// the subject once the defect fails it with the reason of its claim. Under
+// [Isolate] the checks that [With] adds are the other checks of the isolation
+// and the edges of a derived check. Run ignores them otherwise, and ignores the
+// excusals that the options add. Run ends tb with a fault that wraps
+// [ErrConfig] for an invalid setting and for a check with Around on a seat
+// without a test.
 func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	tb.Helper()
 	cfg := configure(nil, opts)
@@ -98,7 +136,18 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 		assert.Fault(tb, fmt.Errorf("%w: %s", ErrConfig, invalid[0]))
 		return
 	}
-	c.run(tb, newSubject, cfg)
+	cfg.fresh = newSubject
+	c.apply(tb, newSubject, cfg, cfg.checks)
+}
+
+// apply falsifies a derived check on its planted defect against others, and
+// applies the check to a subject of source once the falsification proves it.
+func (c Check[S]) apply(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S], others []Check[S]) {
+	tb.Helper()
+	if c.Claim != "" && !c.falsify(tb, cfg, others) {
+		return
+	}
+	c.run(tb, source, cfg)
 }
 
 // Falsify applies the check on tb to its planted defect. It fails tb unless
@@ -115,10 +164,18 @@ func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 	c.falsify(tb, cfg, cfg.checks)
 }
 
+// firsts are the first failures that the handles of one run of a check keep:
+// the message of the first failure outside an assertion, and the reason that
+// the probe set for the first failed assertion.
+type firsts struct {
+	message atomic.Pointer[string]
+	reason  atomic.Pointer[spec.ReasonID]
+}
+
 // run applies the check on tb to a subject of source, under the settings of
 // an application. A property check with Options also takes the options of
-// its run from a handle of its own, after the options of the application. The
-// handle ends once Options returns. A check with Around runs inside its
+// its run from a handle of its own on tb, after the options of the
+// application. A check with Around runs inside its
 // environment, and a failure of the environment fails tb. A check with Apply
 // builds its handle on the test that Around hands run.
 func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S]) {
@@ -129,14 +186,13 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S])
 	}
 	opts := cfg.runOptions()
 	if c.Property != nil && c.Options != nil {
-		h := newHandle(tb, &c, source, cfg, new(atomic.Pointer[string]))
+		h := newHandle(tb, &c, source, cfg, new(firsts))
 		opts = append(opts, c.Options(h)...)
-		h.end()
 	}
 	if env != nil {
 		opts = append(opts, prop.Around(env.wrap))
 	}
-	kept := new(atomic.Pointer[string])
+	kept := new(firsts)
 	if env == nil || c.Property != nil {
 		c.exercise(tb, source, cfg, opts, kept)
 	} else if misuse := env.inside(func(t *testing.T) {
@@ -152,19 +208,17 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S])
 }
 
 // exercise applies the check on seat to subjects of source. A check with
-// Apply runs once on one handle, which ends when Apply returns or stops. A
+// Apply runs once on one handle, which registers its cleanups with seat. A
 // check with Property runs the property engine on seat with opts, and each
 // case has a handle of its own, which registers its cleanups with the case.
 // Each handle keeps the message of the first failure outside an assertion in
 // kept.
 func (c *Check[S]) exercise(
-	seat assert.TB, source func(h *Handle[S]) S, cfg *config[S], opts []prop.Option, kept *atomic.Pointer[string],
+	seat assert.TB, source func(h *Handle[S]) S, cfg *config[S], opts []prop.Option, kept *firsts,
 ) {
 	seat.Helper()
 	if c.Property == nil {
-		h := newHandle(seat, c, source, cfg, kept)
-		defer h.end()
-		c.Apply(h)
+		c.Apply(newHandle(seat, c, source, cfg, kept))
 		return
 	}
 	prop.ForAll(seat, c.Statement, func(pc *prop.Case) {
@@ -172,31 +226,41 @@ func (c *Check[S]) exercise(
 	}, opts...)
 }
 
-// falsify applies the check on tb to its planted defect. A property check
-// runs hermetically, as [config.hermetic] states. Each handle on the defect
-// takes the doors of the check first, as [config.onDefect] states. Once the
-// defect fails the check at its statement, falsify applies each check of
-// others to the defect, as [Check.isolate] states.
+// falsify applies the check on tb to its planted defect, and reports whether
+// the defect proves the check. A property check runs hermetically, as
+// [config.hermetic] states. Each handle on the defect takes the doors of the
+// check first, as [config.onDefect] states.
+//
+// The defect proves a check of the consumer when it fails the check at its
+// statement. It proves a derived check when it fails the check at an
+// assertion for which the probe set the reason of the claim. Once the defect
+// proves a check of the consumer, or a derived check under [Isolate], falsify
+// applies each check of others to the defect, as [Check.isolate] states, and
+// proves each edge of the check, as [Check.edges] states.
 //
 // A check with Around runs inside its environment. A check with Apply runs
 // Rejects on the test that Around hands run, and a skip of that test skips
 // the test of the environment. A failure of the environment fails tb when no
 // assertion of the check failed before it.
-func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) {
+func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool {
 	tb.Helper()
 	env, ok := c.environment(tb)
 	if !ok {
-		return
+		return false
 	}
 	cfg = cfg.onDefect(c.Doors)
-	kept := new(atomic.Pointer[string])
+	kept := new(firsts)
 	opts := cfg.hermetic(c.ID)
 	if env != nil {
 		opts = append(opts, prop.Around(env.wrap))
 	}
+	contract := "the planted defect of " + string(c.ID) + " fails the check"
+	if c.Claim != "" {
+		contract += " with the reason " + string(c.Reason) + " of the claim " + string(c.Claim)
+	}
 	rejects := func(seat assert.TB) []assert.Failure {
 		seat.Helper()
-		return assert.Rejects(seat, "the planted defect of "+string(c.ID)+" fails the check", func(seat assert.TB) {
+		return assert.Rejects(seat, contract, func(seat assert.TB) {
 			c.exercise(seat, c.Defect, cfg, opts, kept)
 		})
 	}
@@ -213,38 +277,65 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) {
 		switch {
 		case misuse != "":
 			assert.Fault(tb, c.misused(misuse))
-			return
+			return false
 		case skipped:
 			env.t.SkipNow()
-			return
+			return false
 		}
 	}
-	if len(failures) > 0 {
-		first := failures[0]
-		if inner, isCase := first.CaseFailure(); isCase {
-			first = inner
+	if len(failures) == 0 {
+		if message := kept.message.Load(); message != nil {
+			c.outside(tb, *message)
+			return false
 		}
-		switch {
-		case first.Assertion == "":
-			c.outside(tb, first.Contract)
-		case first.Contract != c.Statement:
-			tb.Fatalf("the planted defect of %s fails the assertion %s with the message %q. "+
-				"Falsification needs a failure of the assertion whose message is the statement %q. "+
-				"Pass h.Statement() as the message of the decisive assertion, "+
-				"or change the defect so that it passes the other assertions of the check.",
-				c.ID, first.Assertion, first.Contract, c.Statement)
-		default:
-			c.isolate(tb, cfg, others)
+		if failure, failed := env.failure(); failed {
+			c.outside(tb, failure)
 		}
-		return
+		return false
 	}
-	if message := kept.Load(); message != nil {
-		c.outside(tb, *message)
-		return
+	first := failures[0]
+	if inner, isCase := first.CaseFailure(); isCase {
+		first = inner
 	}
-	if failure, failed := env.failure(); failed {
-		c.outside(tb, failure)
+	switch {
+	case first.Assertion == "":
+		c.outside(tb, first.Contract)
+		return false
+	case c.Claim != "":
+		var reason spec.ReasonID
+		if set := kept.reason.Load(); set != nil {
+			reason = *set
+		}
+		if reason != c.Reason {
+			c.wrongReason(tb, reason)
+			return false
+		}
+		if !cfg.isolate {
+			return true
+		}
+	case first.Contract != c.Statement:
+		tb.Fatalf("the planted defect of %s fails the assertion %s with the message %q. "+
+			"Falsification needs a failure of the assertion whose message is the statement %q. "+
+			"Pass h.Statement() as the message of the decisive assertion, "+
+			"or change the defect so that it passes the other assertions of the check.",
+			c.ID, first.Assertion, first.Contract, c.Statement)
+		return false
 	}
+	return c.isolate(tb, cfg, others) && c.edges(tb, cfg, others, env)
+}
+
+// wrongReason fails tb for a planted defect of a derived check that fails the
+// check with the reason that the probe set, which is not the reason of its
+// claim.
+func (c Check[S]) wrongReason(tb assert.TB, reason spec.ReasonID) {
+	tb.Helper()
+	with := "without a reason"
+	if reason != "" {
+		with = "with the reason " + string(reason)
+	}
+	tb.Fatalf("the planted defect of %s fails the check %s, and the claim %s needs the reason %s. "+
+		"Call h.Expect with the reason before the decisive assertion of the probe.",
+		c.ID, with, c.Claim, c.Reason)
 }
 
 // outside fails tb for a planted defect that fails the check with message,
@@ -257,25 +348,29 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 		c.ID, c.Statement, message)
 }
 
-// isolate applies each check of others to the planted defect of c, except
-// each check that shares the defect, c among them, and each check that the
-// options excuse. It fails tb when the defect fails one of them, because a
-// planted defect proves its check only when no other check fails on it. The
-// failure lists each check that fails, with its first assertion or its panic.
-// A check that skips or ends with a fault on the defect has no verdict on it.
-// A check with Around runs inside its environment on the test of tb.
-func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) {
+// isolate applies each check of others to the planted defect of c, and
+// reports whether the defect passes each of them. It leaves out each check
+// that shares the defect, c among them, each check that the options excuse,
+// and each check of an edge of c, which [Check.edges] proves. It fails tb when
+// the defect fails one of them, because a planted defect proves its check
+// only when no other check fails on it. The failure lists each check that
+// fails, with its first assertion or its panic. A check that skips or ends
+// with a fault on the defect has no verdict on it. A check with Around runs
+// inside its environment on the test of tb.
+func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) bool {
 	tb.Helper()
 	defect := reflect.ValueOf(c.Defect).Pointer()
 	var failed []string
 	for i := range others {
 		o := &others[i]
-		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect {
+		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect ||
+			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) {
+
 			continue
 		}
 		env, ok := o.environment(tb)
 		if !ok {
-			return
+			return false
 		}
 		if verdict, fails := o.against(c.Defect, cfg, env); fails {
 			failed = append(failed, verdict)
@@ -286,7 +381,48 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) {
 			"A planted defect fails the check that it proves and no other. Change the defect so that it "+
 			"passes these checks, or give each check that it fails the same defect.",
 			funcName(c.Defect), c.ID, strings.Join(failed, "\n\t"))
+		return false
 	}
+	return true
+}
+
+// edges proves each edge of c to a check of others, and reports whether each
+// edge holds. Down, c fails on the planted defect of the shallower check,
+// because the law of c implies its law. Up, the shallower check passes on the
+// planted defect of c, because the two checks are equivalent otherwise. edges
+// fails tb with each edge that does not hold. It ends tb with a fault that
+// wraps [ErrConfig] for an edge to a check that others lack. env is the
+// environment of c on tb.
+func (c Check[S]) edges(tb assert.TB, cfg *config[S], others []Check[S], env *environment) bool {
+	tb.Helper()
+	var failed []string
+	for _, id := range c.Entails {
+		at := slices.IndexFunc(others, func(o Check[S]) bool { return o.ID == id })
+		if at < 0 {
+			assert.Fault(tb, fmt.Errorf("%w: %s entails %s, which the application lacks", ErrConfig, c.ID, id))
+			return false
+		}
+		s := &others[at]
+		if _, fails := c.against(s.Defect, cfg, env); !fails {
+			failed = append(failed, fmt.Sprintf("%s passes on the planted defect of %s, which it entails, so it is "+
+				"not deeper", c.ID, s.ID))
+		}
+		shallower, ok := s.environment(tb)
+		if !ok {
+			return false
+		}
+		if _, fails := s.against(c.Defect, cfg, shallower); fails {
+			failed = append(failed, fmt.Sprintf("%s fails on the planted defect of %s, which entails it, so the two "+
+				"checks are equivalent", s.ID, c.ID))
+		}
+	}
+	if len(failed) > 0 {
+		tb.Fatalf("the edges of %s fail:\n\t%s\nA deeper check fails on the planted defect of each check that it "+
+			"entails, and each of those checks passes on the planted defect of the deeper check.",
+			c.ID, strings.Join(failed, "\n\t"))
+		return false
+	}
+	return true
 }
 
 // against applies the check to subjects of defect on a seat of its own, as
@@ -313,7 +449,8 @@ func (c *Check[S]) against(defect func(h *Handle[S]) S, cfg *config[S], env *env
 		go func() {
 			defer close(done)
 			defer func() { panicked = recover() }()
-			c.exercise(seat, defect, cfg, opts, new(atomic.Pointer[string]))
+			defer seat.RunCleanups()
+			c.exercise(seat, defect, cfg, opts, new(firsts))
 		}()
 		<-done
 	}

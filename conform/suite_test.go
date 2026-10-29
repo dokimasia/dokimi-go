@@ -238,6 +238,132 @@ func TestSuite(t *testing.T) {
 			c.Run(t, newStore, conform.Crashable(crash))
 		})
 	})
+
+	t.Run("Isolate", func(t *testing.T) {
+		t.Parallel()
+
+		isolate := conform.Isolate[Store]()
+
+		t.Run("passes a planted defect of a derived check that the other checks pass", func(t *testing.T) {
+			t.Parallel()
+
+			derivedKeeps().Run(t, newStore, isolate, conform.With(derivedMisses()))
+		})
+
+		t.Run("fails a planted defect of a derived check that fails another check", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(derivedKeeps())) })
+			assert.Equal(t, r.Message(),
+				"the planted defect conform_test.scrambles of Store.Get/misses-unknown-keys also fails these "+
+					"checks:\n"+
+					"\tStore.Get/keeps-the-value fails at the assertion equal with the message "+
+					`"Get returns the value that Put stored"`+"\n"+
+					"A planted defect fails the check that it proves and no other. Change the defect so that it "+
+					"passes these checks, or give each check that it fails the same defect.",
+				"the message lists the other check that the defect fails")
+		})
+
+		t.Run("exempts a deeper check that entails the derived check from its isolation", func(t *testing.T) {
+			t.Parallel()
+
+			derivedMisses().Run(t, newStore, isolate, conform.With(derivedExact()))
+		})
+
+		t.Run("passes an edge whose deeper check fails on the defect of its shallower check", func(t *testing.T) {
+			t.Parallel()
+
+			var onSubject atomic.Bool
+			c := derivedExact()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				if _, isSubject := h.Subject().(*memory); isSubject {
+					onSubject.Store(true)
+				}
+				apply(h)
+			}
+			c.Run(t, newStore, isolate, conform.With(derivedMisses()))
+			expect.True(t, onSubject.Load(), "the check applies to the subject once its edges hold")
+		})
+
+		t.Run("fails an edge whose deeper check passes on the defect of its shallower check", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Entails = []conform.ID[Store]{storeGet.Check("misses-unknown-keys")}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(derivedMisses())) })
+			assert.Equal(t, r.Message(),
+				"the edges of Store.Get/keeps-the-value fail:\n"+
+					"\tStore.Get/keeps-the-value passes on the planted defect of Store.Get/misses-unknown-keys, "+
+					"which it entails, so it is not deeper\n"+
+					"A deeper check fails on the planted defect of each check that it entails, and each of those "+
+					"checks passes on the planted defect of the deeper check.",
+				"the message names the edge that is not deeper")
+		})
+
+		t.Run("fails an edge whose shallower check fails on the defect of its deeper check", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedExact()
+			c.Entails = []conform.ID[Store]{storeGet.Check("keeps-the-value")}
+			r := recorded(func(tb assert.TB) {
+				c.Run(tb, newStore, isolate, conform.With(derivedMisses(), derivedKeeps()))
+			})
+			assert.Equal(t, r.Message(),
+				"the edges of Store.Get/keeps-exactly fail:\n"+
+					"\tStore.Get/keeps-the-value fails on the planted defect of Store.Get/keeps-exactly, which "+
+					"entails it, so the two checks are equivalent\n"+
+					"A deeper check fails on the planted defect of each check that it entails, and each of those "+
+					"checks passes on the planted defect of the deeper check.",
+				"the message names the equivalent edge")
+		})
+
+		t.Run("ends the falsification with a fault for a shallower check inside Around on a seat without a test",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var onSubject atomic.Bool
+				c := derivedExact()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					if _, isSubject := h.Subject().(*memory); isSubject {
+						onSubject.Store(true)
+					}
+					apply(h)
+				}
+				var onDeeper atomic.Bool
+				shallower := bubbled(derivedMisses())
+				missesApply := shallower.Apply
+				shallower.Apply = func(h *conform.Handle[Store]) {
+					if _, onDefect := h.Subject().(dropsPuts); onDefect {
+						onDeeper.Store(true)
+					}
+					missesApply(h)
+				}
+				r := assert.NewRecorder()
+				c.Run(r, newStore, isolate, conform.With(shallower))
+				faults := r.Faults()
+				assert.Length(t, faults, 1, "the environment ends the falsification with one fault")
+				expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a setting")
+				expect.False(t, onDeeper.Load(), "the shallower check does not run on the defect of the deeper check")
+				expect.False(t, onSubject.Load(), "the check does not apply to the subject")
+			})
+
+		t.Run("ends the falsification with a fault for an edge to a check that the application lacks",
+			func(t *testing.T) {
+				t.Parallel()
+
+				r := recorded(func(tb assert.TB) { derivedExact().Run(tb, newStore, isolate) })
+				faults := r.Faults()
+				assert.Length(t, faults, 1, "the edge ends the falsification with one fault")
+				expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a setting")
+				expect.Equal(t, faults[0].Error(), "conform: the application has an invalid setting: "+
+					"Store.Get/keeps-exactly entails Store.Get/misses-unknown-keys, which the application lacks",
+					"the fault names the missing check")
+			})
+	})
 }
 
 // The variable DOKIMI_SEED of the process seeds each property run of an

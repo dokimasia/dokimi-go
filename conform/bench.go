@@ -67,7 +67,6 @@ func Bench[S any](b B, suite Suite[S], callable Callable[S], newSubject func(h *
 	cfg, call, found := benchmarked(b, "Bench"+suite.Declaration+"Suite", suite, callable, opts)
 	stopAt(b, found)
 	h, draw, contract := measure(b, call, newSubject, cfg)
-	defer h.end()
 	defer contract.End()
 	made, failed := repeat(h.Context(), h.Subject(), draw(), contract.Loop)
 	b.ReportMetric(float64(failed)/float64(made), errorsUnit)
@@ -193,7 +192,7 @@ func measure[S any](
 		warmup = *budget.Warmup
 	}
 	contract.Warmup(warmup)
-	h := newHandle(b, &Check[S]{ID: call.Callable.Check(benchSegment)}, newSubject, cfg, new(atomic.Pointer[string]))
+	h := newHandle(b, &Check[S]{ID: call.Callable.Check(benchSegment)}, newSubject, cfg, new(firsts))
 	return h, draw, contract
 }
 
@@ -205,8 +204,7 @@ func falsifyLimit[S any](tb assert.TB, call *Call[S], l limit, cfg *config[S]) {
 	tb.Helper()
 	id := call.Callable.Check(l.segment)
 	defect := func(h *Handle[S]) S { return call.Over(h, l.budget.over()) }
-	h := newHandle(tb, &Check[S]{ID: id}, defect, cfg, new(atomic.Pointer[string]))
-	defer h.end()
+	h := newHandle(tb, &Check[S]{ID: id}, defect, cfg, new(firsts))
 	s, ctx := h.Subject(), h.Context()
 	calls := prop.Values(call.Calls, seedOf(string(id)), falsifyCalls, cfg.using...)
 	assert.Rejects(tb, "the planted defect of "+string(id)+" fails the ceiling", func(seat assert.TB) {

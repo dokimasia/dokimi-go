@@ -1206,6 +1206,10 @@
         {
           "name": "members",
           "kind": "values"
+        },
+        {
+          "name": "list",
+          "kind": "call"
         }
       ],
       "reasons": [
@@ -1225,6 +1229,10 @@
         {
           "name": "name",
           "kind": "call"
+        },
+        {
+          "name": "outside",
+          "kind": "value"
         }
       ],
       "reasons": [
@@ -1240,6 +1248,14 @@
         {
           "name": "members",
           "kind": "values"
+        },
+        {
+          "name": "valid",
+          "kind": "call"
+        },
+        {
+          "name": "outside",
+          "kind": "value"
         }
       ],
       "reasons": [
@@ -1259,6 +1275,10 @@
         {
           "name": "parse",
           "kind": "call"
+        },
+        {
+          "name": "name",
+          "kind": "call"
         }
       ],
       "reasons": [
@@ -1274,6 +1294,10 @@
         {
           "name": "members",
           "kind": "values"
+        },
+        {
+          "name": "name",
+          "kind": "call"
         }
       ],
       "reasons": [
@@ -1289,6 +1313,10 @@
         {
           "name": "members",
           "kind": "values"
+        },
+        {
+          "name": "name",
+          "kind": "call"
         }
       ],
       "reasons": [

@@ -6,7 +6,6 @@ package conform
 import (
 	"fmt"
 	"slices"
-	"sync/atomic"
 	"testing"
 
 	"go.dokimi.dev/assert/prop"
@@ -52,6 +51,6 @@ func Fuzz[S any](
 	}
 	prop.Fuzz(f, fmt.Sprintf("%s passes each of its property checks", callable), func(pc *prop.Case) {
 		c := checks[pc.Draw(prop.SampledFrom(ids...), "check")]
-		c.Property(newHandle(pc, c, newSubject, cfg, new(atomic.Pointer[string])), pc)
+		c.Property(newHandle(pc, c, newSubject, cfg, new(firsts)), pc)
 	}, cfg.using...)
 }

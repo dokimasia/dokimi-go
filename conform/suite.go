@@ -173,6 +173,16 @@ func Using[S, T any](g prop.Generator[T]) Option[S] {
 	return Option[S]{set: func(c *config[S]) { c.using = append(c.using, prop.Using(g)) }}
 }
 
+// Isolate makes an application run every other check on the planted defect of
+// each derived check, and prove each edge of a derived check in both
+// directions. The corpus passes it for the subject of each fixture, which is a
+// correct implementation. Without it an application falsifies a derived check
+// by the reason of its claim alone, because a defect of the subject of a
+// consumer would fail every planted defect that wraps the subject.
+func Isolate[S any]() Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.isolate = true }}
+}
+
 // Ceilings states the budget of the callable for one application, for a
 // callable whose declaration states no budget. Each ceiling of the budget is a
 // check of that application alone, which the application falsifies before it
@@ -188,6 +198,10 @@ func Ceilings[S any](callable Callable[S], budget Budget) Option[S] {
 type config[S any] struct {
 	// doors are the doors of the handle. A door without its option is nil.
 	doors Doors[S]
+
+	// fresh is the factory of the application, whose subjects
+	// [Handle.Fresh] returns, and nil outside an application.
+	fresh func(h *Handle[S]) S
 
 	// cases is the number of valid cases of the option Cases, and nil
 	// without the option.
@@ -218,6 +232,9 @@ type config[S any] struct {
 	// defect reports that the handles of the configuration build on a planted
 	// defect, whose doors come from its check first.
 	defect bool
+
+	// isolate reports the option Isolate.
+	isolate bool
 }
 
 // onDefect returns a copy of c for the handles on a planted defect with the

@@ -188,6 +188,69 @@ func TestRun(t *testing.T) {
 				"the failure lists the check of the suite that the defect of the added check fails")
 		})
 
+		t.Run("falsifies a derived check of the suite before it applies the check", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Int32
+			c := derivedKeeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				applied.Add(1)
+				apply(h)
+			}
+			t.Cleanup(func() {
+				assert.Equal(t, applied.Load(), int32(2),
+					"the application applies the derived check to its defect and to the subject")
+			})
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
+		})
+
+		t.Run("falsifies a derived check that the options add once", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Int32
+			c := derivedKeeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				applied.Add(1)
+				apply(h)
+			}
+			t.Cleanup(func() {
+				assert.Equal(t, applied.Load(), int32(2),
+					"the application applies the added derived check to its defect and to the subject")
+			})
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store"}, newStore, conform.With(c))
+		})
+
+		t.Run("accepts an edge to a check of the application", func(t *testing.T) {
+			t.Parallel()
+
+			a := application(func(t conform.T) {
+				conform.Run(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{derivedExact(), derivedMisses()},
+				}, newStore)
+			})
+			assert.Empty(t, a.errors, "the application reports no problem")
+		})
+
+		t.Run("isolates each derived check against the other checks of the suite under Isolate", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				c := derivedMisses()
+				c.Defect = scrambles
+				conform.Run(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{derivedKeeps(), c},
+				}, newStore, conform.Isolate[Store]())
+				return
+			}
+			out := childOutput(t)
+			assert.Contains(t, out, "--- FAIL: "+t.Name()+"/Get/misses-unknown-keys",
+				"the test of the derived check fails")
+			assert.Contains(t, out, "\tStore.Get/keeps-the-value fails at the assertion equal",
+				"the failure lists the check of the suite that the defect fails")
+		})
+
 		t.Run("runs a check of the suite inside its environment", func(t *testing.T) {
 			t.Parallel()
 
@@ -284,6 +347,20 @@ func TestRun(t *testing.T) {
 					return s
 				}(),
 				wantErrors: []string{"the call of Store.Get has no planted defect"},
+			},
+			{
+				name:      "reports a derived check without a reason",
+				giveSuite: broken(func(c *conform.Check[Store]) { c.Claim = "read-after-write" }),
+				wantErrors: []string{"the check Store.Get/keeps-the-value has the claim read-after-write and no " +
+					"reason"},
+			},
+			{
+				name: "reports an edge to a check that the application lacks",
+				giveSuite: broken(func(c *conform.Check[Store]) {
+					c.Entails = []conform.ID[Store]{storeGet.Check("misses-unknown-keys")}
+				}),
+				wantErrors: []string{"the check Store.Get/keeps-the-value entails Store.Get/misses-unknown-keys, " +
+					"which RunStoreSuite lacks"},
 			},
 			{
 				name:      "reports every problem before it stops",

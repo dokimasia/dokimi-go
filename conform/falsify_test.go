@@ -70,6 +70,26 @@ func TestFalsify(t *testing.T) {
 				"the falsification runs one test for the check")
 		})
 
+		t.Run("leaves a derived check to the application", func(t *testing.T) {
+			t.Parallel()
+
+			a := application(func(t conform.T) {
+				conform.Falsify(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{keeps(), derivedMisses()},
+				})
+			})
+			assert.Equal(t, a.tests, []string{"Get/keeps-the-value"},
+				"the falsification runs the check of the consumer alone")
+		})
+
+		t.Run("isolates the planted defect of a check against a derived check", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Falsify(t, conform.Suite[Store]{
+				Declaration: "Store", Checks: []conform.Check[Store]{keeps(), derivedMisses()},
+			})
+		})
+
 		t.Run("leaves out a check that counts allocations", func(t *testing.T) {
 			t.Parallel()
 

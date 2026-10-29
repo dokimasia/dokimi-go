@@ -22,6 +22,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // TempDir makes its directory in the directory of temporary files. The test
@@ -462,6 +463,96 @@ func TestHandle(t *testing.T) {
 		})
 	})
 
+	t.Run("Expect", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("accepts a reason of the probe of the check", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Probe = spec.WriteThenRead
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Expect(spec.UnobservedWrite)
+				apply(h)
+			}
+			c.Run(t, newStore)
+		})
+
+		tests := []struct {
+			name      string
+			giveProbe spec.ProbeID
+			want      string
+		}{
+			{
+				name:      "ends the check with a fault for a reason that its probe does not report",
+				giveProbe: spec.Survives,
+				want: "conform: the probe sets a reason that its entry does not list: Store.Get/keeps-the-value " +
+					"sets the reason unobserved-write, and the probe survives reports panicked",
+			},
+			{
+				name: "ends the check with a fault for a check without a probe",
+				want: "conform: the probe sets a reason that its entry does not list: Store.Get/keeps-the-value " +
+					"sets the reason unobserved-write, and the check has no probe",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var continued atomic.Bool
+				c := keeps()
+				c.Probe = tt.giveProbe
+				c.Apply = func(h *conform.Handle[Store]) {
+					h.Expect(spec.UnobservedWrite)
+					continued.Store(true)
+				}
+				r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+				faults := r.Faults()
+				assert.Length(t, faults, 1, "the reason ends the check with one fault")
+				expect.ErrorIs(t, faults[0], conform.ErrReason, "the fault is the fault of a reason")
+				expect.Equal(t, faults[0].Error(), tt.want, "the fault names the reason and the probe")
+				expect.False(t, continued.Load(), "the check ends at the reason")
+			})
+		}
+	})
+
+	t.Run("Fresh", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns a fresh subject of the factory of the application", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isMemory := h.Fresh().(*memory)
+				assert.True(h, isMemory, "Fresh builds a subject of the factory")
+				assert.True(h, h.Fresh() != h.Fresh(), "Fresh returns a fresh subject")
+			}
+			c.Run(t, newStore)
+		})
+
+		t.Run("ends the falsification with a fault without a factory", func(t *testing.T) {
+			t.Parallel()
+
+			var continued atomic.Bool
+			c := keeps()
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				s := h.Fresh()
+				continued.Store(true)
+				return s
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "Fresh ends the falsification with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door")
+			expect.Equal(t, faults[0].Error(), "conform: the handle lacks the door: Store.Get/keeps-the-value "+
+				"calls Fresh without a factory of subjects. A planted defect over a fresh subject proves its check "+
+				"in an application, which has the factory", "the fault names the missing factory")
+			expect.False(t, continued.Load(), "the planted defect ends at Fresh")
+		})
+	})
+
 	t.Run("Context", func(t *testing.T) {
 		t.Parallel()
 
@@ -527,82 +618,35 @@ func TestHandle(t *testing.T) {
 			expect.Equal(t, cleanups.Load(), cases.Load(), "each case runs its function when it ends")
 		})
 
-		t.Run("runs the function when the check ends on a seat without Cleanup", func(t *testing.T) {
+		t.Run("registers the function with the seat of the check", func(t *testing.T) {
 			t.Parallel()
 
 			var ran atomic.Bool
 			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) {
-				h.Cleanup(func() { ran.Store(true) })
-				expect.False(t, ran.Load(), "the function waits for the end of the check")
-			}
-			c.Run(assert.NewRecorder(), newStore)
-			expect.True(t, ran.Load(), "the end of the check runs the function")
+			c.Apply = func(h *conform.Handle[Store]) { h.Cleanup(func() { ran.Store(true) }) }
+			r := assert.NewRecorder()
+			c.Run(r, newStore)
+			expect.False(t, ran.Load(), "the function waits for the end of the seat")
+			r.RunCleanups()
+			expect.True(t, ran.Load(), "the end of the seat runs the function")
 		})
 
-		t.Run("runs the functions in the reverse order of their registration", func(t *testing.T) {
-			t.Parallel()
-
-			var order []string
-			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) {
-				h.Cleanup(func() { order = append(order, "first") })
-				h.Cleanup(func() { order = append(order, "second") })
-			}
-			c.Run(assert.NewRecorder(), newStore)
-			expect.Equal(t, order, []string{"second", "first"}, "the last function that the check registers runs first")
-		})
-
-		t.Run("runs a function that a function registers before the earlier functions", func(t *testing.T) {
-			t.Parallel()
-
-			var order []string
-			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) {
-				h.Cleanup(func() { order = append(order, "first") })
-				h.Cleanup(func() {
-					order = append(order, "second")
-					h.Cleanup(func() { order = append(order, "third") })
-				})
-			}
-			c.Run(assert.NewRecorder(), newStore)
-			expect.Equal(t, order, []string{"second", "third", "first"},
-				"the function that a function registers runs next")
-		})
-
-		t.Run("runs the earlier functions after a function that stops the check", func(t *testing.T) {
+		t.Run("ends the check with a fault on a seat without Cleanup", func(t *testing.T) {
 			t.Parallel()
 
 			var ran atomic.Bool
 			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) {
-				h.Cleanup(func() { ran.Store(true) })
-				h.Cleanup(func() { h.Fatalf("the store is %s", "closed") })
-			}
-			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
-			expect.Equal(t, r.Message(), "the store is closed", "the function fails the check")
-			expect.True(t, ran.Load(), "the earlier function runs after the function that stops the check")
-		})
-
-		t.Run("runs the earlier functions after a function that panics", func(t *testing.T) {
-			t.Parallel()
-
-			var ran atomic.Bool
-			var recovered any
-			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) {
-				h.Cleanup(func() { ran.Store(true) })
-				h.Cleanup(func() {
-					var gone *memory
-					gone.Put("k", "v")
-				})
-			}
-			func() {
-				defer func() { recovered = recover() }()
-				c.Run(assert.NewRecorder(), newStore)
+			c.Apply = func(h *conform.Handle[Store]) { h.Cleanup(func() { ran.Store(true) }) }
+			s := &texts{}
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				c.Run(s, newStore)
 			}()
-			expect.NotNil(t, recovered, "the panic of the function leaves the run of the check")
-			expect.True(t, ran.Load(), "the earlier function runs after the function that panics")
+			<-done
+			assert.Length(t, s.messages, 1, "the seat takes the text of the fault")
+			expect.Contains(t, s.messages[0], "Cleanup", "the fault states that the seat has no Cleanup")
+			expect.False(t, ran.Load(), "the function does not run")
 		})
 
 		runners := []struct {
@@ -875,17 +919,17 @@ func TestHandle(t *testing.T) {
 			}
 		})
 
-		t.Run("returns a directory that the end of the check removes on a seat without Cleanup", func(t *testing.T) {
+		t.Run("returns a directory that the end of the seat removes", func(t *testing.T) {
 			t.Parallel()
 
 			var dir string
 			c := keeps()
-			c.Apply = func(h *conform.Handle[Store]) {
-				dir = h.TempDir()
-				files.IsDir(t, dir, "TempDir returns a directory")
-			}
-			c.Run(assert.NewRecorder(), newStore)
-			files.Absent(t, dir, "the end of the check removes the directory")
+			c.Apply = func(h *conform.Handle[Store]) { dir = h.TempDir() }
+			r := assert.NewRecorder()
+			c.Run(r, newStore)
+			files.IsDir(t, dir, "the directory remains until the seat ends")
+			r.RunCleanups()
+			files.Absent(t, dir, "the end of the seat removes the directory")
 		})
 	})
 

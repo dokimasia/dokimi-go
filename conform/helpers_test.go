@@ -23,6 +23,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // Store is the declaration of the specs: a store of values by key.
@@ -140,6 +141,79 @@ func misses() conform.Check[Store] {
 
 // scrambles is the planted defect scrambled, which two checks can share.
 func scrambles(*conform.Handle[Store]) Store { return scrambled{} }
+
+// dropsPuts is a Store over a fresh subject whose Put drops the value.
+type dropsPuts struct{ Store }
+
+// Put drops the value.
+func (dropsPuts) Put(string, string) {}
+
+// invents is a Store over a fresh subject that finds a value under every key.
+type invents struct{ Store }
+
+// Get returns the value under the key, and an invented value under a key
+// without one.
+func (s invents) Get(key string) (string, bool) {
+	if value, found := s.Store.Get(key); found {
+		return value, true
+	}
+	return "invented", true
+}
+
+// derivedKeeps returns the check of keeps as a derived check of the claim
+// read-after-write. It sets the reason unobserved-write before its decisive
+// assertion, and its planted defect drops each Put of a fresh subject.
+func derivedKeeps() conform.Check[Store] {
+	c := keeps()
+	c.Claim, c.Probe, c.Reason = spec.ReadAfterWrite, spec.WriteThenRead, spec.UnobservedWrite
+	apply := c.Apply
+	c.Apply = func(h *conform.Handle[Store]) {
+		h.Expect(spec.UnobservedWrite)
+		apply(h)
+	}
+	c.Defect = func(h *conform.Handle[Store]) Store { return dropsPuts{h.Fresh()} }
+	return c
+}
+
+// derivedMisses returns the check of misses as a derived check of the claim
+// zero-on-error. It sets the reason value-beside-error before its decisive
+// assertion, and its planted defect invents a value over a fresh subject.
+func derivedMisses() conform.Check[Store] {
+	c := misses()
+	c.Claim, c.Probe, c.Reason = spec.ZeroOnError, spec.ZeroBesideError, spec.ValueBesideError
+	apply := c.Apply
+	c.Apply = func(h *conform.Handle[Store]) {
+		h.Expect(spec.ValueBesideError)
+		apply(h)
+	}
+	c.Defect = func(h *conform.Handle[Store]) Store { return invents{h.Fresh()} }
+	return c
+}
+
+// keepsExactly is the statement of the check of derivedExact.
+const keepsExactly = "Get returns the value that Put stored and nothing under another key"
+
+// derivedExact returns a derived check that Get returns the value that Put
+// stored and finds no value under another key, whose law implies the law of
+// derivedMisses. Its planted defect drops each Put of a fresh subject.
+func derivedExact() conform.Check[Store] {
+	return conform.Check[Store]{
+		ID:        storeGet.Check("keeps-exactly"),
+		Statement: keepsExactly,
+		Claim:     spec.ReadAfterWrite, Probe: spec.WriteThenRead, Reason: spec.UnobservedWrite,
+		Entails: []conform.ID[Store]{storeGet.Check("misses-unknown-keys")},
+		Apply: func(h *conform.Handle[Store]) {
+			h.Expect(spec.UnobservedWrite)
+			s := h.Subject()
+			s.Put("k", "v")
+			got, _ := s.Get("k")
+			assert.Equal(h, got, "v", h.Statement())
+			_, found := s.Get("absent")
+			assert.False(h, found, h.Statement())
+		},
+		Defect: func(h *conform.Handle[Store]) Store { return dropsPuts{h.Fresh()} },
+	}
+}
 
 // keepsEveryValue is the statement of the property check of keepsEvery.
 const keepsEveryValue = "Get returns the value that Put stored under any key"

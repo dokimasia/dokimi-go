@@ -27,7 +27,10 @@ import "testing"
 // check that skips before it fails skips its test. The test also applies every
 // other check of the suite to the defect, and fails when the defect fails one
 // of them. Checks that share one defect accept the failures of each other.
-// Falsify leaves out each check that counts allocations, which
+// The test also proves each edge of the check, as [Check.Run] states for a
+// derived check under [Isolate]. Falsify leaves out each derived check, whose
+// planted defect wraps a fresh subject of an application, which [Run]
+// falsifies. Falsify leaves out each check that counts allocations, which
 // [FalsifyAllocs] falsifies, and does not apply such a check to another
 // planted defect.
 //
@@ -45,6 +48,9 @@ func Falsify[S any](t T, suite Suite[S]) {
 	stopAt(t, append(found, budgetProblems(name, suite.Calls, nil)...))
 	parallel := uncounted(suite.Checks)
 	for _, c := range parallel {
+		if c.Claim != "" {
+			continue
+		}
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()

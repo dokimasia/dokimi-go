@@ -14,6 +14,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // outsideCases returns a factory of stores in memory, which counts each store
@@ -180,25 +181,20 @@ func TestCheck(t *testing.T) {
 			expect.Equal(t, built.Load(), int32(0), "the factory builds the subjects of the cases alone")
 		})
 
-		t.Run("ends the handle of the options before the first case", func(t *testing.T) {
+		t.Run("registers the cleanups of the handle of the options with the seat of the check", func(t *testing.T) {
 			t.Parallel()
 
-			var ended, early atomic.Bool
+			var ended atomic.Bool
 			c := keepsEvery()
-			property := c.Property
-			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
-				if !ended.Load() {
-					early.Store(true)
-				}
-				property(h, pc)
-			}
 			c.Options = func(h *conform.Handle[Store]) []prop.Option {
 				h.Cleanup(func() { ended.Store(true) })
 				return nil
 			}
-			c.Run(assert.NewRecorder(), newStore)
-			expect.True(t, ended.Load(), "the handle of the options runs its cleanups")
-			expect.False(t, early.Load(), "the cleanups of the options run before the first case")
+			r := assert.NewRecorder()
+			c.Run(r, newStore)
+			expect.False(t, ended.Load(), "the cleanups of the options wait for the end of the seat")
+			r.RunCleanups()
+			expect.True(t, ended.Load(), "the end of the seat runs the cleanups of the options")
 		})
 
 		t.Run("leaves the options of a check without a property uncalled", func(t *testing.T) {
@@ -349,6 +345,135 @@ func TestCheck(t *testing.T) {
 			assert.Equal(t, s.Messages(), []string{"the environment of Store.Get/keeps-the-value fails: " +
 				"runtime error: invalid memory address or nil pointer dereference"},
 				"the seat fails with the failure of the environment")
+		})
+
+		t.Run("falsifies a derived check on a planted defect over a fresh subject before it applies it",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var built, applied atomic.Int32
+				c := derivedKeeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					_, onDefect := h.Subject().(dropsPuts)
+					if !onDefect {
+						applied.Add(1)
+					}
+					apply(h)
+				}
+				r := recorded(func(tb assert.TB) {
+					c.Run(tb, func(*conform.Handle[Store]) Store {
+						built.Add(1)
+						return newMemory()
+					})
+				})
+				assert.False(t, r.Failed(), "the defect fails the check with the reason of its claim")
+				expect.Equal(t, built.Load(), int32(2), "the factory builds the fresh subject and the subject")
+				expect.Equal(t, applied.Load(), int32(1), "the check applies to the subject once")
+			})
+
+		t.Run("fails a derived check whose planted defect passes it", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Bool
+			c := derivedKeeps()
+			c.Defect = func(h *conform.Handle[Store]) Store { return h.Fresh() }
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				applied.Store(true)
+				apply(h)
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			failures := r.Failures()
+			assert.Length(t, failures, 1, "falsification fails once")
+			assert.Equal(t, failures[0].Contract, "the planted defect of Store.Get/keeps-the-value fails the check "+
+				"with the reason unobserved-write of the claim read-after-write",
+				"the contract contains the claim and its reason")
+			expect.True(t, applied.Load(), "falsification applied the check to the defect")
+		})
+
+		t.Run("leaves the subject out after a failed falsification on a seat that goes on", func(t *testing.T) {
+			t.Parallel()
+
+			var onSubject atomic.Bool
+			c := derivedKeeps()
+			c.Defect = func(h *conform.Handle[Store]) Store { return dropsPuts{forgetful{}} }
+			c.Probe = spec.ZeroBesideError
+			c.Apply = func(h *conform.Handle[Store]) {
+				if _, onDefect := h.Subject().(dropsPuts); !onDefect {
+					onSubject.Store(true)
+				}
+				h.Expect(spec.ValueBesideError)
+				keeps().Apply(h)
+			}
+			r := assert.NewRecorder()
+			c.Run(r, newStore)
+			assert.True(t, r.Failed(), "falsification fails the seat")
+			expect.False(t, onSubject.Load(), "the check does not apply to the subject")
+		})
+
+		tests := []struct {
+			name      string
+			giveProbe spec.ProbeID
+			giveSet   spec.ReasonID
+			want      string
+		}{
+			{
+				name:      "fails a derived check whose planted defect fails it without a reason",
+				giveProbe: spec.WriteThenRead,
+				want: "the planted defect of Store.Get/keeps-the-value fails the check without a reason, and the " +
+					"claim read-after-write needs the reason unobserved-write. Call h.Expect with the reason " +
+					"before the decisive assertion of the probe.",
+			},
+			{
+				name:      "fails a derived check whose planted defect fails it with another reason",
+				giveProbe: spec.ZeroBesideError, giveSet: spec.ValueBesideError,
+				want: "the planted defect of Store.Get/keeps-the-value fails the check with the reason " +
+					"value-beside-error, and the claim read-after-write needs the reason unobserved-write. " +
+					"Call h.Expect with the reason before the decisive assertion of the probe.",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				c := derivedKeeps()
+				c.Probe = tt.giveProbe
+				apply := keeps().Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					if tt.giveSet != "" {
+						h.Expect(tt.giveSet)
+					}
+					apply(h)
+				}
+				r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+				assert.Equal(t, r.Message(), tt.want, "the message contains both reasons")
+			})
+		}
+
+		t.Run("fails a derived check whose failed assertion bypasses the handle", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Expect(spec.UnobservedWrite)
+				s := h.Subject()
+				s.Put("k", "v")
+				got, _ := s.Get("k")
+				assert.Equal(h.Unwrap(), got, "v", h.Statement())
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Contains(t, r.Message(), "fails the check without a reason",
+				"a failure outside the handle has no reason of the probe")
+		})
+
+		t.Run("leaves the isolation of a derived check out without the option Isolate", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, conform.With(derivedKeeps())) })
+			assert.False(t, r.Failed(), "the application does not run the other checks on the defect")
 		})
 	})
 

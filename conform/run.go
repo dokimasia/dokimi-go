@@ -31,11 +31,15 @@ type T interface {
 // declaration. The test of an excused check skips with the reason of the
 // excusal. The test of a check that opts add falsifies the check before it
 // applies the check to the subject, as [Falsify] does, against every other
-// check of the application that opts do not excuse. Run leaves out each check
-// that counts allocations, which [RunBudgets] runs.
+// check of the application that opts do not excuse. The test of a derived
+// check falsifies the check by the reason of its claim on its planted defect
+// over a fresh subject of newSubject, and under [Isolate] also against every
+// other check of the application, as [Check.Run] states. Run leaves out each
+// check that counts allocations, which [RunBudgets] runs.
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	cfg := configure(suite.overrides(t), opts)
+	cfg.fresh = newSubject
 	stopAt(t, validate("Run"+suite.Declaration+"Suite", suite, cfg))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
 	parallel := uncounted(checks)
@@ -47,10 +51,10 @@ func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Op
 			t.Helper()
 			t.Parallel()
 			cfg.skipExcused(t, c.ID)
-			if i >= len(suite.Checks) {
+			if i >= len(suite.Checks) && c.Claim == "" {
 				c.falsify(t, cfg, parallel)
 			}
-			c.run(t, newSubject, cfg)
+			c.apply(t, newSubject, cfg, parallel)
 		})
 	}
 }
@@ -112,6 +116,14 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S], know
 		}
 		if c.Defect == nil {
 			found = append(found, fmt.Sprintf("the check %s has no planted defect", c.ID))
+		}
+		if c.Claim != "" && c.Reason == "" {
+			found = append(found, fmt.Sprintf("the check %s has the claim %s and no reason", c.ID, c.Claim))
+		}
+		for _, id := range c.Entails {
+			if !slices.ContainsFunc(checks, func(o Check[S]) bool { return o.ID == id }) {
+				found = append(found, fmt.Sprintf("the check %s entails %s, which %s lacks", c.ID, id, name))
+			}
 		}
 		if seen[c.ID] {
 			found = append(found, fmt.Sprintf("two checks of %s have the identity %s", name, c.ID))

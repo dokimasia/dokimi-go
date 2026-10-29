@@ -14,3 +14,5 @@ use (
 )
 
 replace go.dokimi.dev/fault v0.2.0 => ./fault
+
+replace go.dokimi.dev/spec v0.1.0 => ./spec

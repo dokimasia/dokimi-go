@@ -458,6 +458,7 @@ func measured(t *testing.T, iterations int, run func(b conform.B)) *benchmark {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		defer b.RunCleanups()
 		run(b)
 	}()
 	<-done

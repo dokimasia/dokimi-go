@@ -2076,7 +2076,7 @@
       "partners": [
         {
           "name": "read",
-          "mode": "named",
+          "mode": "reader",
           "param": "read"
         }
       ],
@@ -3127,7 +3127,8 @@
       "id": "values-in-order",
       "generator": "enum",
       "gates": [
-        "members"
+        "members",
+        "list-function"
       ],
       "law": "variants-are-listed-in-order",
       "machineries": [
@@ -3139,6 +3140,10 @@
         {
           "name": "members",
           "from": "members"
+        },
+        {
+          "name": "list",
+          "from": "list"
         }
       ],
       "defect": {
@@ -3152,7 +3157,8 @@
       "id": "distinct-names",
       "generator": "enum",
       "gates": [
-        "two-members"
+        "two-members",
+        "outside-value"
       ],
       "law": "each-variant-has-its-own-text",
       "machineries": [
@@ -3168,6 +3174,10 @@
         {
           "name": "name",
           "from": "name"
+        },
+        {
+          "name": "outside",
+          "from": "outside"
         }
       ],
       "defect": {
@@ -3181,7 +3191,9 @@
       "id": "valid-members",
       "generator": "enum",
       "gates": [
-        "members"
+        "members",
+        "valid-function",
+        "outside-value"
       ],
       "law": "only-the-variants-are-valid",
       "machineries": [
@@ -3193,6 +3205,14 @@
         {
           "name": "members",
           "from": "members"
+        },
+        {
+          "name": "valid",
+          "from": "valid"
+        },
+        {
+          "name": "outside",
+          "from": "outside"
         }
       ],
       "defect": {
@@ -3223,6 +3243,10 @@
         {
           "name": "parse",
           "from": "parse"
+        },
+        {
+          "name": "name",
+          "from": "name"
         }
       ],
       "defect": {
@@ -3249,6 +3273,10 @@
         {
           "name": "members",
           "from": "members"
+        },
+        {
+          "name": "name",
+          "from": "name"
         }
       ],
       "defect": {
@@ -3275,6 +3303,10 @@
         {
           "name": "members",
           "from": "members"
+        },
+        {
+          "name": "name",
+          "from": "name"
         }
       ],
       "defect": {

@@ -10,12 +10,16 @@ import (
 	"math/rand/v2"
 	"os"
 	"reflect"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+
+	"go.dokimi.dev/spec"
 )
 
 // origin is the instant at which the clock of each handle starts.
@@ -36,6 +40,10 @@ var ErrTempDir = errors.New("conform: the handle cannot make a temporary directo
 
 // ErrSkip is the fault of [Handle.Skipf] on a seat without Skipf.
 var ErrSkip = errors.New("conform: the handle cannot skip the check")
+
+// ErrReason is the fault of [Handle.Expect] for a reason that the entry of the
+// probe of the check does not list.
+var ErrReason = errors.New("conform: the probe sets a reason that its entry does not list")
 
 // seat is the seat of a handle. The handle embeds it, so the promoted Helper
 // marks the frame of the assertion that calls it, and a failure on a test
@@ -100,16 +108,17 @@ type Handle[S any] struct {
 	config *config[S]
 	clock  *assert.Controlled
 	random rand.Source
-	kept   *atomic.Pointer[string]
+	kept   *firsts
+
+	// expected is the reason that the probe set last, and nil before the
+	// first call of Expect.
+	expected atomic.Pointer[spec.ReasonID]
 
 	// subject is the subject of the check once built is true. mu guards
-	// both. cleanups are the functions that Cleanup keeps on a seat without
-	// Cleanup, in the order of their registration. cleaning guards them.
-	subject  S
-	cleanups []func()
-	mu       sync.Mutex
-	built    bool
-	cleaning sync.Mutex
+	// both.
+	subject S
+	mu      sync.Mutex
+	built   bool
 
 	building  atomic.Int32
 	clockRead atomic.Bool
@@ -121,7 +130,7 @@ type Handle[S any] struct {
 // draws its random values from the case. Any other handle draws them from the
 // seed of cfg, or from the identity of c without a seed.
 func newHandle[S any](
-	tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S], kept *atomic.Pointer[string],
+	tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S], kept *firsts,
 ) *Handle[S] {
 	h := &Handle[S]{seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin), kept: kept}
 	if pc, isCase := tb.(*prop.Case); isCase {
@@ -154,6 +163,45 @@ func (h *Handle[S]) Subject() S {
 // that needs more than one subject.
 func (h *Handle[S]) New() S {
 	return h.build(h.source)
+}
+
+// Fresh returns a fresh subject from the factory of the application, also
+// under falsification, where Subject and New return the planted defect. The
+// planted defect of a derived check wraps it. Without a factory, as under
+// [Falsify], Fresh ends the check with a fault that wraps [ErrOption], and it
+// returns the zero value to a seat that takes the fault and goes on.
+func (h *Handle[S]) Fresh() S {
+	h.Helper()
+	if h.config.fresh == nil {
+		assert.Fault(h, fmt.Errorf("%w: %s calls Fresh without a factory of subjects. A planted defect over a "+
+			"fresh subject proves its check in an application, which has the factory", ErrOption, h.check.ID))
+		var zero S
+		return zero
+	}
+	return h.build(h.config.fresh)
+}
+
+// Expect sets the reason code of the assertions that the probe calls next.
+// The handle keeps the reason of the first assertion that fails, and the
+// falsification of a derived check compares it with the reason of the claim.
+// Expect ends the check with a fault that wraps [ErrReason] where the entry of
+// the probe of the check does not list the reason.
+func (h *Handle[S]) Expect(reason spec.ReasonID) {
+	h.Helper()
+	probe, found := spec.ProbeOf(h.check.Probe)
+	if !slices.Contains(probe.Reasons, reason) {
+		lists := "the check has no probe"
+		if found {
+			reasons := make([]string, len(probe.Reasons))
+			for i, r := range probe.Reasons {
+				reasons[i] = string(r)
+			}
+			lists = fmt.Sprintf("the probe %s reports %s", probe.ID, strings.Join(reasons, ", "))
+		}
+		assert.Fault(h, fmt.Errorf("%w: %s sets the reason %s, and %s", ErrReason, h.check.ID, reason, lists))
+		return
+	}
+	h.expected.Store(&reason)
 }
 
 // Reference returns a fresh reference implementation from the option
@@ -277,22 +325,15 @@ func (h *Handle[S]) Context() context.Context {
 	return assert.Context(h.seat)
 }
 
-// Cleanup registers f to run when the check ends, or when the case ends under
-// a property check. A factory registers the stop of a subject with it, such
-// as the end of the goroutines of the subject. On a seat with Cleanup, such
-// as the test of the check or a case, Cleanup registers f with the seat. On
-// any other seat the handle keeps f, and runs the functions that it keeps
-// when the check ends, the last registered first. A function that stops the
-// check, such as through Fatalf, or that panics leaves the earlier functions
-// to run.
+// Cleanup registers f to run when the seat of the check ends, through
+// assert.Cleanup: the test of the check, the case of a property check, or the
+// seat of a falsification, which ends with the check. A factory registers the
+// stop of a subject with it, such as the end of the goroutines of the
+// subject. A seat without Cleanup in its chain ends the check with a fault,
+// and f does not run.
 func (h *Handle[S]) Cleanup(f func()) {
-	if seat, has := h.seat.(interface{ Cleanup(f func()) }); has {
-		seat.Cleanup(f)
-		return
-	}
-	h.cleaning.Lock()
-	defer h.cleaning.Unlock()
-	h.cleanups = append(h.cleanups, f)
+	h.Helper()
+	assert.Cleanup(h.seat, f)
 }
 
 // Skipf skips the check with the reason that format and args state, through
@@ -317,7 +358,8 @@ func (h *Handle[S]) Skipf(format string, args ...any) {
 }
 
 // TempDir returns a new directory of the check, which the run removes when
-// the check ends, or when the case ends under a property check. Each call
+// the seat of the check ends, or when the case ends under a property check.
+// Each call
 // returns another directory, so a factory builds each subject on a directory
 // of its own.
 //
@@ -350,6 +392,11 @@ func (h *Handle[S]) Unwrap() assert.TB {
 // through Fatalf when aborting is true and through Errorf otherwise.
 func (h *Handle[S]) Report(f assert.Failure, aborting bool) {
 	h.Helper()
+	var reason spec.ReasonID
+	if set := h.expected.Load(); set != nil {
+		reason = *set
+	}
+	h.kept.reason.CompareAndSwap(nil, &reason)
 	if reporter, ok := h.seat.(assert.Reporter); ok {
 		reporter.Report(f, aborting)
 		return
@@ -382,7 +429,7 @@ func (h *Handle[S]) Fatalf(format string, args ...any) {
 // falsification of the check reports that message.
 func (h *Handle[S]) keep(format string, args []any) {
 	message := fmt.Sprintf(format, args...)
-	h.kept.CompareAndSwap(nil, &message)
+	h.kept.message.CompareAndSwap(nil, &message)
 }
 
 // build returns a subject of newSubject. A read of the clock while build runs
@@ -391,26 +438,4 @@ func (h *Handle[S]) build(newSubject func(h *Handle[S]) S) S {
 	h.building.Add(1)
 	defer h.building.Add(-1)
 	return newSubject(h)
-}
-
-// end ends the check of the handle: it runs the functions that Cleanup kept,
-// the last registered first. Each function runs in a frame of its own, so a
-// function that stops the goroutine of the check or panics leaves the earlier
-// functions to run. A function that a function registers runs next. The code
-// that makes a handle on a seat without Cleanup calls end when the check
-// ends.
-func (h *Handle[S]) end() {
-	h.cleaning.Lock()
-	last := len(h.cleanups) - 1
-	kept := last >= 0
-	var f func()
-	if kept {
-		f, h.cleanups = h.cleanups[last], h.cleanups[:last]
-	}
-	h.cleaning.Unlock()
-	if !kept {
-		return
-	}
-	defer h.end()
-	f()
 }

@@ -561,6 +561,10 @@
         "go": "Failure",
         "typescript": "failure"
       },
+      "list-function": {
+        "go": "ListFunction",
+        "typescript": "listFunction"
+      },
       "list-value": {
         "go": "ListValue",
         "typescript": "listValue"
@@ -592,6 +596,10 @@
       "ordered-value": {
         "go": "OrderedValue",
         "typescript": "orderedValue"
+      },
+      "outside-value": {
+        "go": "OutsideValue",
+        "typescript": "outsideValue"
       },
       "parse-function": {
         "go": "ParseFunction",
@@ -640,6 +648,10 @@
       "two-values": {
         "go": "TwoValues",
         "typescript": "twoValues"
+      },
+      "valid-function": {
+        "go": "ValidFunction",
+        "typescript": "validFunction"
       },
       "value-samples": {
         "go": "ValueSamples",
