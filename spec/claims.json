@@ -55,7 +55,7 @@
         }
       ],
       "defect": {
-        "form": "succeeds-always",
+        "form": "ignores-cancel",
         "clause": "a {declaration} whose {callable} ignores the context",
         "reason": "ignored-cancel"
       },
@@ -324,7 +324,10 @@
         "clause": "a {declaration} whose {callable} returns another value on the repeat",
         "reason": "unstable-repeat"
       },
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "entails": [
+        "smoke"
+      ]
     },
     {
       "id": "predicate",
@@ -386,10 +389,7 @@
         "clause": "a {declaration} whose {callable} panics on the repeat",
         "reason": "panicked-repeat"
       },
-      "since": "1.0.0",
-      "entails": [
-        "smoke"
-      ]
+      "since": "1.0.0"
     },
     {
       "id": "miss",
@@ -555,8 +555,8 @@
         }
       ],
       "defect": {
-        "form": "forgets-writes",
-        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "form": "reads-another-value",
+        "clause": "a {declaration} whose {callable} returns a value that {write} did not write",
         "reason": "unobserved-write"
       },
       "since": "1.0.0"
@@ -598,8 +598,8 @@
         }
       ],
       "defect": {
-        "form": "forgets-writes",
-        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "form": "reads-another-value",
+        "clause": "a {declaration} whose {callable} returns a value that {write} did not write",
         "reason": "unobserved-write"
       },
       "since": "1.0.0"
@@ -641,8 +641,8 @@
         }
       ],
       "defect": {
-        "form": "forgets-writes",
-        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "form": "reads-another-value",
+        "clause": "a {declaration} whose {callable} returns a value that {write} did not write",
         "reason": "unobserved-write"
       },
       "since": "1.0.0"
@@ -684,8 +684,8 @@
         }
       ],
       "defect": {
-        "form": "forgets-writes",
-        "clause": "a {declaration} whose {write} returns success and stores nothing",
+        "form": "reads-another-value",
+        "clause": "a {declaration} whose {callable} returns a value that {write} did not write",
         "reason": "unobserved-write"
       },
       "since": "1.0.0"
@@ -1029,7 +1029,7 @@
         }
       ],
       "defect": {
-        "form": "answers-a-sample",
+        "form": "stamps-the-past",
         "clause": "a {declaration} whose {write} is not ordered after the read before it",
         "reason": "unordered-write"
       },
@@ -2208,10 +2208,7 @@
         "clause": "a {declaration} whose {replay} returns the history of {callable} reversed",
         "reason": "unordered-history"
       },
-      "since": "1.0.0",
-      "entails": [
-        "chain"
-      ]
+      "since": "1.0.0"
     },
     {
       "id": "chain",

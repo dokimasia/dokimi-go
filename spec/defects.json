@@ -24,7 +24,7 @@
     {
       "id": "fails-always",
       "changes": "callable",
-      "does": "The callable fails on every call with an error that no directive declares.",
+      "does": "The callable fails with an error that no directive declares wherever the call of the fresh subject succeeds.",
       "since": "1.0.0",
       "min-steps": 1
     },
@@ -48,6 +48,13 @@
       "does": "The callable succeeds on its first call and fails on every later call.",
       "since": "1.0.0",
       "min-steps": 2
+    },
+    {
+      "id": "ignores-cancel",
+      "changes": "callable",
+      "does": "The callable returns its zero results and no error for a cancelled context, and calls the fresh subject for any other.",
+      "since": "1.0.0",
+      "min-steps": 1
     },
     {
       "id": "value-beside",
@@ -106,6 +113,13 @@
       "min-steps": 2
     },
     {
+      "id": "stamps-the-past",
+      "changes": "partner:write",
+      "does": "The partner calls the fresh subject and returns its value with the version 0.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
       "id": "version-descends",
       "changes": "callable",
       "does": "The callable returns a value whose version is 1 on its first call and 0 on every later call.",
@@ -120,9 +134,9 @@
       "min-steps": 1
     },
     {
-      "id": "forgets-writes",
-      "changes": "partner:write",
-      "does": "The partner returns success and stores nothing.",
+      "id": "reads-another-value",
+      "changes": "callable",
+      "does": "The callable returns the second sample of each value wherever the call of the fresh subject succeeds.",
       "since": "1.0.0",
       "min-steps": 2
     },

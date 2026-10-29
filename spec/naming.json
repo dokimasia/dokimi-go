@@ -403,9 +403,9 @@
         "go": "FilesRefusedWrite",
         "typescript": "filesRefusedWrite"
       },
-      "forgets-writes": {
-        "go": "ForgetsWrites",
-        "typescript": "forgetsWrites"
+      "ignores-cancel": {
+        "go": "IgnoresCancel",
+        "typescript": "ignoresCancel"
       },
       "ignores-the-predicate": {
         "go": "IgnoresThePredicate",
@@ -467,6 +467,10 @@
         "go": "ReadSurvivesDelete",
         "typescript": "readSurvivesDelete"
       },
+      "reads-another-value": {
+        "go": "ReadsAnotherValue",
+        "typescript": "readsAnotherValue"
+      },
       "refuses-repeat": {
         "go": "RefusesRepeat",
         "typescript": "refusesRepeat"
@@ -510,6 +514,10 @@
       "slow": {
         "go": "Slow",
         "typescript": "slow"
+      },
+      "stamps-the-past": {
+        "go": "StampsThePast",
+        "typescript": "stampsThePast"
       },
       "stores-nothing": {
         "go": "StoresNothing",

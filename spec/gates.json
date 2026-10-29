@@ -107,7 +107,7 @@
     },
     {
       "id": "partner-arguments",
-      "passes": "Each parameter of the read is a parameter of the write with the same name and type, a field of the written value with its name and type, or the context.",
+      "passes": "Each parameter of the read is a parameter of the write with the same name and type, a field of the written value with its name and type, the context, or a function, or the write takes no input.",
       "why": "a parameter of the read of {callable} selects neither a value that {partner} takes nor a field of the written value",
       "remedy": "align the name of the parameter of the read with a parameter or a field of the write",
       "since": "1.0.0"
