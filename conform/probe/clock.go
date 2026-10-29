@@ -23,12 +23,15 @@ import (
 
 // ReturnsWithin calls call on a goroutine, advances the clock past budget,
 // and fails when the call has not returned. The call runs on the context of
-// the check, which the seat cancels once the check ends.
+// the check, which the seat cancels once the check ends. A call that panics
+// fails the check with the value of the panic.
 func ReturnsWithin[S any](h *conform.Handle[S], call Act, budget time.Duration) {
 	h.Helper()
 	done := make(chan struct{})
+	var panicked any
 	go func() {
 		defer close(done)
+		defer func() { panicked = recover() }()
 		_ = call(h.Context())
 	}()
 	synctest.Wait()
@@ -37,6 +40,10 @@ func ReturnsWithin[S any](h *conform.Handle[S], call Act, budget time.Duration) 
 	returned := false
 	select {
 	case <-done:
+		if panicked != nil {
+			h.Fatalf("%s: the call panics with %v", h.Statement(), panicked)
+			return
+		}
 		returned = true
 	default:
 	}

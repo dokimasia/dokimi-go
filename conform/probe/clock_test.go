@@ -6,6 +6,7 @@ package probe_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"testing"
@@ -390,6 +391,27 @@ func TestClock(t *testing.T) {
 			assert.Contains(t, r.Message(), "fails the check without a reason", "the guard sets no reason")
 		})
 	}
+
+	t.Run("ReturnsWithin fails the check with the panic of the call", func(t *testing.T) {
+		t.Parallel()
+
+		r := &onTest{Recorder: assert.NewRecorder(), t: t}
+		conform.Check[*timer]{
+			ID: "Timer.Call/claim", Statement: "the probe holds", Claim: "claim", Probe: spec.ReturnsWithin,
+			Reason: spec.OverranBudget,
+			Apply: func(h *conform.Handle[*timer]) {
+				_ = h.Subject()
+				calls := 0
+				probe.ReturnsWithin(h, func(context.Context) error {
+					none := make([]int, 0, 1)
+					return fmt.Errorf("probe_test: the element %d", none[calls])
+				}, budget)
+			},
+			Defect: timers(""), Around: synctest.Test,
+		}.Run(r, timers(""))
+		assert.Contains(t, r.Message(), "the call panics with runtime error: index out of range",
+			"the check fails with the value of the panic")
+	})
 
 	t.Run("SteadyWhileTheClockStops fails the guard for a second call that fails", func(t *testing.T) {
 		t.Parallel()

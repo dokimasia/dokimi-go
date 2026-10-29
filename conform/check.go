@@ -310,7 +310,11 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 			c.wrongReason(tb, reason)
 			return false
 		}
-		if !cfg.isolate {
+		// The planted defect of a check of the reason panicked panics on
+		// every call, and the defect of a check of the reason overran-budget
+		// waits past the budget on every call, so a check that calls its
+		// callable fails on it.
+		if !cfg.isolate || c.Reason == spec.Panicked || c.Reason == spec.OverranBudget {
 			return true
 		}
 	case first.Contract != c.Statement:
@@ -351,7 +355,8 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 // isolate applies each check of others to the planted defect of c, and
 // reports whether the defect passes each of them. It leaves out each check
 // that shares the defect, c among them, each check that the options excuse,
-// and each check of an edge of c, which [Check.edges] proves. It fails tb when
+// each check of an edge of c, which [Check.edges] proves, and each check of
+// the consumer where c is a derived check. It fails tb when
 // the defect fails one of them, because a planted defect proves its check
 // only when no other check fails on it. The failure lists each check that
 // fails, with its first assertion or its panic. A check that skips or ends
@@ -364,7 +369,7 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 	for i := range others {
 		o := &others[i]
 		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect ||
-			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) {
+			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) || c.Claim != "" && o.Claim == "" {
 
 			continue
 		}

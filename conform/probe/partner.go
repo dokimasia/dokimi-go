@@ -354,7 +354,7 @@ func CompensatesTheStep[S any](h *conform.Handle[S], call, compensate Act) {
 
 // RefusedLeavesNothing calls call with refused, then reader, and fails when
 // reader returns a value other than zero. A call that accepts refused ends
-// the probe.
+// the probe, and so does a reader that fails, because it finds nothing.
 func RefusedLeavesNothing[S, V, R any](
 	h *conform.Handle[S], call func(ctx context.Context, r R) error, reader Call[V], refused R, zero V,
 ) {
@@ -362,7 +362,10 @@ func RefusedLeavesNothing[S, V, R any](
 	if call(h.Context(), refused) == nil {
 		return
 	}
-	got, _ := reader(h.Context())
+	got, err := reader(h.Context())
+	if err != nil {
+		return
+	}
 	h.Expect(spec.PartialWrite)
 	assert.Equal(h, got, zero, h.Statement())
 }

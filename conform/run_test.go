@@ -14,6 +14,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // An application runs each check of a suite as a test of its own, once it
@@ -250,6 +251,50 @@ func TestRun(t *testing.T) {
 			assert.Contains(t, out, "\tStore.Get/keeps-the-value fails at the assertion equal",
 				"the failure lists the check of the suite that the defect fails")
 		})
+
+		t.Run("isolates a derived check against the other derived checks alone under Isolate", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore,
+				conform.Isolate[Store](), conform.With(keeps()))
+		})
+
+		{
+			tests := []struct {
+				name       string
+				giveClaim  spec.ClaimID
+				giveProbe  spec.ProbeID
+				giveReason spec.ReasonID
+			}{
+				{
+					name:      "leaves the planted defect of a panic out of the isolation under Isolate",
+					giveClaim: spec.Smoke, giveProbe: spec.Survives, giveReason: spec.Panicked,
+				},
+				{
+					name:      "leaves the planted defect of a wait past the budget out of the isolation under Isolate",
+					giveClaim: spec.Within, giveProbe: spec.ReturnsWithin, giveReason: spec.OverranBudget,
+				},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					t.Parallel()
+
+					c := misses()
+					c.ID, c.Defect = storeGet.Check(string(tt.giveClaim)), scrambles
+					c.Claim, c.Probe, c.Reason = tt.giveClaim, tt.giveProbe, tt.giveReason
+					apply := c.Apply
+					c.Apply = func(h *conform.Handle[Store]) {
+						h.Expect(tt.giveReason)
+						apply(h)
+					}
+					conform.Run(t, conform.Suite[Store]{
+						Declaration: "Store", Checks: []conform.Check[Store]{derivedKeeps(), c},
+					}, newStore, conform.Isolate[Store]())
+				})
+			}
+		}
 
 		t.Run("runs a check of the suite inside its environment", func(t *testing.T) {
 			t.Parallel()

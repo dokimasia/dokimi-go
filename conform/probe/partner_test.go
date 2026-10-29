@@ -786,6 +786,15 @@ func TestPartner(t *testing.T) {
 			},
 		},
 		{
+			name:      "RefusedLeavesNothing passes a reader that fails beside a value",
+			giveProbe: spec.RefusedLeavesNothing,
+			giveApply: func(h *conform.Handle[*store]) {
+				refuses := func(context.Context, int) error { return errOther }
+				reads := func(context.Context) (int, error) { return 1, errOther }
+				probe.RefusedLeavesNothing(h, refuses, reads, -1, 0)
+			},
+		},
+		{
 			name: "RemovesOnDelete passes a put that fails", giveProbe: spec.RemovesOnDelete,
 			giveApply: func(h *conform.Handle[*store]) { probe.RemovesOnDelete(h, passes, fails, passes, errMiss) },
 		},
