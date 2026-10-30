@@ -108,6 +108,7 @@ func TestSuite(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				assert.True(h, h.Reference() != h.Reference(), "Reference returns a fresh reference implementation")
 			}
 			c.Run(t, newStore, conform.Reference(newStore))
@@ -122,6 +123,7 @@ func TestSuite(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				assert.True(h, h.Second() != h.Second(), "Second returns a fresh second subject")
 			}
 			c.Run(t, newStore, conform.Second(newStore))
@@ -201,6 +203,7 @@ func TestSuite(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				s := h.Subject()
 				s.Put("k", "v")
 				got, _ := h.Restart(s).Get("k")
@@ -224,6 +227,7 @@ func TestSuite(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				s := h.Subject()
 				got, _ := h.Crash(s, func() { s.Put("k", "v") }).Get("k")
 				assert.Equal(h, got, "v-torn", "the crashed subject has the value that the crash left")
@@ -371,7 +375,7 @@ func TestSuite(t *testing.T) {
 // sets the variable, so neither it nor its subtests run in parallel.
 func TestSuiteSeed(t *testing.T) {
 	const seedEnv = "DOKIMI_SEED"
-	const invalid = `DOKIMI_SEED is "seven", and a seed is a decimal number below 2^64`
+	const invalid = `DOKIMI_SEED is "seven", and a seed is a decimal or a 0x hexadecimal number below 2^64`
 
 	t.Run("seeds each property run of an application", func(t *testing.T) {
 		t.Setenv(seedEnv, "7")
@@ -380,11 +384,21 @@ func TestSuiteSeed(t *testing.T) {
 		assert.Equal(t, detailOf(t, r, "seed"), any("7"), "the property run takes the seed of DOKIMI_SEED")
 	})
 
+	t.Run("takes a hexadecimal seed with the prefix 0x", func(t *testing.T) {
+		t.Setenv(seedEnv, "0x1f")
+		r := assert.NewRecorder()
+		keepsEvery().Run(r, newStore)
+		assert.Equal(t, detailOf(t, r, "seed"), any("31"), "the property run takes the seed of DOKIMI_SEED")
+	})
+
 	t.Run("seeds the random source of a check that runs once", func(t *testing.T) {
 		t.Setenv(seedEnv, "7")
 		var values []uint64
 		for _, c := range []conform.Check[Store]{keeps(), misses()} {
-			c.Apply = func(h *conform.Handle[Store]) { values = append(values, h.Rand().Uint64()) }
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				values = append(values, h.Rand().Uint64())
+			}
 			c.Run(t, newStore)
 		}
 		assert.Length(t, values, 2, "each check draws one value")

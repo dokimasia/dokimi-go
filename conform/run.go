@@ -22,8 +22,8 @@ type T interface {
 // Run applies each check of the suite, and each check that opts add, to a
 // fresh subject of newSubject.
 //
-// Run reports every problem of the checks, the calls and the options on t, and
-// stops t when it finds one. An excusal may name any check of the application
+// Run reports every problem of the checks, the calls, the options and the seed
+// on t, and stops t when it finds one. An excusal may name any check of the application
 // or any ceiling of a budget, because each entry point of a suite takes the
 // same options. Otherwise Run runs each check as a parallel test of t. The
 // test has the identity of the check without the name of the declaration,
@@ -34,13 +34,29 @@ type T interface {
 // check of the application that opts do not excuse. The test of a derived
 // check falsifies the check by the reason of its claim on its planted defect
 // over a fresh subject of newSubject, and under [Isolate] also against every
-// other check of the application, as [Check.Run] states. Run leaves out each
-// check that counts allocations, which [RunBudgets] runs.
+// other check of the application, as [Check.Run] states. The test of a check
+// that passes without engaging its claim fails as vacuous, as [Check.Run]
+// states. Run leaves out each check that counts allocations, which
+// [RunBudgets] runs.
+//
+// Run takes one seed for the property runs of the application: the seed of
+// DOKIMI_SEED, and otherwise the seed that prop.RunSeed returns for the name of
+// the application, such as RunStoreSuite. Once every test of a check has
+// ended, Run writes two suite records into the output of a t that is an
+// [assert.TB], such as *testing.T: the falsification of the derived checks
+// and of the checks that opts add, and the application to the subject. It
+// logs the census of the subject record on a t with Logf. The census counts
+// the checks that pass, are vacuous, fail, are excused and skip. The records
+// of an application that problems stop have no check, and their field ended
+// lists the problems.
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
+	name := "Run" + suite.Declaration + "Suite"
 	cfg := configure(suite.overrides(t), opts)
 	cfg.fresh = newSubject
-	stopAt(t, validate("Run"+suite.Declaration+"Suite", suite, cfg))
+	seed, faults := cfg.applicationSeed(name)
+	app := newApplication(&suite, name, funcName(newSubject), seed, falsification, onSubject)
+	app.begin(t, append(validate(name, suite, cfg), faults...))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
 	parallel := uncounted(checks)
 	for i, c := range checks {
@@ -50,12 +66,25 @@ func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Op
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
-			cfg.skipExcused(t, c.ID)
-			if i >= len(suite.Checks) && c.Claim == "" {
-				c.falsify(t, cfg, parallel)
+			added := i >= len(suite.Checks) && c.Claim == ""
+			judged, falsified := app.track(t, i, onSubject, &c, cfg, app.seed), new(verdict)
+			if added || c.Claim != "" {
+				falsified = app.track(t, i, falsification, &c, cfg, seedOf(string(c.ID)))
 			}
-			c.apply(t, newSubject, cfg, parallel)
+			cfg.skipExcused(t, c.ID)
+			if added {
+				c.falsify(t, cfg, parallel, falsified)
+			}
+			c.apply(t, newSubject, cfg, parallel, falsified, judged)
 		})
+	}
+}
+
+// whenDone registers f to run once every test of t has ended, on a t with
+// Cleanup, such as *testing.T.
+func whenDone(t T, f func()) {
+	if c, cleans := t.(interface{ Cleanup(f func()) }); cleans {
+		c.Cleanup(f)
 	}
 }
 

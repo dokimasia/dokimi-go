@@ -77,6 +77,7 @@ func TestHandle(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				assert.True(h, h.Subject() == h.Subject(), "Subject returns the subject that it built for the check")
 			}
 			c.Run(t, newStore)
@@ -104,6 +105,7 @@ func TestHandle(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				_, isMemory := h.New().(*memory)
 				assert.True(h, isMemory, "New builds a subject of the factory")
 				assert.True(h, h.New() != h.New(), "New returns a fresh subject")
@@ -321,6 +323,7 @@ func TestHandle(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				read := h.Subject().(*memory).clock
 				assert.True(h, read == h.Clock(), "the subject read the clock of the handle")
 			}
@@ -336,6 +339,7 @@ func TestHandle(t *testing.T) {
 			c := keepsEvery()
 			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
 				_ = pc.Draw(prop.String(), "key")
+				h.Engage()
 				mu.Lock()
 				defer mu.Unlock()
 				clocks[h.Clock()] = true
@@ -357,6 +361,7 @@ func TestHandle(t *testing.T) {
 			var mu sync.Mutex
 			var values []uint64
 			record := func(h *conform.Handle[Store]) {
+				h.Engage()
 				mu.Lock()
 				defer mu.Unlock()
 				values = append(values, h.Rand().Uint64())
@@ -404,6 +409,7 @@ func TestHandle(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				clock := h.Subject().(*memory).clock
 				start := clock.Now()
 				h.Advance(time.Minute)
@@ -457,7 +463,7 @@ func TestHandle(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
-				assert.Equal(h, h.Statement(), keepsTheValue, "the handle has the statement of its check")
+				assert.Equal(h, h.Statement(), keepsTheValue, h.Statement())
 			}
 			c.Run(t, newStore)
 		})
@@ -473,6 +479,7 @@ func TestHandle(t *testing.T) {
 			c.Probe = spec.WriteThenRead
 			apply := c.Apply
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				h.Expect(spec.UnobservedWrite)
 				apply(h)
 			}
@@ -525,6 +532,7 @@ func TestHandle(t *testing.T) {
 
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
 				_, isMemory := h.Fresh().(*memory)
 				assert.True(h, isMemory, "Fresh builds a subject of the factory")
 				assert.True(h, h.Fresh() != h.Fresh(), "Fresh returns a fresh subject")
@@ -574,6 +582,7 @@ func TestHandle(t *testing.T) {
 			c := keepsEvery()
 			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
 				_ = pc.Draw(prop.String(), "key")
+				h.Engage()
 				if h.Context() != pc.Context() {
 					mismatched.Store(true)
 				}
@@ -597,7 +606,10 @@ func TestHandle(t *testing.T) {
 				t.Parallel()
 
 				c := keeps()
-				c.Apply = func(h *conform.Handle[Store]) { h.Cleanup(func() { ran.Store(true) }) }
+				c.Apply = func(h *conform.Handle[Store]) {
+					h.Engage()
+					h.Cleanup(func() { ran.Store(true) })
+				}
 				c.Run(t, newStore)
 			})
 		})
@@ -609,6 +621,7 @@ func TestHandle(t *testing.T) {
 			c := keepsEvery()
 			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
 				_ = pc.Draw(prop.String(), "key")
+				h.Engage()
 				cases.Add(1)
 				h.Cleanup(func() { cleanups.Add(1) })
 				expect.Equal(t, cleanups.Load(), cases.Load()-1, "the earlier cases have run their functions")
@@ -888,6 +901,7 @@ func TestHandle(t *testing.T) {
 
 				c := keeps()
 				c.Apply = func(h *conform.Handle[Store]) {
+					h.Engage()
 					dir = h.TempDir()
 					files.IsDir(h, dir, "TempDir returns a directory")
 				}
@@ -903,6 +917,7 @@ func TestHandle(t *testing.T) {
 			c := keepsEvery()
 			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
 				_ = pc.Draw(prop.String(), "key")
+				h.Engage()
 				dir := h.TempDir()
 				files.IsDir(h, dir, "TempDir returns a directory of the case")
 				mu.Lock()
@@ -962,6 +977,7 @@ func TestHandle(t *testing.T) {
 			c := keepsEvery()
 			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
 				_ = pc.Draw(prop.String(), "key")
+				h.Engage()
 				if h.Unwrap() != assert.TB(pc) {
 					mismatched.Store(true)
 				}

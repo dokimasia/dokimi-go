@@ -12,4 +12,9 @@
 // and passes the statement of the check as the message of each assertion.
 // A guard assertion, such as the success of an establishing write, sets no
 // reason.
+//
+// A probe calls Handle.Engage where the vacuous condition of its entry stops
+// being true, such as after an establishing write that succeeded. A probe
+// that ends before that call, such as after a write that failed, leaves its
+// check vacuous on the subject.
 package probe

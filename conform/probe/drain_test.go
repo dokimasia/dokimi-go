@@ -192,31 +192,31 @@ func TestDrain(t *testing.T) {
 		giveApply func(h *conform.Handle[*queue])
 	}{
 		{
-			name: "NoElementTwice passes a write that fails", giveProbe: spec.NoElementTwice,
+			name: "NoElementTwice is vacuous on a write that fails", giveProbe: spec.NoElementTwice,
 			giveApply: func(h *conform.Handle[*queue]) { probe.NoElementTwice(h, returning([]int{1, 1}), failing) },
 		},
 		{
-			name: "NoElementTwice passes a drain of one element", giveProbe: spec.NoElementTwice,
+			name: "NoElementTwice is vacuous on a drain of one element", giveProbe: spec.NoElementTwice,
 			giveApply: func(h *conform.Handle[*queue]) { probe.NoElementTwice(h, one, passes) },
 		},
 		{
-			name: "DrainsInOneOrder passes a first drain of one element", giveProbe: spec.DrainsInOneOrder,
+			name: "DrainsInOneOrder is vacuous on a first drain of one element", giveProbe: spec.DrainsInOneOrder,
 			giveApply: func(h *conform.Handle[*queue]) { probe.DrainsInOneOrder(h, failsSecond([]int{1}), passes) },
 		},
 		{
-			name: "DrainsInOneOrder passes a write that fails", giveProbe: spec.DrainsInOneOrder,
+			name: "DrainsInOneOrder is vacuous on a write that fails", giveProbe: spec.DrainsInOneOrder,
 			giveApply: func(h *conform.Handle[*queue]) { probe.DrainsInOneOrder(h, failsSecond([]int{1, 2}), failing) },
 		},
 		{
-			name: "GainsWhatWentIn passes a write that fails", giveProbe: spec.GainsWhatWentIn,
+			name: "GainsWhatWentIn is vacuous on a write that fails", giveProbe: spec.GainsWhatWentIn,
 			giveApply: func(h *conform.Handle[*queue]) { probe.GainsWhatWentIn(h, one, failing) },
 		},
 		{
-			name: "KeepsWhatWentIn passes a write that fails", giveProbe: spec.KeepsWhatWentIn,
+			name: "KeepsWhatWentIn is vacuous on a write that fails", giveProbe: spec.KeepsWhatWentIn,
 			giveApply: func(h *conform.Handle[*queue]) { probe.KeepsWhatWentIn(h, one, failing) },
 		},
 		{
-			name: "ReadsNeverRegress passes a first read that fails", giveProbe: spec.ReadsNeverRegress,
+			name: "ReadsNeverRegress is vacuous on a first read that fails", giveProbe: spec.ReadsNeverRegress,
 			giveApply: func(h *conform.Handle[*queue]) {
 				reads := 0
 				read := func(context.Context) (int, error) {
@@ -230,34 +230,34 @@ func TestDrain(t *testing.T) {
 			},
 		},
 		{
-			name: "ReadsNeverRegress passes a write that fails", giveProbe: spec.ReadsNeverRegress,
+			name: "ReadsNeverRegress is vacuous on a write that fails", giveProbe: spec.ReadsNeverRegress,
 			giveApply: func(h *conform.Handle[*queue]) {
 				probe.ReadsNeverRegress(h, failsSecond(1), failing, itself)
 			},
 		},
 		{
-			name: "WritesAdvance passes a first write that fails", giveProbe: spec.WritesAdvance,
+			name: "WritesAdvance is vacuous on a first write that fails", giveProbe: spec.WritesAdvance,
 			giveApply: func(h *conform.Handle[*queue]) {
 				probe.WritesAdvance(h, returning(1), failsFirst(0), itself)
 			},
 		},
 		{
-			name: "WritesAdvance passes a read that fails", giveProbe: spec.WritesAdvance,
+			name: "WritesAdvance is vacuous on a read that fails", giveProbe: spec.WritesAdvance,
 			giveApply: func(h *conform.Handle[*queue]) {
 				probe.WritesAdvance(h, refusing[int](), failsSecond(2), itself)
 			},
 		},
 		{
-			name:      "ReplaysInStampOrder passes an append that fails",
+			name:      "ReplaysInStampOrder is vacuous on an append that fails",
 			giveProbe: spec.ReplaysInStampOrder,
 			giveApply: func(h *conform.Handle[*queue]) { probe.ReplaysInStampOrder(h, failing, returning([]int{2, 1})) },
 		},
 		{
-			name: "ReplayGrows passes a first replay that fails", giveProbe: spec.ReplayGrows,
+			name: "ReplayGrows is vacuous on a first replay that fails", giveProbe: spec.ReplayGrows,
 			giveApply: func(h *conform.Handle[*queue]) { probe.ReplayGrows(h, passes, failsFirst([]int{1})) },
 		},
 		{
-			name: "ReplayGrows passes an append that fails", giveProbe: spec.ReplayGrows,
+			name: "ReplayGrows is vacuous on an append that fails", giveProbe: spec.ReplayGrows,
 			giveApply: func(h *conform.Handle[*queue]) { probe.ReplayGrows(h, failing, failsSecond([]int{1})) },
 		},
 	}
@@ -265,9 +265,7 @@ func TestDrain(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			conform.Check[*queue]{
-				ID: "Queue.Call/claim", Statement: "the probe holds", Probe: tt.giveProbe, Apply: tt.giveApply,
-			}.Run(t, queues(""))
+			vacuous(t, tt.giveProbe, tt.giveApply, queues(""), nil)
 		})
 	}
 

@@ -62,7 +62,7 @@ func TestRun(t *testing.T) {
 			var returned atomic.Bool
 			c := keeps()
 			c.Apply = func(h *conform.Handle[Store]) {
-				assert.True(h, returned.Load(), "the check runs once the test of the application returns")
+				assert.True(h, returned.Load(), h.Statement())
 			}
 			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
 			returned.Store(true)
@@ -286,6 +286,7 @@ func TestRun(t *testing.T) {
 					c.Claim, c.Probe, c.Reason = tt.giveClaim, tt.giveProbe, tt.giveReason
 					apply := c.Apply
 					c.Apply = func(h *conform.Handle[Store]) {
+						h.Engage()
 						h.Expect(tt.giveReason)
 						apply(h)
 					}
@@ -295,6 +296,56 @@ func TestRun(t *testing.T) {
 				})
 			}
 		}
+
+		t.Run("fails the test of a vacuous check", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{vacuous()}},
+					newStore)
+				return
+			}
+			out := childOutput(t)
+			assert.Contains(t, out, "--- FAIL: "+t.Name()+"/Get/misses-unknown-keys", "the test of the check fails")
+			assert.Contains(t, out, "Store.Get/misses-unknown-keys never engaged: no call fails",
+				"the failure names the vacuous condition")
+		})
+
+		t.Run("passes a vacuous check that the options excuse", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{vacuous()}},
+				newStore, conform.Excuse(storeGet.Check("misses-unknown-keys"), "every Get of the store succeeds"))
+		})
+
+		t.Run("passes a check that skips for a capability that the environment lacks", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{skipping()}},
+				newStore)
+		})
+
+		t.Run("logs the census of the application", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				fails := keeps()
+				fails.ID = storeGet.Check("keeps-another-value")
+				fails.Apply = func(h *conform.Handle[Store]) {
+					got, _ := h.Subject().Get("k")
+					assert.Equal(h, got, "w", h.Statement())
+				}
+				excused := keeps()
+				excused.ID = storePut.Check("keeps-the-value")
+				conform.Run(t, conform.Suite[Store]{
+					Declaration: "Store",
+					Checks:      []conform.Check[Store]{keeps(), keepsEvery(), vacuous(), fails, excused, skipping()},
+				}, newStore, conform.Excuse(excused.ID, "Put has no check of its own"))
+				return
+			}
+			assert.Contains(t, childOutput(t), "RunStoreSuite: checks 6 pass 2 vacuous 1 fail 1 excused 1 skipped 1\n",
+				"the application counts each result apart")
+		})
 
 		t.Run("runs a check of the suite inside its environment", func(t *testing.T) {
 			t.Parallel()

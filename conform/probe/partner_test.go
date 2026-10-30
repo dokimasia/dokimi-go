@@ -569,35 +569,35 @@ func TestPartner(t *testing.T) {
 		giveApply func(h *conform.Handle[*store])
 	}{
 		{
-			name: "WriteThenRead passes a write that fails", giveProbe: spec.WriteThenRead,
+			name: "WriteThenRead is vacuous on a write that fails", giveProbe: spec.WriteThenRead,
 			giveApply: func(h *conform.Handle[*store]) { probe.WriteThenRead(h, reader(h, 1), refusing[int]()) },
 		},
 		{
-			name: "PinnedAcrossWrite passes a first read that fails", giveProbe: spec.PinnedAcrossWrite,
+			name: "PinnedAcrossWrite is vacuous on a first read that fails", giveProbe: spec.PinnedAcrossWrite,
 			giveApply: func(h *conform.Handle[*store]) { probe.PinnedAcrossWrite(h, refusing[int](), passes) },
 		},
 		{
-			name: "PinnedAcrossWrite passes a write that fails", giveProbe: spec.PinnedAcrossWrite,
+			name: "PinnedAcrossWrite is vacuous on a write that fails", giveProbe: spec.PinnedAcrossWrite,
 			giveApply: func(h *conform.Handle[*store]) { probe.PinnedAcrossWrite(h, failsSecond(1), fails) },
 		},
 		{
-			name: "SecondWriteReplaces passes a first write that fails", giveProbe: spec.SecondWriteReplaces,
+			name: "SecondWriteReplaces is vacuous on a first write that fails", giveProbe: spec.SecondWriteReplaces,
 			giveApply: func(h *conform.Handle[*store]) { probe.SecondWriteReplaces(h, failsFirst(1), reader(h, 3)) },
 		},
 		{
-			name: "SecondWriteReplaces passes a second write that fails", giveProbe: spec.SecondWriteReplaces,
+			name: "SecondWriteReplaces is vacuous on a second write that fails", giveProbe: spec.SecondWriteReplaces,
 			giveApply: func(h *conform.Handle[*store]) { probe.SecondWriteReplaces(h, failsSecond(1), reader(h, 3)) },
 		},
 		{
-			name: "KeepsPartitionsApart passes a first write that fails", giveProbe: spec.KeepsPartitionsApart,
+			name: "KeepsPartitionsApart is vacuous on a first write that fails", giveProbe: spec.KeepsPartitionsApart,
 			giveApply: func(h *conform.Handle[*store]) { probe.KeepsPartitionsApart(h, failsFirst(1), reader(h, 3)) },
 		},
 		{
-			name: "KeepsPartitionsApart passes a second write that fails", giveProbe: spec.KeepsPartitionsApart,
+			name: "KeepsPartitionsApart is vacuous on a second write that fails", giveProbe: spec.KeepsPartitionsApart,
 			giveApply: func(h *conform.Handle[*store]) { probe.KeepsPartitionsApart(h, failsSecond(1), reader(h, 3)) },
 		},
 		{
-			name: "RoundTrips passes a forward call that fails", giveProbe: spec.RoundTrips,
+			name: "RoundTrips is vacuous on a forward call that fails", giveProbe: spec.RoundTrips,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.RoundTrips(h, refusing[probe.Pair[int, int]](), func(context.Context, int) (int, error) {
 					return 0, errOther
@@ -605,31 +605,31 @@ func TestPartner(t *testing.T) {
 			},
 		},
 		{
-			name: "WorksAfter passes a predecessor that fails", giveProbe: spec.WorksAfter,
+			name: "WorksAfter is vacuous on a predecessor that fails", giveProbe: spec.WorksAfter,
 			giveApply: func(h *conform.Handle[*store]) { probe.WorksAfter(h, fails, fails) },
 		},
 		{
-			name: "ReportsSealed passes a close that fails", giveProbe: spec.ReportsSealed,
+			name: "ReportsSealed is vacuous on a close that fails", giveProbe: spec.ReportsSealed,
 			giveApply: func(h *conform.Handle[*store]) { probe.ReportsSealed(h, passes, fails, errClosed) },
 		},
 		{
-			name: "SealsAfterClose passes an open that fails", giveProbe: spec.SealsAfterClose,
+			name: "SealsAfterClose is vacuous on an open that fails", giveProbe: spec.SealsAfterClose,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.SealsAfterClose(h, refusing[int](), closeHandle, closeHandle, errClosed)
 			},
 		},
 		{
-			name: "SealsAfterClose passes a close that fails", giveProbe: spec.SealsAfterClose,
+			name: "SealsAfterClose is vacuous on a close that fails", giveProbe: spec.SealsAfterClose,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.SealsAfterClose(h, returning(1), failHandle, closeHandle, errClosed)
 			},
 		},
 		{
-			name: "MovesObservation passes a call that fails", giveProbe: spec.MovesObservation,
+			name: "MovesObservation is vacuous on a call that fails", giveProbe: spec.MovesObservation,
 			giveApply: func(h *conform.Handle[*store]) { probe.MovesObservation(h, fails, version(h)) },
 		},
 		{
-			name: "EachCallCompounds passes a second call that fails", giveProbe: spec.EachCallCompounds,
+			name: "EachCallCompounds is vacuous on a second call that fails", giveProbe: spec.EachCallCompounds,
 			giveApply: func(h *conform.Handle[*store]) {
 				call := failsSecond(0)
 				probe.EachCallCompounds(h, func(ctx context.Context) error {
@@ -641,19 +641,19 @@ func TestPartner(t *testing.T) {
 			},
 		},
 		{
-			name: "SettlesThenObserves passes a call that fails", giveProbe: spec.SettlesThenObserves,
+			name: "SettlesThenObserves is vacuous on a call that fails", giveProbe: spec.SettlesThenObserves,
 			giveApply: func(h *conform.Handle[*store]) { probe.SettlesThenObserves(h, fails, passes, version(h)) },
 		},
 		{
-			name: "SettlesThenObserves passes a settle that fails", giveProbe: spec.SettlesThenObserves,
+			name: "SettlesThenObserves is vacuous on a settle that fails", giveProbe: spec.SettlesThenObserves,
 			giveApply: func(h *conform.Handle[*store]) { probe.SettlesThenObserves(h, passes, fails, version(h)) },
 		},
 		{
-			name: "DetectsTamper passes a call that fails", giveProbe: spec.DetectsTamper,
+			name: "DetectsTamper is vacuous on a call that fails", giveProbe: spec.DetectsTamper,
 			giveApply: func(h *conform.Handle[*store]) { probe.DetectsTamper(h, fails, passes, passes) },
 		},
 		{
-			name: "DetectsTamper passes a first verify that fails", giveProbe: spec.DetectsTamper,
+			name: "DetectsTamper is vacuous on a first verify that fails", giveProbe: spec.DetectsTamper,
 			giveApply: func(h *conform.Handle[*store]) {
 				tampered := false
 				verify := func(context.Context) error {
@@ -670,30 +670,31 @@ func TestPartner(t *testing.T) {
 			},
 		},
 		{
-			name: "ConvergesAfter passes a begin that fails", giveProbe: spec.ConvergesAfter,
+			name: "ConvergesAfter is vacuous on a begin that fails", giveProbe: spec.ConvergesAfter,
 			giveApply: func(h *conform.Handle[*store]) { probe.ConvergesAfter(h, fails, fails, 2) },
 		},
 		{
-			name: "RunsTheHook passes a register that fails", giveProbe: spec.RunsTheHook,
+			name: "RunsTheHook is vacuous on a register that fails", giveProbe: spec.RunsTheHook,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.RunsTheHook(h, passes, func(context.Context, func()) error { return errOther })
 			},
 		},
 		{
-			name: "RunsTheHook passes a call that fails", giveProbe: spec.RunsTheHook,
+			name: "RunsTheHook is vacuous on a call that fails", giveProbe: spec.RunsTheHook,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.RunsTheHook(h, fails, func(context.Context, func()) error { return nil })
 			},
 		},
 		{
-			name: "RefusesTheInvalid passes a validator that accepts the value", giveProbe: spec.RefusesTheInvalid,
+			name:      "RefusesTheInvalid is vacuous on a validator that accepts the value",
+			giveProbe: spec.RefusesTheInvalid,
 			giveApply: func(h *conform.Handle[*store]) {
 				accept := func(context.Context, int) error { return nil }
 				probe.RefusesTheInvalid(h, accept, accept, -1)
 			},
 		},
 		{
-			name:      "RefusesWhatThePredicateRejects passes a first write that fails",
+			name:      "RefusesWhatThePredicateRejects is vacuous on a first write that fails",
 			giveProbe: spec.RefusesWhatThePredicateRejects,
 			giveApply: func(h *conform.Handle[*store]) {
 				calls := 0
@@ -708,66 +709,69 @@ func TestPartner(t *testing.T) {
 			},
 		},
 		{
-			name:      "RefusesWhatThePredicateRejects passes a predicate that accepts the value",
+			name:      "RefusesWhatThePredicateRejects is vacuous on a predicate that accepts the value",
 			giveProbe: spec.RefusesWhatThePredicateRejects,
 			giveApply: func(h *conform.Handle[*store]) { probe.RefusesWhatThePredicateRejects(h, passes, returning(true)) },
 		},
 		{
-			name:      "RefusesWhatThePredicateRejects passes a predicate that fails",
+			name:      "RefusesWhatThePredicateRejects is vacuous on a predicate that fails",
 			giveProbe: spec.RefusesWhatThePredicateRejects,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.RefusesWhatThePredicateRejects(h, passes, refusing[bool]())
 			},
 		},
 		{
-			name: "ResignsLeadership passes a campaign that fails", giveProbe: spec.ResignsLeadership,
+			name: "ResignsLeadership is vacuous on a campaign that fails", giveProbe: spec.ResignsLeadership,
 			giveApply: func(h *conform.Handle[*store]) { probe.ResignsLeadership(h, fails, passes, returning(true)) },
 		},
 		{
-			name: "ResignsLeadership passes a resign that fails", giveProbe: spec.ResignsLeadership,
+			name: "ResignsLeadership is vacuous on a resign that fails", giveProbe: spec.ResignsLeadership,
 			giveApply: func(h *conform.Handle[*store]) { probe.ResignsLeadership(h, passes, fails, returning(true)) },
 		},
 		{
-			name: "RollsBackOnFailure passes a write in the scope that fails", giveProbe: spec.RollsBackOnFailure,
+			name:      "RollsBackOnFailure is vacuous on a write in the scope that fails",
+			giveProbe: spec.RollsBackOnFailure,
 			giveApply: func(h *conform.Handle[*store]) {
 				scope := func(ctx context.Context, body probe.Act) error { return body(ctx) }
 				probe.RollsBackOnFailure(h, scope, fails, passes, errMiss)
 			},
 		},
 		{
-			name: "RollsBackOnFailure passes a scope that does not run its body", giveProbe: spec.RollsBackOnFailure,
+			name:      "RollsBackOnFailure is vacuous on a scope that does not run its body",
+			giveProbe: spec.RollsBackOnFailure,
 			giveApply: func(h *conform.Handle[*store]) {
 				scope := func(context.Context, probe.Act) error { return nil }
 				probe.RollsBackOnFailure(h, scope, passes, passes, errMiss)
 			},
 		},
 		{
-			name: "AgreesWithTheBacking passes a put that fails", giveProbe: spec.AgreesWithTheBacking,
+			name: "AgreesWithTheBacking is vacuous on a put that fails", giveProbe: spec.AgreesWithTheBacking,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.AgreesWithTheBacking(h, returning(1), returning(2), fails)
 			},
 		},
 		{
-			name: "AgreesWithTheBacking passes a backing that fails", giveProbe: spec.AgreesWithTheBacking,
+			name: "AgreesWithTheBacking is vacuous on a backing that fails", giveProbe: spec.AgreesWithTheBacking,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.AgreesWithTheBacking(h, returning(1), refusing[int](), passes)
 			},
 		},
 		{
-			name: "TakesBackWhatItLent passes a get that fails", giveProbe: spec.TakesBackWhatItLent,
+			name: "TakesBackWhatItLent is vacuous on a get that fails", giveProbe: spec.TakesBackWhatItLent,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.TakesBackWhatItLent(h, refusing[int](), failHandle)
 			},
 		},
 		{
-			name: "ContinuesFromTheCursor passes a first page that fails", giveProbe: spec.ContinuesFromTheCursor,
+			name:      "ContinuesFromTheCursor is vacuous on a first page that fails",
+			giveProbe: spec.ContinuesFromTheCursor,
 			giveApply: func(h *conform.Handle[*store]) {
 				read := func(context.Context, int) (page, error) { return page{next: 1}, errOther }
 				probe.ContinuesFromTheCursor(h, read, func(p page) int { return p.next })
 			},
 		},
 		{
-			name:      "ContinuesFromTheCursor passes a first page without a cursor",
+			name:      "ContinuesFromTheCursor is vacuous on a first page without a cursor",
 			giveProbe: spec.ContinuesFromTheCursor,
 			giveApply: func(h *conform.Handle[*store]) {
 				read := func(context.Context, int) (page, error) { return page{}, nil }
@@ -775,31 +779,22 @@ func TestPartner(t *testing.T) {
 			},
 		},
 		{
-			name: "CompensatesTheStep passes a step that fails", giveProbe: spec.CompensatesTheStep,
+			name: "CompensatesTheStep is vacuous on a step that fails", giveProbe: spec.CompensatesTheStep,
 			giveApply: func(h *conform.Handle[*store]) { probe.CompensatesTheStep(h, fails, fails) },
 		},
 		{
-			name:      "RefusedLeavesNothing passes a call that accepts the refused value",
+			name:      "RefusedLeavesNothing is vacuous on a call that accepts the refused value",
 			giveProbe: spec.RefusedLeavesNothing,
 			giveApply: func(h *conform.Handle[*store]) {
 				probe.RefusedLeavesNothing(h, closeHandle, returning(1), -1, 0)
 			},
 		},
 		{
-			name:      "RefusedLeavesNothing passes a reader that fails beside a value",
-			giveProbe: spec.RefusedLeavesNothing,
-			giveApply: func(h *conform.Handle[*store]) {
-				refuses := func(context.Context, int) error { return errOther }
-				reads := func(context.Context) (int, error) { return 1, errOther }
-				probe.RefusedLeavesNothing(h, refuses, reads, -1, 0)
-			},
-		},
-		{
-			name: "RemovesOnDelete passes a put that fails", giveProbe: spec.RemovesOnDelete,
+			name: "RemovesOnDelete is vacuous on a put that fails", giveProbe: spec.RemovesOnDelete,
 			giveApply: func(h *conform.Handle[*store]) { probe.RemovesOnDelete(h, passes, fails, passes, errMiss) },
 		},
 		{
-			name: "RemovesOnDelete passes a delete that fails", giveProbe: spec.RemovesOnDelete,
+			name: "RemovesOnDelete is vacuous on a delete that fails", giveProbe: spec.RemovesOnDelete,
 			giveApply: func(h *conform.Handle[*store]) { probe.RemovesOnDelete(h, fails, passes, passes, errMiss) },
 		},
 	}
@@ -807,11 +802,22 @@ func TestPartner(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			conform.Check[*store]{
-				ID: "Store.Call/claim", Statement: "the probe holds", Probe: tt.giveProbe, Apply: tt.giveApply,
-			}.Run(t, stores(""))
+			vacuous(t, tt.giveProbe, tt.giveApply, stores(""), nil)
 		})
 	}
+
+	t.Run("RefusedLeavesNothing passes a reader that fails beside a value", func(t *testing.T) {
+		t.Parallel()
+
+		conform.Check[*store]{
+			ID: "Store.Call/claim", Statement: "the probe holds", Probe: spec.RefusedLeavesNothing,
+			Apply: func(h *conform.Handle[*store]) {
+				refuses := func(context.Context, int) error { return errOther }
+				reads := func(context.Context) (int, error) { return 1, errOther }
+				probe.RefusedLeavesNothing(h, refuses, reads, -1, 0)
+			},
+		}.Run(t, stores(""))
+	})
 
 	guards := []struct {
 		name      string

@@ -161,13 +161,15 @@ func (s invents) Get(key string) (string, bool) {
 }
 
 // derivedKeeps returns the check of keeps as a derived check of the claim
-// read-after-write. It sets the reason unobserved-write before its decisive
-// assertion, and its planted defect drops each Put of a fresh subject.
+// read-after-write. It engages its claim and sets the reason unobserved-write
+// before its decisive assertion, and its planted defect drops each Put of a
+// fresh subject.
 func derivedKeeps() conform.Check[Store] {
 	c := keeps()
 	c.Claim, c.Probe, c.Reason = spec.ReadAfterWrite, spec.WriteThenRead, spec.UnobservedWrite
 	apply := c.Apply
 	c.Apply = func(h *conform.Handle[Store]) {
+		h.Engage()
 		h.Expect(spec.UnobservedWrite)
 		apply(h)
 	}
@@ -176,17 +178,39 @@ func derivedKeeps() conform.Check[Store] {
 }
 
 // derivedMisses returns the check of misses as a derived check of the claim
-// zero-on-error. It sets the reason value-beside-error before its decisive
-// assertion, and its planted defect invents a value over a fresh subject.
+// zero-on-error. It engages its claim and sets the reason value-beside-error
+// before its decisive assertion, and its planted defect invents a value over a
+// fresh subject.
 func derivedMisses() conform.Check[Store] {
 	c := misses()
 	c.Claim, c.Probe, c.Reason = spec.ZeroOnError, spec.ZeroBesideError, spec.ValueBesideError
 	apply := c.Apply
 	c.Apply = func(h *conform.Handle[Store]) {
+		h.Engage()
 		h.Expect(spec.ValueBesideError)
 		apply(h)
 	}
 	c.Defect = func(h *conform.Handle[Store]) Store { return invents{h.Fresh()} }
+	return c
+}
+
+// vacuous returns the check of derivedMisses without its call of Engage. It
+// passes on a store in memory and never engages its claim.
+func vacuous() conform.Check[Store] {
+	c := derivedMisses()
+	c.Apply = func(h *conform.Handle[Store]) {
+		h.Expect(spec.ValueBesideError)
+		misses().Apply(h)
+	}
+	return c
+}
+
+// skipping returns a check whose function Apply skips it, as a factory skips
+// a check where the environment of the run lacks a capability.
+func skipping() conform.Check[Store] {
+	c := keeps()
+	c.ID = storeGet.Check("needs-direct-io")
+	c.Apply = func(h *conform.Handle[Store]) { h.Skipf("the file system has no direct I/O") }
 	return c
 }
 
@@ -195,7 +219,8 @@ const keepsExactly = "Get returns the value that Put stored and nothing under an
 
 // derivedExact returns a derived check that Get returns the value that Put
 // stored and finds no value under another key, whose law implies the law of
-// derivedMisses. Its planted defect drops each Put of a fresh subject.
+// derivedMisses. It engages its claim, and its planted defect drops each Put
+// of a fresh subject.
 func derivedExact() conform.Check[Store] {
 	return conform.Check[Store]{
 		ID:        storeGet.Check("keeps-exactly"),
@@ -203,6 +228,7 @@ func derivedExact() conform.Check[Store] {
 		Claim:     spec.ReadAfterWrite, Probe: spec.WriteThenRead, Reason: spec.UnobservedWrite,
 		Entails: []conform.ID[Store]{storeGet.Check("misses-unknown-keys")},
 		Apply: func(h *conform.Handle[Store]) {
+			h.Engage()
 			h.Expect(spec.UnobservedWrite)
 			s := h.Subject()
 			s.Put("k", "v")
@@ -555,6 +581,74 @@ func application(apply func(t conform.T)) *applying {
 	}()
 	<-done
 	return a
+}
+
+// record is the part of a suite record that the specs read.
+type record struct {
+	Suite struct {
+		Language    string `json:"language"`
+		Package     string `json:"package"`
+		Declaration string `json:"declaration"`
+	} `json:"suite"`
+	Generator struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	} `json:"generator"`
+	Runtime struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	} `json:"runtime"`
+	Spec        string `json:"spec"`
+	Seed        string `json:"seed"`
+	Application string `json:"application"`
+	Subject     string `json:"subject"`
+	Ended       string `json:"ended"`
+	Checks      []struct {
+		Failure        map[string]any   `json:"failure"`
+		Identity       string           `json:"identity"`
+		Key            string           `json:"key"`
+		Claim          string           `json:"claim"`
+		Result         string           `json:"result"`
+		Other          string           `json:"other"`
+		Why            string           `json:"why"`
+		Seed           string           `json:"seed"`
+		Reason         string           `json:"reason"`
+		Counterexample []map[string]any `json:"counterexample"`
+		Cases          int              `json:"cases"`
+		Shallow        bool             `json:"shallow"`
+		Authored       bool             `json:"authored"`
+	} `json:"checks"`
+	Refusals  []map[string]string `json:"refusals"`
+	Unclaimed []map[string]string `json:"unclaimed"`
+}
+
+// attrLine matches a line of an attribute of a suite record in the output of
+// go test -v: the name of the test, the key and the value.
+var attrLine = regexp.MustCompile(`=== ATTR  (\S+) (dokimi\.suite\.\d+) (.*)$`)
+
+// recordsOf returns the suite records in the output of a test binary under
+// -test.v, in the order of their first attributes. It joins the values of the
+// attributes of one key of one test.
+func recordsOf(t *testing.T, out string) []record {
+	t.Helper()
+	var order []string
+	values := map[string]string{}
+	for line := range strings.Lines(out) {
+		m := attrLine.FindStringSubmatch(strings.TrimRight(line, "\n"))
+		if m == nil {
+			continue
+		}
+		key := m[1] + " " + m[2]
+		if _, seen := values[key]; !seen {
+			order = append(order, key)
+		}
+		values[key] += m[3]
+	}
+	records := make([]record, len(order))
+	for i, key := range order {
+		assert.NoError(t, json.Unmarshal([]byte(values[key]), &records[i]), "the suite record is JSON")
+	}
+	return records
 }
 
 // metaWritten writes the coverage meta-data of the test binary once, into the

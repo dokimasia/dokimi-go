@@ -50,9 +50,11 @@ type Check[S any] struct {
 	// Options returns the options of the property run of the check in an
 	// application, such as the shares of prop.Require. The application calls
 	// it before the run, with a handle of its own whose subject is a fresh
-	// subject of the factory, and passes the options after its own.
-	// Falsification and fuzz targets leave the options out. A check with
-	// Options has a function Property.
+	// subject of the factory, and passes the options after its own. The
+	// application passes its own prop.OnResult after the options, and its own
+	// prop.Around for a check with Around. An OnResult or an Around of Options
+	// therefore does not apply. Falsification and fuzz targets leave the
+	// options out. A check with Options has a function Property.
 	Options func(h *Handle[S]) []prop.Option
 
 	// Around runs each run of the check inside an environment, such as a
@@ -87,7 +89,8 @@ type Check[S any] struct {
 	Claim spec.ClaimID
 
 	// Probe is the probe of the claim, whose reasons [Handle.Expect] accepts,
-	// and empty for a check of the consumer.
+	// and empty for a check of the consumer. A check with a probe engages its
+	// claim through [Handle.Engage] alone.
 	Probe spec.ProbeID
 
 	// Reason is the reason code of the planted defect of the check, and empty
@@ -117,13 +120,19 @@ type Check[S any] struct {
 	// Shallow reports that the machineries of the claim do not include the
 	// depth of its law.
 	Shallow bool
+
+	// ceiling reports that the check is a ceiling of a budget, which neither
+	// the consumer nor a claim states.
+	ceiling bool
 }
 
 // Run applies the check on tb to a subject that newSubject builds on the
 // handle of the check. The doors of the handle and a property run read the
 // options in opts. A derived check is first falsified on its planted defect,
 // whose [Handle.Fresh] returns a subject of newSubject, and Run applies it to
-// the subject once the defect fails it with the reason of its claim. Under
+// the subject once the defect fails it with the reason of its claim. Run fails
+// tb for a check that passes without engaging its claim, as [Handle.Engage]
+// states, and names the vacuous condition of the check. Under
 // [Isolate] the checks that [With] adds are the other checks of the isolation
 // and the edges of a derived check. Run ignores them otherwise, and ignores the
 // excusals that the options add. Run ends tb with a fault that wraps
@@ -137,17 +146,20 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 		return
 	}
 	cfg.fresh = newSubject
-	c.apply(tb, newSubject, cfg, cfg.checks)
+	c.apply(tb, newSubject, cfg, cfg.checks, new(verdict), new(verdict))
 }
 
-// apply falsifies a derived check on its planted defect against others, and
-// applies the check to a subject of source once the falsification proves it.
-func (c Check[S]) apply(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S], others []Check[S]) {
+// apply falsifies a derived check on its planted defect against others, with
+// the result in falsified, and applies the check to a subject of source once
+// the falsification proves it, with the result in judged.
+func (c Check[S]) apply(
+	tb assert.TB, source func(h *Handle[S]) S, cfg *config[S], others []Check[S], falsified, judged *verdict,
+) {
 	tb.Helper()
-	if c.Claim != "" && !c.falsify(tb, cfg, others) {
+	if c.Claim != "" && !c.falsify(tb, cfg, others, falsified) {
 		return
 	}
-	c.run(tb, source, cfg)
+	c.run(tb, source, cfg, judged)
 }
 
 // Falsify applies the check on tb to its planted defect. It fails tb unless
@@ -161,15 +173,22 @@ func (c Check[S]) apply(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S
 func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 	tb.Helper()
 	cfg := configure(nil, opts)
-	c.falsify(tb, cfg, cfg.checks)
+	c.falsify(tb, cfg, cfg.checks, new(verdict))
 }
 
-// firsts are the first failures that the handles of one run of a check keep:
-// the message of the first failure outside an assertion, and the reason that
-// the probe set for the first failed assertion.
+// firsts is the state that the handles of one run of a check share: the
+// message of the first failure outside an assertion, the first failed
+// assertion with the reason that the probe set for it, the reason of the
+// first skip, the result of a property run, and whether a handle engaged the
+// claim of the check. The cases of a property check share it, so the check
+// engages when one of its cases engages.
 type firsts struct {
 	message atomic.Pointer[string]
+	failure atomic.Pointer[assert.Failure]
 	reason  atomic.Pointer[spec.ReasonID]
+	skip    atomic.Pointer[string]
+	result  atomic.Pointer[prop.Result]
+	engaged atomic.Bool
 }
 
 // run applies the check on tb to a subject of source, under the settings of
@@ -178,7 +197,12 @@ type firsts struct {
 // application. A check with Around runs inside its
 // environment, and a failure of the environment fails tb. A check with Apply
 // builds its handle on the test that Around hands run.
-func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S]) {
+//
+// A check that passes without engaging its claim is vacuous, and run fails tb
+// with the vacuous condition of the check and both remedies. run sets the
+// result vacuous in v, and the first failure and its reason of a check that
+// failed. The test of the check sets every other result.
+func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S], v *verdict) {
 	tb.Helper()
 	env, ok := c.environment(tb)
 	if !ok {
@@ -193,6 +217,10 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S])
 		opts = append(opts, prop.Around(env.wrap))
 	}
 	kept := new(firsts)
+	defer func() {
+		v.keep(kept)
+		v.why = skipReason(kept)
+	}()
 	if env == nil || c.Property != nil {
 		c.exercise(tb, source, cfg, opts, kept)
 	} else if misuse := env.inside(func(t *testing.T) {
@@ -204,7 +232,31 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S])
 	}
 	if failure, failed := env.failure(); failed {
 		tb.Errorf("the environment of %s fails: %s", c.ID, failure)
+		return
 	}
+	if kept.engaged.Load() || kept.failed(tb) {
+		return
+	}
+	v.result = resultVacuous
+	tb.Errorf("%s never engaged: %s. Pass a subject that engages the check, or excuse the check with the "+
+		"directive excuse or conform.Excuse and a reason.", c.ID, c.vacuity())
+}
+
+// failed reports whether the run of a check on tb failed: tb failed, or a
+// handle kept a failure.
+func (f *firsts) failed(tb assert.TB) bool {
+	seat, has := tb.(interface{ Failed() bool })
+	return has && seat.Failed() || f.reason.Load() != nil || f.message.Load() != nil
+}
+
+// vacuity returns the condition under which the check does not exercise its
+// claim. It is the vacuous condition of the probe of the check. A check
+// without a probe is vacuous when no assertion passes its statement.
+func (c *Check[S]) vacuity() string {
+	if probe, _ := spec.ProbeOf(c.Probe); probe.Vacuous != "" {
+		return strings.ToLower(probe.Vacuous[:1]) + strings.TrimSuffix(probe.Vacuous[1:], ".")
+	}
+	return "no assertion ran with the statement of the check as its message"
 }
 
 // exercise applies the check on seat to subjects of source. A check with
@@ -212,7 +264,7 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S])
 // check with Property runs the property engine on seat with opts, and each
 // case has a handle of its own, which registers its cleanups with the case.
 // Each handle keeps the message of the first failure outside an assertion in
-// kept.
+// kept, and the run keeps its result there.
 func (c *Check[S]) exercise(
 	seat assert.TB, source func(h *Handle[S]) S, cfg *config[S], opts []prop.Option, kept *firsts,
 ) {
@@ -223,7 +275,7 @@ func (c *Check[S]) exercise(
 	}
 	prop.ForAll(seat, c.Statement, func(pc *prop.Case) {
 		c.Property(newHandle(pc, c, source, cfg, kept), pc)
-	}, opts...)
+	}, append(slices.Clip(opts), prop.OnResult(func(r prop.Result) { kept.result.Store(&r) }))...)
 }
 
 // falsify applies the check on tb to its planted defect, and reports whether
@@ -242,7 +294,10 @@ func (c *Check[S]) exercise(
 // Rejects on the test that Around hands run, and a skip of that test skips
 // the test of the environment. A failure of the environment fails tb when no
 // assertion of the check failed before it.
-func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool {
+//
+// falsify sets the result of falsification in v before it fails tb, with the
+// reason that the probe set and the other check of an isolation or an edge.
+func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S], v *verdict) bool {
 	tb.Helper()
 	env, ok := c.environment(tb)
 	if !ok {
@@ -250,6 +305,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 	}
 	cfg = cfg.onDefect(c.Doors)
 	kept := new(firsts)
+	defer func() { v.why = skipReason(kept) }()
 	opts := cfg.hermetic(c.ID)
 	if env != nil {
 		opts = append(opts, prop.Around(env.wrap))
@@ -260,8 +316,16 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 	}
 	rejects := func(seat assert.TB) []assert.Failure {
 		seat.Helper()
-		return assert.Rejects(seat, contract, func(seat assert.TB) {
-			c.exercise(seat, c.Defect, cfg, opts, kept)
+		return assert.Rejects(seat, contract, func(defect assert.TB) {
+			c.exercise(defect, c.Defect, cfg, opts, kept)
+			switch {
+			case kept.failed(defect):
+			case kept.engaged.Load():
+				v.set(resultPassed, kept)
+			default:
+				v.set(resultVacuous, kept)
+				seat.Errorf("the planted defect of %s never engaged the check: %s.", c.ID, c.vacuity())
+			}
 		})
 	}
 	var failures []assert.Failure
@@ -284,6 +348,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 		}
 	}
 	if len(failures) == 0 {
+		v.set(resultWrongReason, kept)
 		if message := kept.message.Load(); message != nil {
 			c.outside(tb, *message)
 			return false
@@ -299,6 +364,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 	}
 	switch {
 	case first.Assertion == "":
+		v.set(resultWrongReason, kept)
 		c.outside(tb, first.Contract)
 		return false
 	case c.Claim != "":
@@ -307,6 +373,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 			reason = *set
 		}
 		if reason != c.Reason {
+			v.set(resultWrongReason, kept)
 			c.wrongReason(tb, reason)
 			return false
 		}
@@ -315,9 +382,11 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 		// waits past the budget on every call, so a check that calls its
 		// callable fails on it.
 		if !cfg.isolate || c.Reason == spec.Panicked || c.Reason == spec.OverranBudget {
+			v.set(resultProven, kept)
 			return true
 		}
 	case first.Contract != c.Statement:
+		v.set(resultWrongReason, kept)
 		tb.Fatalf("the planted defect of %s fails the assertion %s with the message %q. "+
 			"Falsification needs a failure of the assertion whose message is the statement %q. "+
 			"Pass h.Statement() as the message of the decisive assertion, "+
@@ -325,7 +394,20 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 			c.ID, first.Assertion, first.Contract, c.Statement)
 		return false
 	}
-	return c.isolate(tb, cfg, others) && c.edges(tb, cfg, others, env)
+	if !c.isolate(tb, cfg, others, v, kept) || !c.edges(tb, cfg, others, env, v, kept) {
+		return false
+	}
+	v.set(resultProven, kept)
+	return true
+}
+
+// skipReason returns the reason of the first skip of a run, and the empty
+// string for a run that did not skip through a handle.
+func skipReason(kept *firsts) string {
+	if why := kept.skip.Load(); why != nil {
+		return *why
+	}
+	return ""
 }
 
 // wrongReason fails tb for a planted defect of a derived check that fails the
@@ -361,11 +443,13 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 // only when no other check fails on it. The failure lists each check that
 // fails, with its first assertion or its panic. A check that skips or ends
 // with a fault on the defect has no verdict on it. A check with Around runs
-// inside its environment on the test of tb.
-func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) bool {
+// inside its environment on the test of tb. isolate sets the result
+// not-isolated in v with the first check that fails, before it fails tb.
+func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *verdict, kept *firsts) bool {
 	tb.Helper()
 	defect := reflect.ValueOf(c.Defect).Pointer()
 	var failed []string
+	var first ID[S]
 	for i := range others {
 		o := &others[i]
 		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect ||
@@ -378,10 +462,15 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 			return false
 		}
 		if verdict, fails := o.against(c.Defect, cfg, env); fails {
+			if failed == nil {
+				first = o.ID
+			}
 			failed = append(failed, verdict)
 		}
 	}
 	if len(failed) > 0 {
+		v.set(resultNotIsolated, kept)
+		v.other = string(first)
 		tb.Fatalf("the planted defect %s of %s also fails these checks:\n\t%s\n"+
 			"A planted defect fails the check that it proves and no other. Change the defect so that it "+
 			"passes these checks, or give each check that it fails the same defect.",
@@ -397,10 +486,21 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S]) bool 
 // planted defect of c, because the two checks are equivalent otherwise. edges
 // fails tb with each edge that does not hold. It ends tb with a fault that
 // wraps [ErrConfig] for an edge to a check that others lack. env is the
-// environment of c on tb.
-func (c Check[S]) edges(tb assert.TB, cfg *config[S], others []Check[S], env *environment) bool {
+// environment of c on tb. edges sets the result not-deeper or equivalent of
+// the first edge that does not hold in v, with its shallower check, before it
+// fails tb.
+func (c Check[S]) edges(
+	tb assert.TB, cfg *config[S], others []Check[S], env *environment, v *verdict, kept *firsts,
+) bool {
 	tb.Helper()
 	var failed []string
+	fail := func(result string, other ID[S], message string) {
+		if failed == nil {
+			v.set(result, kept)
+			v.other = string(other)
+		}
+		failed = append(failed, message)
+	}
 	for _, id := range c.Entails {
 		at := slices.IndexFunc(others, func(o Check[S]) bool { return o.ID == id })
 		if at < 0 {
@@ -409,16 +509,16 @@ func (c Check[S]) edges(tb assert.TB, cfg *config[S], others []Check[S], env *en
 		}
 		s := &others[at]
 		if _, fails := c.against(s.Defect, cfg, env); !fails {
-			failed = append(failed, fmt.Sprintf("%s passes on the planted defect of %s, which it entails, so it is "+
-				"not deeper", c.ID, s.ID))
+			fail(resultNotDeeper, s.ID, fmt.Sprintf("%s passes on the planted defect of %s, which it entails, so it "+
+				"is not deeper", c.ID, s.ID))
 		}
 		shallower, ok := s.environment(tb)
 		if !ok {
 			return false
 		}
 		if _, fails := s.against(c.Defect, cfg, shallower); fails {
-			failed = append(failed, fmt.Sprintf("%s fails on the planted defect of %s, which entails it, so the two "+
-				"checks are equivalent", s.ID, c.ID))
+			fail(resultEquivalent, s.ID, fmt.Sprintf("%s fails on the planted defect of %s, which entails it, so "+
+				"the two checks are equivalent", s.ID, c.ID))
 		}
 	}
 	if len(failed) > 0 {

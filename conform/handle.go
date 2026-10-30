@@ -94,8 +94,8 @@ func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
 // Handle is the handle of one check, or of one case of a property check. It
 // is the seat of the assertions of the check, it builds the subjects of the
 // check, and it supplies the machinery of the check. It implements
-// [assert.TB], [assert.Reporter] and [assert.Clocked], and its method Unwrap
-// returns the seat of the check.
+// [assert.TB], [assert.Reporter], [assert.Clocked] and [assert.Observer], and
+// its method Unwrap returns the seat of the check.
 //
 // A failure on the handle fails the seat of the check. The seat is the test
 // of the check under [Run] and [Falsify], and the case under a property
@@ -202,6 +202,26 @@ func (h *Handle[S]) Expect(reason spec.ReasonID) {
 		return
 	}
 	h.expected.Store(&reason)
+}
+
+// Engage records that the probe put the subject into the state of the claim
+// of the check, such as a call that failed for a check of the zero value
+// beside an error. An application fails a check whose run ends without a call
+// of Engage as vacuous, unless an excusal covers it. A property check engages
+// when one of its cases engages.
+func (h *Handle[S]) Engage() {
+	h.kept.engaged.Store(true)
+}
+
+// ObserveCall receives each assertion call on the handle, a passing one
+// included, as [assert.Observer] states. A call whose message is the
+// statement engages a check without a probe. A check with a probe engages
+// through [Handle.Engage] alone, because the probe passes the statement to
+// the assertions of its guards too.
+func (h *Handle[S]) ObserveCall(call assert.Call) {
+	if h.check.Probe == "" && call.Contract == h.check.Statement {
+		h.kept.engaged.Store(true)
+	}
 }
 
 // Reference returns a fresh reference implementation from the option
@@ -354,6 +374,8 @@ func (h *Handle[S]) Skipf(format string, args ...any) {
 		assert.Fault(h, fmt.Errorf("%w: the seat of %s has no Skipf", ErrSkip, h.check.ID))
 		return
 	}
+	why := fmt.Sprintf(format, args...)
+	h.kept.skip.CompareAndSwap(nil, &why)
 	seat.Skipf(format, args...)
 }
 
@@ -389,7 +411,9 @@ func (h *Handle[S]) Unwrap() assert.TB {
 
 // Report passes the record of a failure to a seat that implements
 // [assert.Reporter]. It writes the text of the record to any other seat,
-// through Fatalf when aborting is true and through Errorf otherwise.
+// through Fatalf when aborting is true and through Errorf otherwise. The
+// suite record of a check with Apply contains the first failure. The record
+// of a property check contains the failure of its smallest failing case.
 func (h *Handle[S]) Report(f assert.Failure, aborting bool) {
 	h.Helper()
 	var reason spec.ReasonID
@@ -397,6 +421,7 @@ func (h *Handle[S]) Report(f assert.Failure, aborting bool) {
 		reason = *set
 	}
 	h.kept.reason.CompareAndSwap(nil, &reason)
+	h.kept.failure.CompareAndSwap(nil, &f)
 	if reporter, ok := h.seat.(assert.Reporter); ok {
 		reporter.Report(f, aborting)
 		return

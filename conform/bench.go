@@ -175,8 +175,9 @@ func measure[S any](
 		if _, excused := cfg.excused(call.Callable.Check(l.segment)); excused {
 			continue
 		}
+		//dokimi:mutate-skip lcr-right: checked is false in an instrumented test binary, so no spec under mutation reads it
 		if added && (checked || !l.budget.counted()) {
-			falsifyLimit(b, call, l, cfg)
+			falsifyLimit(b, call, l, cfg, new(verdict))
 		}
 		l.budget.state(contract)
 	}
@@ -199,14 +200,16 @@ func measure[S any](
 // falsifyLimit applies the ceiling l of the call to its planted defect, the
 // subject that Over of the call returns with the spend of the ceiling. It
 // measures 10 calls of the defect under a contract of the ceiling alone, and
-// fails tb unless the contract fails.
-func falsifyLimit[S any](tb assert.TB, call *Call[S], l limit, cfg *config[S]) {
+// fails tb unless the contract fails. It sets the result proven in v, or
+// passed for a defect that the contract passes.
+func falsifyLimit[S any](tb assert.TB, call *Call[S], l limit, cfg *config[S], v *verdict) {
 	tb.Helper()
 	id := call.Callable.Check(l.segment)
 	defect := func(h *Handle[S]) S { return call.Over(h, l.budget.over()) }
 	h := newHandle(tb, &Check[S]{ID: id}, defect, cfg, new(firsts))
 	s, ctx := h.Subject(), h.Context()
 	calls := prop.Values(call.Calls, seedOf(string(id)), falsifyCalls, cfg.using...)
+	v.result = resultPassed
 	assert.Rejects(tb, "the planted defect of "+string(id)+" fails the ceiling", func(seat assert.TB) {
 		contract := l.budget.state(bench.Start(&iterations{TB: seat, left: len(calls)}))
 		defer contract.End()
@@ -214,6 +217,7 @@ func falsifyLimit[S any](tb assert.TB, call *Call[S], l limit, cfg *config[S]) {
 			_ = calls[i](ctx, s)
 		}
 	})
+	v.result = resultProven
 }
 
 // iterations is a benchmark of a fixed number of iterations on a seat. It

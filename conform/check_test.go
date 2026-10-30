@@ -112,6 +112,7 @@ func TestCheck(t *testing.T) {
 			c := keepsEvery()
 			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
 				_ = pc.Draw(prop.String(), "key")
+				h.Engage()
 				s := h.Subject()
 				mu.Lock()
 				defer mu.Unlock()
@@ -475,6 +476,94 @@ func TestCheck(t *testing.T) {
 			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, conform.With(derivedKeeps())) })
 			assert.False(t, r.Failed(), "the application does not run the other checks on the defect")
 		})
+
+		t.Run("fails a derived check that never engages its claim", func(t *testing.T) {
+			t.Parallel()
+
+			r := recorded(func(tb assert.TB) { vacuous().Run(tb, newStore) })
+			assert.Equal(t, r.Messages(), []string{"Store.Get/misses-unknown-keys never engaged: no call fails, " +
+				"with the sample inputs or with a cancelled context. Pass a subject that engages the check, or " +
+				"excuse the check with the directive excuse or conform.Excuse and a reason."},
+				"the message names the vacuous condition of the probe and both remedies")
+		})
+
+		t.Run("leaves a derived check unengaged by an assertion of its statement", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Expect(spec.UnobservedWrite)
+				keeps().Apply(h)
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Contains(t, r.Message(), "Store.Get/keeps-the-value never engaged: the write fails.",
+				"the probe of a derived check engages it")
+		})
+
+		t.Run("passes a derived check that engages its claim", func(t *testing.T) {
+			t.Parallel()
+
+			r := recorded(func(tb assert.TB) { derivedMisses().Run(tb, newStore) })
+			assert.False(t, r.Failed(), "the check engages and passes")
+		})
+
+		t.Run("fails a check of the consumer that never calls the assertion of its statement", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, found := h.Subject().Get("k")
+				assert.False(h, found, "the store starts empty")
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Equal(t, r.Messages(), []string{"Store.Get/keeps-the-value never engaged: no assertion ran with " +
+				"the statement of the check as its message. Pass a subject that engages the check, or excuse the " +
+				"check with the directive excuse or conform.Excuse and a reason."},
+				"the message names the assertion that never ran")
+		})
+
+		t.Run("engages a property check when one of its cases engages", func(t *testing.T) {
+			t.Parallel()
+
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				if pc.Draw(prop.Of[bool](), "engages") {
+					h.Engage()
+				}
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Empty(t, r.Messages(), "a case of the property engages the check")
+		})
+
+		t.Run("names no vacuous condition for a check that fails through Errorf", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Probe = spec.WriteThenRead
+			c.Apply = func(h *conform.Handle[Store]) { h.Errorf("the store fails") }
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Equal(t, r.Messages(), []string{"the store fails"}, "the seat has the failure of the check alone")
+		})
+
+		t.Run("names no vacuous condition for a check that fails on its seat", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Probe = spec.WriteThenRead
+			c.Apply = func(h *conform.Handle[Store]) {
+				got, _ := h.Subject().Get("k")
+				expect.Equal(h.Unwrap(), got, "v", "the store has the value")
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Length(t, r.Messages(), 1, "the seat has the failure of the check alone")
+		})
+
+		t.Run("skips the seat when the check skips", func(t *testing.T) {
+			t.Parallel()
+
+			skipping().Run(t, newStore)
+			t.Fatal("the check skips the test")
+		})
 	})
 
 	t.Run("Falsify", func(t *testing.T) {
@@ -484,6 +573,52 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 
 			keeps().Falsify(t)
+		})
+
+		t.Run("names the vacuous condition when the defect never engages the check", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, found := h.Subject().Get("k")
+				assert.False(h, found, "the store starts empty")
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			assert.Equal(t, r.Messages(), []string{
+				"the planted defect of Store.Get/keeps-the-value never engaged the check: no assertion ran with the " +
+					"statement of the check as its message.",
+			}, "a failure names the vacuous condition")
+			failures := r.Failures()
+			assert.Length(t, failures, 1, "falsification fails at its assertion once")
+			assert.Equal(t, failures[0].Contract, "the planted defect of Store.Get/keeps-the-value fails the check",
+				"the assertion of falsification fails because the defect passes the check")
+		})
+
+		t.Run("names no vacuous condition for a defect that fails an assertion that goes on", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Probe = spec.WriteThenRead
+			c.Apply = func(h *conform.Handle[Store]) {
+				s := h.Subject()
+				s.Put("k", "v")
+				got, _ := s.Get("k")
+				expect.Equal(h, got, "v", h.Statement())
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			assert.False(t, r.Failed(), "the defect fails the assertion of the statement")
+		})
+
+		t.Run("names no vacuous condition for a defect that fails through Errorf", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Probe = spec.WriteThenRead
+			c.Apply = func(h *conform.Handle[Store]) { h.Errorf("the store fails") }
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			assert.Contains(t, r.Message(), "fails the check before an assertion fails",
+				"falsification fails for the failure outside an assertion")
+			assert.Empty(t, r.Messages(), "falsification names no vacuous condition")
 		})
 
 		t.Run("fails when the defect passes the check", func(t *testing.T) {
@@ -496,6 +631,7 @@ func TestCheck(t *testing.T) {
 			assert.Length(t, failures, 1, "falsification fails once")
 			assert.Equal(t, failures[0].Contract, "the planted defect of Store.Get/keeps-the-value fails the check",
 				"falsification fails because the defect passes the check")
+			expect.Empty(t, r.Messages(), "the defect engages the check, so falsification names no vacuous condition")
 		})
 
 		t.Run("reports one failure to a seat that goes on after a fatal failure", func(t *testing.T) {

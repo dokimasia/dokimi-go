@@ -439,4 +439,12 @@ func TestValues(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("ComparesWithIdentity is vacuous on types without the method Is", func(t *testing.T) {
+		t.Parallel()
+
+		vacuous(t, spec.ComparesWithIdentity, func(h *conform.Handle[*palette]) {
+			probe.ComparesWithIdentity(h, h.Subject().values, h.Subject().values)
+		}, palettes(""), nil)
+	})
 }

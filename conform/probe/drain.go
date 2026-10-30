@@ -15,10 +15,15 @@ import (
 )
 
 // NoElementTwice writes twice, drains once, and fails when an element
-// repeats. A write that fails ends the probe with no elements.
+// repeats. A write that fails, or a drain of fewer than two elements, ends
+// the probe.
 func NoElementTwice[S, E any](h *conform.Handle[S], drain Call[[]E], write Act) {
 	h.Helper()
 	got, _ := drained(h, drain, write)
+	if len(got) < 2 {
+		return
+	}
+	h.Engage()
 	h.Expect(spec.RepeatedElement)
 	assert.NoDuplicates(h, func() ([]E, error) { return got, nil }, h.Statement())
 }
@@ -32,6 +37,7 @@ func DrainsInOneOrder[S, E any](h *conform.Handle[S], drain Call[[]E], write Act
 	if len(first) < 2 {
 		return
 	}
+	h.Engage()
 	second, err := drain(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.ReorderedDrain)
@@ -47,6 +53,7 @@ func GainsWhatWentIn[S, E any](h *conform.Handle[S], drain Call[[]E], write Act)
 	if !ok {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.MiscountedDrain)
 	assert.Length(h, gained, 2, h.Statement())
 }
@@ -60,6 +67,7 @@ func KeepsWhatWentIn[S, E any](h *conform.Handle[S], drain Call[[]E], write Act)
 	if !ok {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.ShrunkDrain)
 	assert.True(h, len(gained) >= 2, h.Statement())
 }
@@ -109,6 +117,7 @@ func ReadsNeverRegress[S, V any, O cmp.Ordered](h *conform.Handle[S], read Call[
 	if err != nil || write(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	second, err := read(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.Regressed)
@@ -128,6 +137,7 @@ func WritesAdvance[S, V any, O cmp.Ordered](h *conform.Handle[S], read, write Ca
 	if err != nil {
 		return
 	}
+	h.Engage()
 	next, err := write(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.UnorderedWrite)
@@ -136,11 +146,14 @@ func WritesAdvance[S, V any, O cmp.Ordered](h *conform.Handle[S], read, write Ca
 
 // ReplaysInStampOrder appends twice, replays, which returns the stamp of each
 // entry, and fails when a stamp is below the stamp before it. An append that
-// fails ends the probe with no stamps, and the guard of the probe fails a
-// replay that fails.
+// fails ends the probe, and the guard of the probe fails a replay that fails.
 func ReplaysInStampOrder[S any, O cmp.Ordered](h *conform.Handle[S], call Act, replay Call[[]O]) {
 	h.Helper()
-	stamps, _ := drained(h, replay, call)
+	stamps, ok := drained(h, replay, call)
+	if !ok {
+		return
+	}
+	h.Engage()
 	h.Expect(spec.UnorderedHistory)
 	assert.Pairwise(h, stamps, func(a, b O) bool { return b >= a }, h.Statement())
 }
@@ -155,6 +168,7 @@ func ReplayGrows[S, E any](h *conform.Handle[S], call Act, replay Call[[]E]) {
 	if err != nil || call(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	after, err := replay(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.ReplayNotGrown)

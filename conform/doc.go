@@ -49,6 +49,18 @@
 // calls on one subject. [Fuzz] registers the fuzz target of the property
 // checks of one callable.
 //
+// Each application writes its suite records into the output of its test,
+// which go test -json reports as attribute events under the key
+// dokimi.suite.<n>. [Run] writes the record of the falsification and the
+// record of the subject, [RunBudgets] the record of the subject, and
+// [Falsify] and [FalsifyAllocs] the record of the falsification. A record
+// contains the suite, the seed of the application, the result of each check,
+// and the refusals and the unclaimed classifications of the suite. The record
+// of a property check also contains the number of its valid cases, and the
+// counterexample and the failure of its smallest failing case. The records of
+// an application that problems stop have no check, and their field ended
+// lists the problems.
+//
 // A generated suite states the values of the channels and of the interfaces
 // of package io in its inputs. [Stream] generates a channel that a subject
 // receives from, and [Closed] is the end value of such a channel. [SinkOf]

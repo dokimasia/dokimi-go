@@ -26,6 +26,7 @@ func WriteThenRead[S, V any](h *conform.Handle[S], read, write Call[V]) {
 	if err != nil {
 		return
 	}
+	h.Engage()
 	got, err := read(h.Context())
 	h.Expect(spec.UnobservedWrite)
 	assert.NoError(h, err, h.Statement())
@@ -41,6 +42,7 @@ func PinnedAcrossWrite[S, V any](h *conform.Handle[S], read Call[V], write Act) 
 	if err != nil || write(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	second, err := read(h.Context())
 	h.Expect(spec.UnpinnedRead)
 	assert.NoError(h, err, h.Statement())
@@ -59,6 +61,7 @@ func SecondWriteReplaces[S, V any](h *conform.Handle[S], call, read Call[V]) {
 	if err != nil {
 		return
 	}
+	h.Engage()
 	got, err := read(h.Context())
 	h.Expect(spec.UnreplacedWrite)
 	assert.NoError(h, err, h.Statement())
@@ -77,6 +80,7 @@ func KeepsPartitionsApart[S, V any](h *conform.Handle[S], write, read Call[V]) {
 	if _, err = write(h.Context()); err != nil {
 		return
 	}
+	h.Engage()
 	got, err := read(h.Context())
 	h.Expect(spec.CrossedPartitions)
 	assert.NoError(h, err, h.Statement())
@@ -96,6 +100,7 @@ func RoundTrips[S, V, W any](
 	if err != nil {
 		return
 	}
+	h.Engage()
 	got, err := inverse(h.Context(), forward.Second)
 	h.Expect(spec.BrokenRoundTrip)
 	assert.NoError(h, err, h.Statement())
@@ -109,6 +114,7 @@ func WorksAfter[S any](h *conform.Handle[S], call, ready Act) {
 	if ready(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	err := call(h.Context())
 	h.Expect(spec.NeverReady)
 	assert.NoError(h, err, h.Statement())
@@ -121,6 +127,7 @@ func ReportsSealed[S any](h *conform.Handle[S], call, closer Act, sentinel error
 	if closer(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	err := call(h.Context())
 	h.Expect(spec.AliveAfterClose)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
@@ -137,6 +144,7 @@ func SealsAfterClose[S, H any](
 	if err != nil || closer(h.Context(), handle) != nil {
 		return
 	}
+	h.Engage()
 	err = after(h.Context(), handle)
 	h.Expect(spec.AliveAfterClose)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
@@ -146,7 +154,9 @@ func SealsAfterClose[S, H any](
 // two observations are equal. A call that fails ends the probe.
 func MovesObservation[S, V any](h *conform.Handle[S], call Act, observe Call[V]) {
 	h.Helper()
-	moves(h, call, observe, spec.UnmovedObservation)
+	if moves(h, call, observe, spec.UnmovedObservation) {
+		h.Engage()
+	}
 }
 
 // EachCallCompounds observes around each of two calls, and fails when a call
@@ -158,6 +168,7 @@ func EachCallCompounds[S, V any](h *conform.Handle[S], call Act, observe Call[V]
 			return
 		}
 	}
+	h.Engage()
 }
 
 // moves observes, calls call, observes again, and fails with reason when the
@@ -188,7 +199,9 @@ func SettlesThenObserves[S, V any](h *conform.Handle[S], call, settle Act, obser
 		}
 		return settle(ctx)
 	}
-	moves(h, settled, observe, spec.UnsettledEffect)
+	if moves(h, settled, observe, spec.UnsettledEffect) {
+		h.Engage()
+	}
 }
 
 // DetectsTamper calls call, verify, tamper and verify, and fails when the
@@ -198,6 +211,7 @@ func DetectsTamper[S any](h *conform.Handle[S], call, verify, tamper Act) {
 	if call(h.Context()) != nil || verify(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	_ = tamper(h.Context())
 	err := verify(h.Context())
 	h.Expect(spec.SilentTamper)
@@ -211,6 +225,7 @@ func ConvergesAfter[S any](h *conform.Handle[S], call, begin Act, attempts int) 
 	if begin(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	converges(h, call, attempts)
 }
 
@@ -222,6 +237,7 @@ func RunsTheHook[S any](h *conform.Handle[S], call Act, register func(ctx contex
 	if register(h.Context(), func() { ran.Store(true) }) != nil || call(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.HookNotRun)
 	assert.True(h, ran.Load(), h.Statement())
 }
@@ -233,6 +249,7 @@ func RefusesTheInvalid[S, V any](h *conform.Handle[S], call, validate func(ctx c
 	if validate(h.Context(), invalid) == nil {
 		return
 	}
+	h.Engage()
 	err := call(h.Context(), invalid)
 	h.Expect(spec.UnscreenedWrite)
 	assert.HasError(h, err, h.Statement())
@@ -251,6 +268,7 @@ func RefusesWhatThePredicateRejects[S any](h *conform.Handle[S], call Act, match
 	if accepted, err := match(h.Context()); err != nil || accepted {
 		return
 	}
+	h.Engage()
 	err := call(h.Context())
 	h.Expect(spec.UnmatchedWrite)
 	assert.HasError(h, err, h.Statement())
@@ -264,6 +282,7 @@ func ResignsLeadership[S any](h *conform.Handle[S], call, resign Act, leading Ca
 	if call(h.Context()) != nil || resign(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	lead, err := leading(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.StillLeading)
@@ -285,6 +304,7 @@ func RollsBackOnFailure[S any](
 	if !wrote {
 		return
 	}
+	h.Engage()
 	err := read(h.Context())
 	h.Expect(spec.NotRolledBack)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
@@ -302,6 +322,7 @@ func AgreesWithTheBacking[S, V any](h *conform.Handle[S], call, backing Call[V],
 	if err != nil {
 		return
 	}
+	h.Engage()
 	got, err := call(h.Context())
 	h.Expect(spec.CacheDisagrees)
 	assert.NoError(h, err, h.Statement())
@@ -316,6 +337,7 @@ func TakesBackWhatItLent[S, V any](h *conform.Handle[S], call Call[V], put func(
 	if err != nil {
 		return
 	}
+	h.Engage()
 	err = put(h.Context(), lent)
 	h.Expect(spec.UnreturnedLoan)
 	assert.NoError(h, err, h.Statement())
@@ -334,6 +356,7 @@ func ContinuesFromTheCursor[S, V any, C comparable](
 	if err != nil || cursor(first) == start {
 		return
 	}
+	h.Engage()
 	second, err := call(h.Context(), cursor(first))
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.RepeatedPage)
@@ -347,6 +370,7 @@ func CompensatesTheStep[S any](h *conform.Handle[S], call, compensate Act) {
 	if call(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	err := compensate(h.Context())
 	h.Expect(spec.UncompensatedStep)
 	assert.NoError(h, err, h.Statement())
@@ -354,7 +378,7 @@ func CompensatesTheStep[S any](h *conform.Handle[S], call, compensate Act) {
 
 // RefusedLeavesNothing calls call with refused, then reader, and fails when
 // reader returns a value other than zero. A call that accepts refused ends
-// the probe, and so does a reader that fails, because it finds nothing.
+// the probe. A reader that fails finds nothing, so the probe passes it.
 func RefusedLeavesNothing[S, V, R any](
 	h *conform.Handle[S], call func(ctx context.Context, r R) error, reader Call[V], refused R, zero V,
 ) {
@@ -362,6 +386,7 @@ func RefusedLeavesNothing[S, V, R any](
 	if call(h.Context(), refused) == nil {
 		return
 	}
+	h.Engage()
 	got, err := reader(h.Context())
 	if err != nil {
 		return
@@ -377,6 +402,7 @@ func RemovesOnDelete[S any](h *conform.Handle[S], call, put, read Act, sentinel 
 	if put(h.Context()) != nil || call(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	err := read(h.Context())
 	h.Expect(spec.ReadableAfterDelete)
 	assert.ErrorIs(h, err, sentinel, h.Statement())

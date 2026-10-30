@@ -11,14 +11,19 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+
+	"go.dokimi.dev/spec"
 )
 
 // seedEnv is the variable of the environment that states the seed of the
-// property runs of an application, in decimal.
+// property runs of an application, in decimal or in hexadecimal after the
+// prefix 0x.
 const seedEnv = "DOKIMI_SEED"
 
 // ErrConfig is the fault of an application with an invalid setting, such as
@@ -35,8 +40,22 @@ type Suite[S any] struct {
 	// Declaration is the name of the declaration, such as Store.
 	Declaration string
 
+	// Package is the import path of the package of the declaration, such as
+	// example.com/store.
+	Package string
+
+	// Generator is the generator that wrote the suite.
+	Generator Generator
+
 	// Checks are the checks of the declaration.
 	Checks []Check[S]
+
+	// Refusals are the licensed claims that the generator refused.
+	Refusals []Refusal
+
+	// Unclaimed are the classifications of the callables of the declaration
+	// without a check.
+	Unclaimed []Unclaimed
 
 	// Calls are the call generators of the callables of the declaration,
 	// with their budgets.
@@ -55,6 +74,45 @@ type Suite[S any] struct {
 	// Using and before the generators of the option [Using], so the option
 	// replaces a sink.
 	Sinks []Sink
+}
+
+// Generator is the generator that wrote a suite, with its version, such as
+// dokimi v0.1.0.
+type Generator struct {
+	Name    string
+	Version string
+}
+
+// Refusal is a licensed claim whose gate fails for a callable.
+type Refusal struct {
+	// Claim is the claim of the spec.
+	Claim spec.ClaimID
+
+	// Callable is the declaration and the callable, such as Store.Scan.
+	Callable string
+
+	// Why is the reason of the gate that fails.
+	Why string
+
+	// Remedy is the change that lets the gate pass.
+	Remedy string
+}
+
+// Unclaimed is a classification of a callable without a check, with its
+// stance.
+type Unclaimed struct {
+	// Classification is shape:<name>, mixin:<name> or
+	// contract:<name>/<role>, with the names of the shape catalog.
+	Classification string
+
+	// Callable is the declaration and the callable, such as Store.Stale.
+	Callable string
+
+	// Stance is the stance of the spec for the classification.
+	Stance spec.StanceID
+
+	// Note is the reason of the stance for this classification.
+	Note string
 }
 
 // Call is the call generator of one callable of a suite, with the budget that
@@ -225,9 +283,12 @@ type config[S any] struct {
 	// option Using in the order of the options.
 	using []prop.Option
 
-	// seed is the seed of DOKIMI_SEED where seeded is true.
-	seed   uint64
-	seeded bool
+	// seed is the seed of DOKIMI_SEED where seeded is true, and runSeed the
+	// seed of the property runs of an application where runSeeded is true.
+	seed      uint64
+	runSeed   uint64
+	seeded    bool
+	runSeeded bool
 
 	// defect reports that the handles of the configuration build on a planted
 	// defect, whose doors come from its check first.
@@ -287,7 +348,11 @@ func configure[S any](using []prop.Option, opts []Option[S]) *config[S] {
 		}
 	}
 	if text, set := os.LookupEnv(seedEnv); set {
-		seed, err := strconv.ParseUint(text, 10, 64)
+		digits, base := text, 10
+		if hex, isHex := strings.CutPrefix(text, "0x"); isHex {
+			digits, base = hex, 16
+		}
+		seed, err := strconv.ParseUint(digits, base, 64)
 		if err != nil {
 			c.seedText = &text
 		} else {
@@ -301,7 +366,8 @@ func configure[S any](using []prop.Option, opts []Option[S]) *config[S] {
 func (c *config[S]) invalid() []string {
 	var found []string
 	if c.seedText != nil {
-		found = append(found, fmt.Sprintf("%s is %q, and a seed is a decimal number below 2^64", seedEnv, *c.seedText))
+		found = append(found, fmt.Sprintf("%s is %q, and a seed is a decimal or a 0x hexadecimal number below 2^64",
+			seedEnv, *c.seedText))
 	}
 	if c.cases != nil && *c.cases < 1 {
 		found = append(found, fmt.Sprintf("the option Cases asks for %d cases, and a property run needs at least 1",
@@ -312,17 +378,38 @@ func (c *config[S]) invalid() []string {
 
 // runOptions returns the options of a property run of an application: the
 // overrides of the suite, the generators of the option Using, the cases of the
-// option Cases and the seed of DOKIMI_SEED. A run without a seed takes the
-// seed of the profile of the property engine.
+// option Cases, and the seed of the application or of DOKIMI_SEED. A run
+// without a seed takes the seed of the profile of the property engine.
 func (c *config[S]) runOptions() []prop.Option {
 	opts := slices.Clip(c.using)
 	if c.cases != nil {
 		opts = append(opts, prop.Cases(*c.cases))
 	}
-	if c.seeded {
+	switch {
+	case c.runSeeded:
+		opts = append(opts, prop.Seed(c.runSeed))
+	case c.seeded:
 		opts = append(opts, prop.Seed(c.seed))
 	}
 	return opts
+}
+
+// applicationSeed returns the seed of the property runs of the application
+// name, and passes it to each of them: the seed of DOKIMI_SEED, and otherwise
+// the seed that prop.RunSeed returns for name. It also returns the text of
+// each fault of prop.RunSeed, such as a malformed DOKIMI_ASSERT_PROP_SEED, as
+// a problem of the application.
+func (c *config[S]) applicationSeed(name string) (uint64, []string) {
+	c.runSeed, c.runSeeded = c.seed, true
+	var found []string
+	if !c.seeded {
+		r := assert.NewRecorder()
+		c.runSeed = prop.RunSeed(r, name)
+		for _, err := range r.Faults() {
+			found = append(found, err.Error())
+		}
+	}
+	return c.runSeed, found
 }
 
 // hermetic returns the options of a property run of falsification for the

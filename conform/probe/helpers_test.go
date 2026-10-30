@@ -6,7 +6,10 @@ package probe_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+
+	"go.dokimi.dev/assert"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
@@ -67,14 +70,36 @@ func proves(
 	}.Run(t, good)
 }
 
-// holds applies a check of the probe p to a subject of source, and passes
-// where the probe passes.
-func holds(
+// vacuous applies a check of the probe p to a subject of source, inside
+// around where around is not nil, and fails t unless the check fails once for
+// the vacuous condition of p.
+func vacuous[S any](
 	t *testing.T,
 	p spec.ProbeID,
-	apply func(h *conform.Handle[*cell]),
-	source func(*conform.Handle[*cell]) *cell,
+	apply func(h *conform.Handle[S]),
+	source func(*conform.Handle[S]) S,
+	around func(t *testing.T, run func(*testing.T)),
 ) {
 	t.Helper()
-	conform.Check[*cell]{ID: "Cell.Call/claim", Statement: "the probe holds", Probe: p, Apply: apply}.Run(t, source)
+	r := &onTest{Recorder: assert.NewRecorder(), t: t}
+	conform.Check[S]{
+		ID: "Subject.Call/claim", Statement: "the probe holds", Probe: p, Apply: apply, Around: around,
+	}.Run(r, source)
+	entry, _ := spec.ProbeOf(p)
+	condition := strings.ToLower(entry.Vacuous[:1]) + strings.TrimSuffix(entry.Vacuous[1:], ".")
+	assert.Equal(t, r.Messages(), []string{"Subject.Call/claim never engaged: " + condition + ". Pass a subject " +
+		"that engages the check, or excuse the check with the directive excuse or conform.Excuse and a reason."},
+		"the check fails for the vacuous condition of its probe")
 }
+
+// onTest is a recorder of the test t. Its method Unwrap returns t, so a check
+// with Around runs inside the environment of t, and the recorder keeps what
+// conform reports on the seat.
+type onTest struct {
+	*assert.Recorder
+
+	t *testing.T
+}
+
+// Unwrap returns the test of the recorder.
+func (s *onTest) Unwrap() assert.TB { return s.t }

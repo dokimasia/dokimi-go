@@ -16,6 +16,7 @@ import (
 // Survives calls call, and fails when the call panics.
 func Survives[S any](h *conform.Handle[S], call Act) {
 	h.Helper()
+	h.Engage()
 	h.Expect(spec.Panicked)
 	assert.NotPanics(h, func() { _ = call(h.Context()) }, h.Statement())
 }
@@ -25,6 +26,7 @@ func Survives[S any](h *conform.Handle[S], call Act) {
 func UnderCancelled[S any](h *conform.Handle[S], call Act) {
 	h.Helper()
 	err := call(cancelled(h.Context()))
+	h.Engage()
 	h.Expect(spec.IgnoredCancel)
 	assert.HasError(h, err, h.Statement())
 }
@@ -48,6 +50,7 @@ func ZeroBesideError[S, V any](h *conform.Handle[S], call Call[V], zero V) {
 	if err == nil {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.ValueBesideError)
 	assert.Equal(h, v, zero, h.Statement())
 }
@@ -66,6 +69,7 @@ func ZeroBesideFalse[S, V any](h *conform.Handle[S], call Lookup[V], zero V) {
 	if ok {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.ValueBesideFalse)
 	assert.Equal(h, v, zero, h.Statement())
 }
@@ -81,6 +85,7 @@ func ZeroPairBesideFalse[S, A, B any](h *conform.Handle[S], call Lookup[Pair[A, 
 func NilBesideAMiss[S, V any](h *conform.Handle[S], call Call[V]) {
 	h.Helper()
 	v, _ := call(h.Context())
+	h.Engage()
 	h.Expect(spec.NonNilMiss)
 	assert.Nil(h, v, h.Statement())
 }
@@ -90,6 +95,7 @@ func NilBesideAMiss[S, V any](h *conform.Handle[S], call Call[V]) {
 func ZeroBesideAMiss[S, V any](h *conform.Handle[S], call Call[V], zero V) {
 	h.Helper()
 	v, _ := call(h.Context())
+	h.Engage()
 	h.Expect(spec.NonZeroMiss)
 	assert.Equal(h, v, zero, h.Statement())
 }
@@ -103,6 +109,7 @@ func RepeatAgrees[S, V any](h *conform.Handle[S], call Call[V]) {
 		return
 	}
 	second, _ := call(h.Context())
+	h.Engage()
 	h.Expect(spec.UnstableRepeat)
 	assert.Equal(h, second, first, h.Statement())
 }
@@ -114,6 +121,7 @@ func SurvivesRepeat[S any](h *conform.Handle[S], call Act) {
 	if !returns(h.Context(), call) {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.PanickedRepeat)
 	assert.NotPanics(h, func() { _ = call(h.Context()) }, h.Statement())
 }
@@ -130,6 +138,7 @@ func returns(ctx context.Context, call Act) (returned bool) {
 func ReportsSentinel[S, V any](h *conform.Handle[S], call Call[V], sentinel error) {
 	h.Helper()
 	_, err := call(h.Context())
+	h.Engage()
 	h.Expect(spec.WrongSentinel)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
 }
@@ -142,6 +151,7 @@ func RepeatIsQuiet[S any](h *conform.Handle[S], call Act) {
 		return
 	}
 	err := call(h.Context())
+	h.Engage()
 	h.Expect(spec.RefusedRepeat)
 	assert.NoError(h, err, h.Statement())
 }
@@ -169,6 +179,7 @@ func ordered[S any, O cmp.Ordered](h *conform.Handle[S], call Call[O], reason sp
 	if err != nil {
 		return
 	}
+	h.Engage()
 	second, err := call(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(reason)
@@ -183,6 +194,7 @@ func EscapesTheUnsafe[S any](h *conform.Handle[S], call Call[string], unsafe str
 	if err != nil {
 		return
 	}
+	h.Engage()
 	h.Expect(spec.UnescapedOutput)
 	assert.NotContains(h, out, unsafe, h.Statement())
 }
@@ -191,6 +203,7 @@ func EscapesTheUnsafe[S any](h *conform.Handle[S], call Call[string], unsafe str
 func AcceptsTheEdge[S, V any](h *conform.Handle[S], call func(ctx context.Context, v V) error, edge V) {
 	h.Helper()
 	err := call(h.Context(), edge)
+	h.Engage()
 	h.Expect(spec.RefusedTheEdge)
 	assert.NoError(h, err, h.Statement())
 }
@@ -200,6 +213,7 @@ func AcceptsTheEdge[S, V any](h *conform.Handle[S], call func(ctx context.Contex
 func RemainsPoisoned[S any](h *conform.Handle[S], call, induce Act) {
 	h.Helper()
 	_ = induce(h.Context())
+	h.Engage()
 	for range 2 {
 		err := call(h.Context())
 		h.Expect(spec.HealthyAfterInduce)
@@ -211,6 +225,7 @@ func RemainsPoisoned[S any](h *conform.Handle[S], call, induce Act) {
 // succeeds.
 func SucceedsWithin[S any](h *conform.Handle[S], call Act, attempts int) {
 	h.Helper()
+	h.Engage()
 	converges(h, call, attempts)
 }
 
@@ -236,6 +251,7 @@ func RefusesTheSecondWrite[S any](h *conform.Handle[S], call Act, sentinel error
 		return
 	}
 	err := call(h.Context())
+	h.Engage()
 	h.Expect(spec.UnguardedWrite)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
 }
@@ -251,6 +267,7 @@ func RefusesPastTheBurst[S any](h *conform.Handle[S], call Act, burst int, senti
 		}
 	}
 	err := call(h.Context())
+	h.Engage()
 	h.Expect(spec.PastTheBurst)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
 }
@@ -260,6 +277,7 @@ func RefusesPastTheBurst[S any](h *conform.Handle[S], call Act, burst int, senti
 func RefusesEarly[S any](h *conform.Handle[S], call Act, sentinel error) {
 	h.Helper()
 	err := call(h.Context())
+	h.Engage()
 	h.Expect(spec.AcceptedEarly)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
 }

@@ -47,6 +47,7 @@ func ReturnsWithin[S any](h *conform.Handle[S], call Act, budget time.Duration) 
 		returned = true
 	default:
 	}
+	h.Engage()
 	h.Expect(spec.OverranBudget)
 	assert.True(h, returned, h.Statement())
 }
@@ -60,6 +61,7 @@ func CountsWithinWindow[S any, N cmp.Ordered](h *conform.Handle[S], call Act, co
 	if call(h.Context()) != nil {
 		return
 	}
+	h.Engage()
 	inside := countAfter(h, count, window/2)
 	after := countAfter(h, count, window-window/2+time.Nanosecond)
 	h.Expect(spec.MisreadWindow)
@@ -79,6 +81,7 @@ func RunsOnSchedule[S any, N cmp.Ordered](h *conform.Handle[S], call Call[time.D
 	if err != nil {
 		return
 	}
+	h.Engage()
 	half := countAfter(h, count, delay/2)
 	past := countAfter(h, count, delay-delay/2+time.Nanosecond)
 	h.Expect(spec.OffSchedule)
@@ -112,6 +115,7 @@ func MovesWithTheClock[S, V any](h *conform.Handle[S], call Call[V], put Act) {
 	if err != nil {
 		return
 	}
+	h.Engage()
 	last := first
 	for step := time.Duration(1); step <= 1<<52 && reflect.DeepEqual(last, first); step *= 2 {
 		synctest.Wait()
@@ -136,6 +140,7 @@ func SteadyWhileTheClockStops[S, V any](h *conform.Handle[S], call Call[V], put 
 	if err != nil {
 		return
 	}
+	h.Engage()
 	second, err := call(h.Context())
 	assert.NoError(h, err, h.Statement())
 	h.Expect(spec.DriftedWithoutClock)
@@ -153,6 +158,7 @@ func ExpiresAfter[S, V any](h *conform.Handle[S], read Call[V], write Act, lifet
 	if _, err := read(h.Context()); err != nil {
 		return
 	}
+	h.Engage()
 	synctest.Wait()
 	h.Advance(lifetime + time.Nanosecond)
 	synctest.Wait()

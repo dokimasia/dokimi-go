@@ -49,8 +49,8 @@ type ceiling[S any] struct {
 // campaign profile of the property engine searches for the input with the
 // most allocations.
 //
-// RunBudgets reports every problem of the checks, the calls and the options
-// on t, as [Run] does, and stops t when it finds one. Otherwise it runs each
+// RunBudgets reports every problem of the checks, the calls, the options and
+// the seed on t, as [Run] does, and stops t when it finds one. Otherwise it runs each
 // ceiling as a test of t, such as Get/allocation-budget. It then runs each
 // check of the suite and of the option [With] that counts allocations as a
 // test of t, such as Apply/keeps-the-steady-state. The tests do not run in
@@ -62,17 +62,26 @@ type ceiling[S any] struct {
 // check before it applies it.
 func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
+	name := "Run" + suite.Declaration + "Budgets"
 	cfg := configure(suite.overrides(t), opts)
-	stopAt(t, validate("Run"+suite.Declaration+"Budgets", suite, cfg))
-	for _, c := range allocationCeilings(suite.Calls, cfg.ceilings) {
+	seed, faults := cfg.applicationSeed(name)
+	app := newApplication(&suite, name, funcName(newSubject), seed, onSubject)
+	app.begin(t, append(validate(name, suite, cfg), faults...))
+	ceilings := allocationCeilings(suite.Calls, cfg.ceilings)
+	for i, c := range ceilings {
 		t.Run(c.check.ID.subtest(), func(t *testing.T) {
 			t.Helper()
+			judged := app.track(t, i, onSubject, &c.check, cfg, app.seed)
+			//dokimi:mutate-skip sbr-delete: an instrumented test binary skips each ceiling at skipUncounted, so no spec under mutation tells this skip from that one
 			cfg.skipExcused(t, c.check.ID)
-			skipUncounted(t)
+			skipUncounted(t, judged)
+			//dokimi:mutate-skip all: an instrumented test binary skips each ceiling, so no spec under mutation reaches this line
 			if c.added {
-				c.check.falsify(t, cfg, nil)
+				//dokimi:mutate-skip all: an instrumented test binary skips each ceiling
+				c.check.falsify(t, cfg, nil, new(verdict))
 			}
-			c.check.run(t, newSubject, cfg)
+			//dokimi:mutate-skip all: an instrumented test binary skips each ceiling
+			c.check.run(t, newSubject, cfg, judged)
 		})
 	}
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
@@ -82,13 +91,17 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 		}
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
+			judged := app.track(t, len(ceilings)+i, onSubject, &c, cfg, app.seed)
+			//dokimi:mutate-skip sbr-delete: an instrumented test binary skips each check that counts allocations at skipUncounted, so no spec under mutation tells this skip from that one
 			cfg.skipExcused(t, c.ID)
-			skipUncounted(t)
-			//dokimi:mutate-skip ror-true: an instrumented test binary skips each check that counts allocations, so no spec under mutation reaches this line
+			skipUncounted(t, judged)
+			//dokimi:mutate-skip all: an instrumented test binary skips each check that counts allocations, so no spec under mutation reaches this line
 			if i >= len(suite.Checks) {
-				c.falsify(t, cfg, checks)
+				//dokimi:mutate-skip all: an instrumented test binary skips each check that counts allocations
+				c.falsify(t, cfg, checks, new(verdict))
 			}
-			c.run(t, newSubject, cfg)
+			//dokimi:mutate-skip all: an instrumented test binary skips each check that counts allocations
+			c.run(t, newSubject, cfg, judged)
 		})
 	}
 }
@@ -99,46 +112,57 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 // callable allocates one time more per call than the ceiling admits. A
 // generated suite runs it in Test<Declaration>SuiteAllocs.
 //
-// FalsifyAllocs reports every problem of the checks and the calls on t, as
-// [Falsify] does, and stops t when it finds one. Otherwise it runs each
+// FalsifyAllocs reports every problem of the checks, the calls and the seed on
+// t, as [Falsify] does, and stops t when it finds one. Otherwise it runs each
 // ceiling as a test of t, then each check of the suite that counts
 // allocations. The tests do not run in parallel, because a count of
 // allocations covers the whole process. The test of a ceiling fails unless
 // the defect fails the ceiling at [assert.MaxAllocs]. The test of a check
 // falsifies the check on its planted defect against every other check of the
 // suite, as Falsify does. In a run that does not check allocation ceilings,
-// each test skips with the reason of [assert.AllocsChecked].
+// each test skips with the reason of [assert.AllocsChecked]. Once every test
+// has ended, FalsifyAllocs writes the falsification record of the application,
+// as [Falsify] does.
 func FalsifyAllocs[S any](t T, suite Suite[S]) {
 	t.Helper()
 	cfg := configure[S](suite.overrides(t), nil)
 	name := suite.Declaration + "Suite"
-	found := problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil))
-	stopAt(t, append(found, budgetProblems(name, suite.Calls, nil)...))
-	for _, c := range allocationCeilings(suite.Calls, nil) {
+	seed, faults := cfg.applicationSeed(name)
+	app := newApplication(&suite, name, "", seed, falsification)
+	app.begin(t, slices.Concat(problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil)),
+		budgetProblems(name, suite.Calls, nil), faults))
+	ceilings := allocationCeilings(suite.Calls, nil)
+	for i, c := range ceilings {
 		t.Run(c.check.ID.subtest(), func(t *testing.T) {
 			t.Helper()
-			skipUncounted(t)
-			c.check.falsify(t, cfg, nil)
+			falsified := app.track(t, i, falsification, &c.check, cfg, seedOf(string(c.check.ID)))
+			skipUncounted(t, falsified)
+			//dokimi:mutate-skip all: an instrumented test binary skips each ceiling
+			c.check.falsify(t, cfg, nil, falsified)
 		})
 	}
-	for _, c := range suite.Checks {
+	for i, c := range suite.Checks {
 		if !c.Counted {
 			continue
 		}
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
-			skipUncounted(t)
-			c.falsify(t, cfg, suite.Checks)
+			falsified := app.track(t, len(ceilings)+i, falsification, &c, cfg, seedOf(string(c.ID)))
+			skipUncounted(t, falsified)
+			//dokimi:mutate-skip all: an instrumented test binary skips each check that counts allocations
+			c.falsify(t, cfg, suite.Checks, falsified)
 		})
 	}
 }
 
 // skipUncounted skips tb with the reason of [assert.AllocsChecked] in a run
-// that does not check allocation ceilings.
-func skipUncounted(tb testing.TB) {
+// that does not check allocation ceilings, and sets the result unchecked with
+// that reason in v.
+func skipUncounted(tb testing.TB, v *verdict) {
 	tb.Helper()
 	if checked, reason := assert.AllocsChecked(); !checked {
-		tb.Skipf("the run does not check allocation ceilings: %s", reason)
+		v.result, v.why = resultUnchecked, "the run does not check allocation ceilings: "+reason
+		tb.Skipf("%s", v.why)
 	}
 }
 
@@ -176,6 +200,7 @@ func allocationCheck[S any](c *Call[S], allocs *uint64) Check[S] {
 	n := *allocs
 	return Check[S]{
 		ID:        c.Callable.Check(allocationSegment),
+		ceiling:   true,
 		Statement: allocationStatement(c.Callable.method(), n),
 		Property: func(h *Handle[S], pc *prop.Case) {
 			call := pc.Draw(c.Calls, "call")

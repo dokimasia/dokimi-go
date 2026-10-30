@@ -318,47 +318,47 @@ func TestSingle(t *testing.T) {
 		give      answer
 	}{
 		{
-			name:      "ZeroBesideError passes a call that never fails",
+			name:      "ZeroBesideError is vacuous on a call that never fails",
 			giveProbe: spec.ZeroBesideError, give: value(1),
 			giveApply: func(h *conform.Handle[*cell]) { probe.ZeroBesideError(h, calls(h), 0) },
 		},
 		{
-			name:      "ZeroBesideFalse passes a call that returns a true flag",
+			name:      "ZeroBesideFalse is vacuous on a call that returns a true flag",
 			giveProbe: spec.ZeroBesideFalse, give: value(1),
 			giveApply: func(h *conform.Handle[*cell]) { probe.ZeroBesideFalse(h, lookups(h), 0) },
 		},
 		{
-			name:      "RepeatAgrees passes a first call that fails",
+			name:      "RepeatAgrees is vacuous on a first call that fails",
 			giveProbe: spec.RepeatAgrees, give: fromCall(failing(1, errOther), value(2)),
 			giveApply: func(h *conform.Handle[*cell]) { probe.RepeatAgrees(h, calls(h)) },
 		},
 		{
-			name:      "SurvivesRepeat passes a first call that panics",
+			name:      "SurvivesRepeat is vacuous on a first call that panics",
 			giveProbe: spec.SurvivesRepeat, give: panicking,
 			giveApply: func(h *conform.Handle[*cell]) { probe.SurvivesRepeat(h, acts(h)) },
 		},
 		{
-			name:      "RepeatIsQuiet passes a first call that fails",
+			name:      "RepeatIsQuiet is vacuous on a first call that fails",
 			giveProbe: spec.RepeatIsQuiet, give: failing(0, errOther),
 			giveApply: func(h *conform.Handle[*cell]) { probe.RepeatIsQuiet(h, acts(h)) },
 		},
 		{
-			name:      "NeverDecreases passes a first call that fails",
+			name:      "NeverDecreases is vacuous on a first call that fails",
 			giveProbe: spec.NeverDecreases, give: fromCall(failing(2, errOther), value(1)),
 			giveApply: func(h *conform.Handle[*cell]) { probe.NeverDecreases(h, calls(h)) },
 		},
 		{
-			name:      "EscapesTheUnsafe passes a call that fails",
+			name:      "EscapesTheUnsafe is vacuous on a call that fails",
 			giveProbe: spec.EscapesTheUnsafe, give: failing(1, errOther),
 			giveApply: func(h *conform.Handle[*cell]) { probe.EscapesTheUnsafe(h, texts(h), "<script>") },
 		},
 		{
-			name:      "RefusesTheSecondWrite passes a first call that fails",
+			name:      "RefusesTheSecondWrite is vacuous on a first call that fails",
 			giveProbe: spec.RefusesTheSecondWrite, give: failing(0, errOther),
 			giveApply: func(h *conform.Handle[*cell]) { probe.RefusesTheSecondWrite(h, acts(h), errMiss) },
 		},
 		{
-			name:      "RefusesPastTheBurst passes a call inside the burst that fails",
+			name:      "RefusesPastTheBurst is vacuous on a call inside the burst that fails",
 			giveProbe: spec.RefusesPastTheBurst, give: fromCall(value(0), failing(0, errOther)),
 			giveApply: func(h *conform.Handle[*cell]) { probe.RefusesPastTheBurst(h, acts(h), 2, errMiss) },
 		},
@@ -367,7 +367,7 @@ func TestSingle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			holds(t, tt.giveProbe, tt.giveApply, answering(tt.give))
+			vacuous(t, tt.giveProbe, tt.giveApply, answering(tt.give), nil)
 		})
 	}
 

@@ -304,47 +304,42 @@ func TestClock(t *testing.T) {
 		giveApply func(h *conform.Handle[*timer])
 	}{
 		{
-			name: "CountsWithinWindow passes a call that fails", giveProbe: spec.CountsWithinWindow,
+			name: "CountsWithinWindow is vacuous on a call that fails", giveProbe: spec.CountsWithinWindow,
 			giveApply: func(h *conform.Handle[*timer]) {
 				probe.CountsWithinWindow(h, failing, returning(1), window)
 			},
 		},
 		{
-			name: "RunsOnSchedule passes a registration that fails", giveProbe: spec.RunsOnSchedule,
+			name: "RunsOnSchedule is vacuous on a registration that fails", giveProbe: spec.RunsOnSchedule,
 			giveApply: func(h *conform.Handle[*timer]) {
 				probe.RunsOnSchedule(h, refusing[time.Duration](), returning(1))
 			},
 		},
 		{
-			name: "MovesWithTheClock passes a put that fails", giveProbe: spec.MovesWithTheClock,
+			name: "MovesWithTheClock is vacuous on a put that fails", giveProbe: spec.MovesWithTheClock,
 			giveApply: func(h *conform.Handle[*timer]) { probe.MovesWithTheClock(h, returning(1), failing) },
 		},
 		{
-			name: "MovesWithTheClock passes a first call that fails", giveProbe: spec.MovesWithTheClock,
+			name: "MovesWithTheClock is vacuous on a first call that fails", giveProbe: spec.MovesWithTheClock,
 			giveApply: func(h *conform.Handle[*timer]) { probe.MovesWithTheClock(h, failsFirst(1), passes) },
 		},
 		{
-			name: "MovesWithTheClock passes a value that returns to its first value", giveProbe: spec.MovesWithTheClock,
-			giveApply: func(h *conform.Handle[*timer]) {
-				probe.MovesWithTheClock(h, on(h, (*timer).phase), doing(h, (*timer).write))
-			},
-		},
-		{
-			name: "SteadyWhileTheClockStops passes a put that fails", giveProbe: spec.SteadyWhileTheClockStops,
+			name: "SteadyWhileTheClockStops is vacuous on a put that fails", giveProbe: spec.SteadyWhileTheClockStops,
 			giveApply: func(h *conform.Handle[*timer]) { probe.SteadyWhileTheClockStops(h, drifting(0), failing) },
 		},
 		{
-			name: "SteadyWhileTheClockStops passes a first call that fails", giveProbe: spec.SteadyWhileTheClockStops,
+			name:      "SteadyWhileTheClockStops is vacuous on a first call that fails",
+			giveProbe: spec.SteadyWhileTheClockStops,
 			giveApply: func(h *conform.Handle[*timer]) { probe.SteadyWhileTheClockStops(h, drifting(1), passes) },
 		},
 		{
-			name: "ExpiresAfter passes a write that fails", giveProbe: spec.ExpiresAfter,
+			name: "ExpiresAfter is vacuous on a write that fails", giveProbe: spec.ExpiresAfter,
 			giveApply: func(h *conform.Handle[*timer]) {
 				probe.ExpiresAfter(h, returning(1), failing, lifetime, errExpired)
 			},
 		},
 		{
-			name: "ExpiresAfter passes a first read that fails", giveProbe: spec.ExpiresAfter,
+			name: "ExpiresAfter is vacuous on a first read that fails", giveProbe: spec.ExpiresAfter,
 			giveApply: func(h *conform.Handle[*timer]) {
 				probe.ExpiresAfter(h, failsFirst(1), passes, lifetime, errExpired)
 			},
@@ -354,12 +349,21 @@ func TestClock(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			conform.Check[*timer]{
-				ID: "Timer.Call/claim", Statement: "the probe holds", Probe: tt.giveProbe, Apply: tt.giveApply,
-				Around: synctest.Test,
-			}.Run(t, timers(""))
+			vacuous(t, tt.giveProbe, tt.giveApply, timers(""), synctest.Test)
 		})
 	}
+
+	t.Run("MovesWithTheClock passes a value that returns to its first value", func(t *testing.T) {
+		t.Parallel()
+
+		conform.Check[*timer]{
+			ID: "Timer.Call/claim", Statement: "the probe holds", Probe: spec.MovesWithTheClock,
+			Apply: func(h *conform.Handle[*timer]) {
+				probe.MovesWithTheClock(h, on(h, (*timer).phase), doing(h, (*timer).write))
+			},
+			Around: synctest.Test,
+		}.Run(t, timers(""))
+	})
 
 	guards := []struct {
 		name       string
@@ -426,15 +430,3 @@ func TestClock(t *testing.T) {
 		assert.Equal(t, failures[0].Assertion, "err-absent", "the guard asserts the success of the call")
 	})
 }
-
-// onTest is a recorder of the test t. Its method Unwrap returns t, so a check
-// with Around runs inside the environment of t, and the recorder keeps what
-// falsification reports on the seat.
-type onTest struct {
-	*assert.Recorder
-
-	t *testing.T
-}
-
-// Unwrap returns the test of the recorder.
-func (s *onTest) Unwrap() assert.TB { return s.t }

@@ -27,6 +27,7 @@ func ListsTheMembers[S, E any](h *conform.Handle[S], members []conform.Named[E],
 	for i, m := range members {
 		want[i] = m.Value
 	}
+	h.Engage()
 	h.Expect(spec.MisorderedMembers)
 	assert.Equal(h, list(), want, h.Statement())
 }
@@ -181,20 +182,25 @@ func TypeMessage[S any](h *conform.Handle[S], types []conform.Named[error], open
 
 // ComparesWithIdentity fails when the method Is of the value of a type
 // disagrees with errors.Is on one of values. It passes over a type without
-// the method Is.
+// the method Is. The probe ends when no type has the method Is.
 func ComparesWithIdentity[S any](h *conform.Handle[S], types, values []conform.Named[error]) {
 	h.Helper()
 	var faults []string
+	compared := false
 	for _, t := range types {
 		is, compares := t.Value.(interface{ Is(target error) bool })
 		if !compares {
 			continue
 		}
+		compared = true
 		for _, v := range values {
 			if is.Is(v.Value) != errors.Is(t.Value, v.Value) {
 				faults = append(faults, t.Name+" and "+v.Name)
 			}
 		}
+	}
+	if !compared {
+		return
 	}
 	judge(h, spec.DisagreeingIs, faults)
 }
@@ -228,10 +234,11 @@ func TypesDiffer[S any](h *conform.Handle[S], types []conform.Named[error]) {
 	judge(h, spec.SharedIdentity, faults)
 }
 
-// judge sets reason and fails the check when faults is not empty. The
-// contract is the statement, followed by faults.
+// judge engages the handle, sets reason and fails the check when faults is
+// not empty. The contract is the statement, followed by faults.
 func judge[S any](h *conform.Handle[S], reason spec.ReasonID, faults []string) {
 	h.Helper()
+	h.Engage()
 	h.Expect(reason)
 	assert.Empty(h, faults, h.Statement()+": "+strings.Join(faults, ", "))
 }
