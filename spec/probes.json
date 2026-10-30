@@ -245,7 +245,7 @@
     {
       "id": "no-element-twice",
       "summary": "One drain after two writes returns each element at most once.",
-      "vacuous": "The drain returns fewer than two elements.",
+      "vacuous": "A write fails, or the drain returns fewer than two elements.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -264,7 +264,7 @@
     {
       "id": "drains-in-one-order",
       "summary": "Two drains after two writes return the elements in the same order.",
-      "vacuous": "The first drain returns fewer than two elements.",
+      "vacuous": "A write fails, or the first drain returns fewer than two elements.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -955,7 +955,7 @@
     {
       "id": "refuses-what-the-predicate-rejects",
       "summary": "A write of a value that the predicate rejects fails.",
-      "vacuous": "The predicate accepts both values.",
+      "vacuous": "The first write fails, or the predicate accepts the second value or fails.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -1097,7 +1097,7 @@
     {
       "id": "takes-back-what-it-lent",
       "summary": "The put accepts the value that the get lent.",
-      "vacuous": "The get lends nothing.",
+      "vacuous": "The get fails.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -1116,7 +1116,7 @@
     {
       "id": "continues-from-the-cursor",
       "summary": "A read with the cursor of the first page returns another page.",
-      "vacuous": "The first page returns no cursor.",
+      "vacuous": "The first page fails or returns no cursor.",
       "since": "1.0.0",
       "inputs": [
         {

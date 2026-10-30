@@ -39,6 +39,10 @@ type StanceID string
 type Probe struct {
 	ID ProbeID `json:"id"`
 
+	// Vacuous is the condition under which the probe does not exercise its
+	// claim, as a sentence. A run names it when it fails a vacuous check.
+	Vacuous string `json:"vacuous"`
+
 	// Reasons lists the reason codes that the probe reports. The handle
 	// fails a check whose probe sets another code.
 	Reasons []ReasonID `json:"reasons"`

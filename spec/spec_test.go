@@ -49,14 +49,16 @@ func TestSpec(t *testing.T) {
 	t.Run("ProbeOf", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("returns the probe with its reasons", func(t *testing.T) {
+		t.Run("returns the probe with its reasons and its vacuous condition", func(t *testing.T) {
 			t.Parallel()
 
 			got, ok := spec.ProbeOf(spec.ZeroBesideError)
 
 			assert.True(t, ok, "the spec has the probe zero-beside-error")
 			assert.Equal(t, got, spec.Probe{
-				ID: spec.ZeroBesideError, Reasons: []spec.ReasonID{spec.ValueBesideError},
+				ID:      spec.ZeroBesideError,
+				Reasons: []spec.ReasonID{spec.ValueBesideError},
+				Vacuous: "No call fails, with the sample inputs or with a cancelled context.",
 			}, "the probe reports the reason value-beside-error")
 		})
 

@@ -1,0 +1,237 @@
+{
+  "type": "object",
+  "properties": {
+    "spec": {
+      "type": "string"
+    },
+    "suite": {
+      "type": "object",
+      "properties": {
+        "language": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "declaration": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "language",
+        "package",
+        "declaration"
+      ]
+    },
+    "generator": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "seed": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{16}$"
+    },
+    "application": {
+      "type": "string",
+      "enum": [
+        "falsification",
+        "subject"
+      ]
+    },
+    "subject": {
+      "type": "string"
+    },
+    "ended": {
+      "type": "string"
+    },
+    "checks": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "counterexample": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "object"
+            }
+          },
+          "failure": {
+            "type": "object"
+          },
+          "identity": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "claim": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "law": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "vacuous",
+              "excused",
+              "skipped",
+              "unchecked",
+              "proven",
+              "passed",
+              "wrong-reason",
+              "not-isolated",
+              "not-deeper",
+              "equivalent"
+            ]
+          },
+          "other": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "seed": {
+            "type": "string",
+            "pattern": "^0x[0-9a-f]{16}$"
+          },
+          "reason": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "machineries": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+            }
+          },
+          "cases": {
+            "type": "integer"
+          },
+          "shallow": {
+            "type": "boolean"
+          },
+          "authored": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "identity",
+          "key",
+          "result"
+        ]
+      }
+    },
+    "refusals": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "claim": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "callable": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "remedy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "claim",
+          "callable",
+          "why",
+          "remedy"
+        ]
+      }
+    },
+    "unclaimed": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "callable": {
+            "type": "string"
+          },
+          "stance": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "classification",
+          "callable",
+          "stance"
+        ]
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "spec",
+    "suite",
+    "generator",
+    "runtime",
+    "seed",
+    "application",
+    "checks",
+    "refusals",
+    "unclaimed"
+  ]
+}
