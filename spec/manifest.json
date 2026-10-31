@@ -1,11 +1,12 @@
 {
-    "commit": "b21bf983909e79de0c03bb3f3c3f21a73c8cc141",
-    "digest": "sha256:3a59462c6709d0cf219ad7583e01493fc8bcb0ca84d27420ce948aa7c4a99aa5",
+    "commit": "7ffbb81a234402e6ca86364d67782a9e05de4bc0",
+    "digest": "sha256:e4f20a98e5956863e4fe5688aa14446b8b0909644bb93c5fd0b9bd0c827124ac",
     "files": {
         "VERSION": "sha256:59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
         "claims.json": "sha256:3842824e1829710dd9cd1bea615cc5dbdb192f9ad045f577af82a26c561a951c",
         "defects.json": "sha256:c77d8729d30d5cf12685f8214f486b23a53d37b6b95378183200b37fdf67732e",
         "gates.json": "sha256:170f8686d6159aef26cc118cd5210655d247a5a19a09dfeaa2ea72a74d2e0927",
+        "keys.json": "sha256:2c2ab03ef33fc665eab35d873b0d35dff7ccc73ed8fca50683ff1c1a5fd5b33d",
         "laws.json": "sha256:7ba62eb52ac2cd4f2ec457f4786020989262b90f03ddfd717b5b3acdda24584f",
         "machineries.json": "sha256:bbd760a3d22998580fd73241c31ff39b681df9b735aca4a93299e2ca76e53828",
         "naming.json": "sha256:60ae7a2f384f4050e05886eb770ff3d3961a2d2a5e66faf4f2f80946ac03f3aa",
@@ -14,6 +15,7 @@
         "schemas/claims.schema.json": "sha256:5a0c2bfaa69ee9efbf483f4ed511d2d49ecf0b45ba7f8db04dae25b5a58ae375",
         "schemas/defects.schema.json": "sha256:bf74ca4141dac35d01cb69eee5600f9f1953335b9478579bbd49635fbf14e404",
         "schemas/gates.schema.json": "sha256:4431cc7ee37e6b1164d7eb11eeab5082a41073a3d99b56d20312a8a0f8ad72fe",
+        "schemas/keys.schema.json": "sha256:553038f8a7d9a80b9fc4ac7b17c2195d6807708e3ff8baaaf4a09dd708e22fa6",
         "schemas/laws.schema.json": "sha256:c937791f3662e4ce9f74a16c31557d9827bf5a58f79ab52520e1a41e717df1c8",
         "schemas/machineries.schema.json": "sha256:ae6c2c75ad2bea0ba5c24eab88241ff155ce8cd3eeb874324a31c25c2298780e",
         "schemas/probes.schema.json": "sha256:4efc335797ab6b45b4258bf85c44b5c65687a07221022b854412796b04a3d2a6",
