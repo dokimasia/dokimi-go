@@ -127,7 +127,7 @@ func TestRecord(t *testing.T) {
 				t,
 				falsified.Checks[0].Key,
 				"store.get/keeps-the-value",
-				"the key is the identity in lower case",
+				"the key is the key form of the identity",
 			)
 			assert.Equal(t, identities(judged), []string{
 				"Store.Get/keeps-the-value", "Store.Get/keeps-every-value", "Store.Get/misses-unknown-keys",
@@ -291,6 +291,21 @@ func TestRecord(t *testing.T) {
 
 			assert.Equal(t, fmt.Sprintf("0x%016x", seed), judged.Seed, "the property run takes the seed of the record")
 			assert.Equal(t, resultOf(judged, "Store.Get/keeps-every-value"), "fail", "the property check fails")
+		})
+
+		t.Run("records the key form of a name of several words", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				all := keeps()
+				all.ID = conform.Callable[Store]("Store.GetAll").Check("keeps-the-value")
+				conform.Run(t, suiteOf(all), newStore)
+				return
+			}
+			judged := recordsOf(t, childOutput(t))[1]
+
+			assert.Equal(t, judged.Checks[0].Key, "store.get-all/keeps-the-value",
+				"the key splits the name of the callable into its words")
 		})
 
 		t.Run("records the number of cases of a property check", func(t *testing.T) {

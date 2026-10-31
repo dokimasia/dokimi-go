@@ -2,3 +2,5 @@ go.dokimi.dev/assert v0.14.0 h1:v+U9r+HYnLKPMsdqfRR8WUr763NQGj1Lv3fdTQk/5hU=
 go.dokimi.dev/assert v0.14.0/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
 go.dokimi.dev/spec v0.0.0-20261030141156-3e3aa349116f h1:3sZZZaP2oOAamTVJLD9K/b9fPomo9xV1ExWoq+e6wtY=
 go.dokimi.dev/spec v0.0.0-20261030141156-3e3aa349116f/go.mod h1:DM/LWIQoRhsg4rOocgOmm3maYZITAed366gwsVM3Ptg=
+go.dokimi.dev/spec v0.0.0-20261031083817-9421c5610aa5 h1:bPDLZM3Hwz7LHR4afobu5FofpkjZtGoTKWyEKDbJAX4=
+go.dokimi.dev/spec v0.0.0-20261031083817-9421c5610aa5/go.mod h1:p08lSX0/zXduujM3vORcs+dtBi9UDftI/GfdHnfPNCI=

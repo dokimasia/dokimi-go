@@ -15,4 +15,4 @@ use (
 
 replace go.dokimi.dev/fault v0.2.0 => ./fault
 
-replace go.dokimi.dev/spec v0.0.0-20261030141156-3e3aa349116f => ./spec
+replace go.dokimi.dev/spec v0.0.0-20261031083817-9421c5610aa5 => ./spec

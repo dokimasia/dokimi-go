@@ -7,5 +7,5 @@ go 1.27.2
 
 require (
 	go.dokimi.dev/assert v0.14.0
-	go.dokimi.dev/spec v0.0.0-20261030141156-3e3aa349116f
+	go.dokimi.dev/spec v0.0.0-20261031083817-9421c5610aa5
 )

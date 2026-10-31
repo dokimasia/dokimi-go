@@ -281,7 +281,7 @@ func (a *application[S]) track(t *testing.T, i int, kind string, c *Check[S], cf
 // a property check.
 func (a *application[S]) add(i int, kind string, c *Check[S], v *verdict, seed uint64) {
 	r := checkRecord{
-		Identity: string(c.ID), Key: strings.ToLower(string(c.ID)), Claim: c.Claim, Law: c.Law,
+		Identity: string(c.ID), Key: spec.Key(string(c.ID)), Claim: c.Claim, Law: c.Law,
 		Machineries: c.Machineries, Shallow: c.Shallow, Authored: c.Claim == "" && !c.ceiling,
 		Result: v.result, Other: v.other, Why: v.why, Reason: v.reason, Failure: v.failure,
 		Cases: v.cases, Counterexample: v.counterexample,
