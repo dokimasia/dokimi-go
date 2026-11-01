@@ -9,6 +9,10 @@
         "go": "Appender",
         "typescript": "appender"
       },
+      "associative": {
+        "go": "Associative",
+        "typescript": "associative"
+      },
       "batch-writer": {
         "go": "BatchWriter",
         "typescript": "batchWriter"
@@ -44,6 +48,10 @@
       "codec": {
         "go": "Codec",
         "typescript": "codec"
+      },
+      "commutative": {
+        "go": "Commutative",
+        "typescript": "commutative"
       },
       "cursor": {
         "go": "Cursor",
@@ -93,6 +101,14 @@
         "go": "Expires",
         "typescript": "expires"
       },
+      "fails-fast": {
+        "go": "FailsFast",
+        "typescript": "failsFast"
+      },
+      "failure-is-reported": {
+        "go": "FailureIsReported",
+        "typescript": "failureIsReported"
+      },
       "hooks": {
         "go": "Hooks",
         "typescript": "hooks"
@@ -116,6 +132,10 @@
       "is-agrees": {
         "go": "IsAgrees",
         "typescript": "isAgrees"
+      },
+      "keeps-its-instance": {
+        "go": "KeepsItsInstance",
+        "typescript": "keepsItsInstance"
       },
       "leader-election": {
         "go": "LeaderElection",
@@ -160,6 +180,10 @@
       "no-duplicates": {
         "go": "NoDuplicates",
         "typescript": "noDuplicates"
+      },
+      "no-partial-write": {
+        "go": "NoPartialWrite",
+        "typescript": "noPartialWrite"
       },
       "order-after": {
         "go": "OrderAfter",
@@ -225,6 +249,10 @@
         "go": "ReadyAfter",
         "typescript": "readyAfter"
       },
+      "releases-on-every-path": {
+        "go": "ReleasesOnEveryPath",
+        "typescript": "releasesOnEveryPath"
+      },
       "repeat-survives": {
         "go": "RepeatSurvives",
         "typescript": "repeatSurvives"
@@ -236,6 +264,10 @@
       "retry-succeeds-tx": {
         "go": "RetrySucceedsTx",
         "typescript": "retrySucceedsTx"
+      },
+      "retry-succeeds-under-faults": {
+        "go": "RetrySucceedsUnderFaults",
+        "typescript": "retrySucceedsUnderFaults"
       },
       "saga": {
         "go": "Saga",
@@ -280,6 +312,10 @@
       "transaction": {
         "go": "Transaction",
         "typescript": "transaction"
+      },
+      "transaction-under-faults": {
+        "go": "TransactionUnderFaults",
+        "typescript": "transactionUnderFaults"
       },
       "tx": {
         "go": "Tx",
@@ -351,6 +387,14 @@
         "go": "AnswersASample",
         "typescript": "answersASample"
       },
+      "balances-each-call": {
+        "go": "BalancesEachCall",
+        "typescript": "balancesEachCall"
+      },
+      "commits-on-failure": {
+        "go": "CommitsOnFailure",
+        "typescript": "commitsOnFailure"
+      },
       "compensation-refuses": {
         "go": "CompensationRefuses",
         "typescript": "compensationRefuses"
@@ -403,6 +447,14 @@
         "go": "FilesRefusedWrite",
         "typescript": "filesRefusedWrite"
       },
+      "gives-up-early": {
+        "go": "GivesUpEarly",
+        "typescript": "givesUpEarly"
+      },
+      "half-applied": {
+        "go": "HalfApplied",
+        "typescript": "halfApplied"
+      },
       "ignores-cancel": {
         "go": "IgnoresCancel",
         "typescript": "ignoresCancel"
@@ -410,6 +462,10 @@
       "ignores-the-predicate": {
         "go": "IgnoresThePredicate",
         "typescript": "ignoresThePredicate"
+      },
+      "ignores-the-second-input": {
+        "go": "IgnoresTheSecondInput",
+        "typescript": "ignoresTheSecondInput"
       },
       "invents-a-pointer": {
         "go": "InventsAPointer",
@@ -422,6 +478,10 @@
       "keeps-failed-writes": {
         "go": "KeepsFailedWrites",
         "typescript": "keepsFailedWrites"
+      },
+      "keeps-its-first-result": {
+        "go": "KeepsItsFirstResult",
+        "typescript": "keepsItsFirstResult"
       },
       "leads-on": {
         "go": "LeadsOn",
@@ -439,6 +499,10 @@
         "go": "MatchesOtherTypes",
         "typescript": "matchesOtherTypes"
       },
+      "never-opens": {
+        "go": "NeverOpens",
+        "typescript": "neverOpens"
+      },
       "observation-unmoved": {
         "go": "ObservationUnmoved",
         "typescript": "observationUnmoved"
@@ -446,6 +510,10 @@
       "opens-a-live-handle": {
         "go": "OpensALiveHandle",
         "typescript": "opensALiveHandle"
+      },
+      "opens-without-closing": {
+        "go": "OpensWithoutClosing",
+        "typescript": "opensWithoutClosing"
       },
       "panics": {
         "go": "Panics",
@@ -527,6 +595,10 @@
         "go": "SucceedsAlways",
         "typescript": "succeedsAlways"
       },
+      "swallows-failure": {
+        "go": "SwallowsFailure",
+        "typescript": "swallowsFailure"
+      },
       "swallows-hooks": {
         "go": "SwallowsHooks",
         "typescript": "swallowsHooks"
@@ -561,6 +633,14 @@
         "go": "Cancellation",
         "typescript": "cancellation"
       },
+      "classification-params": {
+        "go": "ClassificationParams",
+        "typescript": "classificationParams"
+      },
+      "context-or-input": {
+        "go": "ContextOrInput",
+        "typescript": "contextOrInput"
+      },
       "error-cause": {
         "go": "ErrorCause",
         "typescript": "errorCause"
@@ -573,9 +653,25 @@
         "go": "ErrorValues",
         "typescript": "errorValues"
       },
+      "exact-fidelity": {
+        "go": "ExactFidelity",
+        "typescript": "exactFidelity"
+      },
       "failure": {
         "go": "Failure",
         "typescript": "failure"
+      },
+      "importable-samples": {
+        "go": "ImportableSamples",
+        "typescript": "importableSamples"
+      },
+      "input-samples": {
+        "go": "InputSamples",
+        "typescript": "inputSamples"
+      },
+      "interface-handle": {
+        "go": "InterfaceHandle",
+        "typescript": "interfaceHandle"
       },
       "list-function": {
         "go": "ListFunction",
@@ -633,6 +729,14 @@
         "go": "PresenceFlag",
         "typescript": "presenceFlag"
       },
+      "result-of-the-input-type": {
+        "go": "ResultOfTheInputType",
+        "typescript": "resultOfTheInputType"
+      },
+      "returns-before-cancel": {
+        "go": "ReturnsBeforeCancel",
+        "typescript": "returnsBeforeCancel"
+      },
       "returns-beside-error": {
         "go": "ReturnsBesideError",
         "typescript": "returnsBesideError"
@@ -660,6 +764,10 @@
       "two-error-values": {
         "go": "TwoErrorValues",
         "typescript": "twoErrorValues"
+      },
+      "two-inputs-of-one-type": {
+        "go": "TwoInputsOfOneType",
+        "typescript": "twoInputsOfOneType"
       },
       "two-members": {
         "go": "TwoMembers",
@@ -731,6 +839,14 @@
         "go": "CancelledContextIsReported",
         "typescript": "cancelledContextIsReported"
       },
+      "combining-ignores-the-grouping": {
+        "go": "CombiningIgnoresTheGrouping",
+        "typescript": "combiningIgnoresTheGrouping"
+      },
+      "combining-ignores-the-order": {
+        "go": "CombiningIgnoresTheOrder",
+        "typescript": "combiningIgnoresTheOrder"
+      },
       "compensation-accepts-its-step": {
         "go": "CompensationAcceptsItsStep",
         "typescript": "compensationAcceptsItsStep"
@@ -791,9 +907,25 @@
         "go": "ErrorValuesAreDistinct",
         "typescript": "errorValuesAreDistinct"
       },
+      "failed-call-leaves-no-effect": {
+        "go": "FailedCallLeavesNoEffect",
+        "typescript": "failedCallLeavesNoEffect"
+      },
+      "failed-commit-leaves-nothing": {
+        "go": "FailedCommitLeavesNothing",
+        "typescript": "failedCommitLeavesNothing"
+      },
+      "failed-dependency-is-reported": {
+        "go": "FailedDependencyIsReported",
+        "typescript": "failedDependencyIsReported"
+      },
       "failed-scope-leaves-nothing": {
         "go": "FailedScopeLeavesNothing",
         "typescript": "failedScopeLeavesNothing"
+      },
+      "failure-path-releases": {
+        "go": "FailurePathReleases",
+        "typescript": "failurePathReleases"
       },
       "granted-lease-is-not-granted-twice": {
         "go": "GrantedLeaseIsNotGrantedTwice",
@@ -835,6 +967,10 @@
         "go": "NoValueBesideAnError",
         "typescript": "noValueBesideAnError"
       },
+      "one-key-one-instance": {
+        "go": "OneKeyOneInstance",
+        "typescript": "oneKeyOneInstance"
+      },
       "one-partition-does-not-serve-another": {
         "go": "OnePartitionDoesNotServeAnother",
         "typescript": "onePartitionDoesNotServeAnother"
@@ -842,6 +978,10 @@
       "only-the-variants-are-valid": {
         "go": "OnlyTheVariantsAreValid",
         "typescript": "onlyTheVariantsAreValid"
+      },
+      "open-breaker-skips-the-operation": {
+        "go": "OpenBreakerSkipsTheOperation",
+        "typescript": "openBreakerSkipsTheOperation"
       },
       "read-keeps-its-snapshot": {
         "go": "ReadKeepsItsSnapshot",
@@ -1075,6 +1215,14 @@
         "go": "EachCallCompounds",
         "typescript": "eachCallCompounds"
       },
+      "either-grouping-agrees": {
+        "go": "EitherGroupingAgrees",
+        "typescript": "eitherGroupingAgrees"
+      },
+      "either-order-agrees": {
+        "go": "EitherOrderAgrees",
+        "typescript": "eitherOrderAgrees"
+      },
       "encodes-each-variant": {
         "go": "EncodesEachVariant",
         "typescript": "encodesEachVariant"
@@ -1090,6 +1238,10 @@
       "expires-after": {
         "go": "ExpiresAfter",
         "typescript": "expiresAfter"
+      },
+      "fails-without-effect": {
+        "go": "FailsWithoutEffect",
+        "typescript": "failsWithoutEffect"
       },
       "gains-what-went-in": {
         "go": "GainsWhatWentIn",
@@ -1175,6 +1327,14 @@
         "go": "RefusesWhatThePredicateRejects",
         "typescript": "refusesWhatThePredicateRejects"
       },
+      "refuses-without-the-dependency": {
+        "go": "RefusesWithoutTheDependency",
+        "typescript": "refusesWithoutTheDependency"
+      },
+      "releases-what-it-acquires": {
+        "go": "ReleasesWhatItAcquires",
+        "typescript": "releasesWhatItAcquires"
+      },
       "remains-poisoned": {
         "go": "RemainsPoisoned",
         "typescript": "remainsPoisoned"
@@ -1203,6 +1363,10 @@
         "go": "ReplaysInStampOrder",
         "typescript": "replaysInStampOrder"
       },
+      "reports-a-failed-dependency": {
+        "go": "ReportsAFailedDependency",
+        "typescript": "reportsAFailedDependency"
+      },
       "reports-sealed": {
         "go": "ReportsSealed",
         "typescript": "reportsSealed"
@@ -1226,6 +1390,10 @@
       "rolls-back-on-failure": {
         "go": "RollsBackOnFailure",
         "typescript": "rollsBackOnFailure"
+      },
+      "rolls-back-under-faults": {
+        "go": "RollsBackUnderFaults",
+        "typescript": "rollsBackUnderFaults"
       },
       "round-trips": {
         "go": "RoundTrips",
@@ -1255,6 +1423,10 @@
         "go": "SteadyWhileTheClockStops",
         "typescript": "steadyWhileTheClockStops"
       },
+      "succeeds-after-a-failure": {
+        "go": "SucceedsAfterAFailure",
+        "typescript": "succeedsAfterAFailure"
+      },
       "succeeds-within": {
         "go": "SucceedsWithin",
         "typescript": "succeedsWithin"
@@ -1282,6 +1454,10 @@
       "under-cancelled": {
         "go": "UnderCancelled",
         "typescript": "underCancelled"
+      },
+      "uses-one-instance": {
+        "go": "UsesOneInstance",
+        "typescript": "usesOneInstance"
       },
       "works-after": {
         "go": "WorksAfter",
@@ -1345,6 +1521,10 @@
         "go": "DriftedWithoutClock",
         "typescript": "driftedWithoutClock"
       },
+      "grouping-dependent": {
+        "go": "GroupingDependent",
+        "typescript": "groupingDependent"
+      },
       "healthy-after-induce": {
         "go": "HealthyAfterInduce",
         "typescript": "healthyAfterInduce"
@@ -1356,6 +1536,10 @@
       "ignored-cancel": {
         "go": "IgnoredCancel",
         "typescript": "ignoredCancel"
+      },
+      "leaked-resource": {
+        "go": "LeakedResource",
+        "typescript": "leakedResource"
       },
       "lost-cause": {
         "go": "LostCause",
@@ -1381,9 +1565,17 @@
         "go": "MisreadWindow",
         "typescript": "misreadWindow"
       },
+      "moved-instance": {
+        "go": "MovedInstance",
+        "typescript": "movedInstance"
+      },
       "never-converged": {
         "go": "NeverConverged",
         "typescript": "neverConverged"
+      },
+      "never-opened": {
+        "go": "NeverOpened",
+        "typescript": "neverOpened"
       },
       "never-ready": {
         "go": "NeverReady",
@@ -1412,6 +1604,10 @@
       "off-schedule": {
         "go": "OffSchedule",
         "typescript": "offSchedule"
+      },
+      "order-dependent": {
+        "go": "OrderDependent",
+        "typescript": "orderDependent"
       },
       "overran-budget": {
         "go": "OverranBudget",
@@ -1484,6 +1680,10 @@
       "still-leading": {
         "go": "StillLeading",
         "typescript": "stillLeading"
+      },
+      "swallowed-failure": {
+        "go": "SwallowedFailure",
+        "typescript": "swallowedFailure"
       },
       "uncompensated-step": {
         "go": "UncompensatedStep",

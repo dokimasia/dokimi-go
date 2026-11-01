@@ -177,6 +177,10 @@
           "callable": {
             "type": "string"
           },
+          "gate": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
           "why": {
             "type": "string"
           },
@@ -187,6 +191,7 @@
         "required": [
           "claim",
           "callable",
+          "gate",
           "why",
           "remedy"
         ]

@@ -255,9 +255,58 @@
     {
       "id": "keeps-failed-writes",
       "changes": "partner:read",
-      "does": "The read finds what a failed scope wrote.",
+      "does": "The read returns its zero results and no error until a call of a dependency fails.",
       "since": "1.0.0",
       "min-steps": 2
+    },
+    {
+      "id": "commits-on-failure",
+      "changes": "partner:read",
+      "does": "The read returns the second sample and no error once a call of a dependency failed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "swallows-failure",
+      "changes": "callable",
+      "does": "The callable returns its zero results and no error where a call of a dependency fails during the call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "half-applied",
+      "changes": "partner:read",
+      "does": "The read returns the second sample and no error once a call of a dependency failed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "gives-up-early",
+      "changes": "callable",
+      "does": "The callable fails on every call once a call of a dependency failed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "never-opens",
+      "changes": "callable",
+      "does": "Each call goes to a fresh subject, whose breaker is closed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "balances-each-call",
+      "changes": "callable",
+      "does": "Each call goes to a fresh subject over new dependencies.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "opens-without-closing",
+      "changes": "callable",
+      "does": "A call that fails records one more acquisition of its own, which no release follows.",
+      "since": "1.0.0",
+      "min-steps": 1
     },
     {
       "id": "put-refuses",
@@ -370,6 +419,20 @@
       "does": "The error type matches a value of another error type of the package.",
       "since": "1.0.0",
       "min-steps": 1
+    },
+    {
+      "id": "ignores-the-second-input",
+      "changes": "callable",
+      "does": "The callable returns its first input, or for a result of another type its value with a zero second input.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "keeps-its-first-result",
+      "changes": "callable",
+      "does": "The callable returns its first input where that input equals the value of its first call.",
+      "since": "1.0.0",
+      "min-steps": 4
     }
   ]
 }

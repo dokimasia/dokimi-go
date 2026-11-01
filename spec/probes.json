@@ -226,7 +226,7 @@
     {
       "id": "pinned-across-write",
       "summary": "Two reads of one snapshot return the same value across a write between them.",
-      "vacuous": "The first read or the write fails.",
+      "vacuous": "A write or the first read fails.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -336,7 +336,7 @@
     {
       "id": "reads-never-regress",
       "summary": "A second read after a write returns a version that is at least the version of the first read.",
-      "vacuous": "The write or the first read fails.",
+      "vacuous": "A write or the first read fails.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -577,7 +577,7 @@
     {
       "id": "runs-on-schedule",
       "summary": "A registered task has not run halfway to its instant and has run once the clock passes it.",
-      "vacuous": "The registration fails.",
+      "vacuous": "The registration fails, or its delay is not positive.",
       "since": "1.0.0",
       "inputs": [
         {
@@ -1072,6 +1072,139 @@
       ]
     },
     {
+      "id": "rolls-back-under-faults",
+      "summary": "A read after a scope whose commit failed fails with the declared sentinel.",
+      "vacuous": "The write inside the scope fails, the scope succeeds, or its commit calls no dependency.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "scope"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        },
+        {
+          "name": "read",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "not-rolled-back"
+      ]
+    },
+    {
+      "id": "reports-a-failed-dependency",
+      "summary": "A call returns an error while every call of a dependency fails.",
+      "vacuous": "The subject calls no dependency during the call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "swallowed-failure"
+      ]
+    },
+    {
+      "id": "fails-without-effect",
+      "summary": "A read after a call that failed with its dependency returns the value of the read before the call.",
+      "vacuous": "The call succeeds, or the subject calls no dependency during it.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "read",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "partial-write"
+      ]
+    },
+    {
+      "id": "succeeds-after-a-failure",
+      "summary": "A call succeeds within the declared attempts after the next call of a dependency fails.",
+      "vacuous": "The subject calls no dependency during the attempts.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "attempts",
+          "kind": "count"
+        }
+      ],
+      "reasons": [
+        "never-converged"
+      ]
+    },
+    {
+      "id": "refuses-without-the-dependency",
+      "summary": "A call fails without a call of its operation after the operation failed repeatedly.",
+      "vacuous": "The subject calls no dependency during the first call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "never-opened"
+      ]
+    },
+    {
+      "id": "uses-one-instance",
+      "summary": "Two calls with one key go to one dependency.",
+      "vacuous": "The subject calls no dependency during a call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "moved-instance"
+      ]
+    },
+    {
+      "id": "releases-what-it-acquires",
+      "summary": "The calls of open and of close of the dependencies agree in number after each failure of a call.",
+      "vacuous": "The subject calls no dependency during the call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "open",
+          "kind": "value"
+        },
+        {
+          "name": "close",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "leaked-resource"
+      ]
+    },
+    {
       "id": "agrees-with-the-backing",
       "summary": "The cache returns the value that its backing returns, after an establishing write.",
       "vacuous": "The establishing write or the read of the backing fails.",
@@ -1427,6 +1560,56 @@
       ],
       "reasons": [
         "shared-identity"
+      ]
+    },
+    {
+      "id": "either-order-agrees",
+      "summary": "A call returns one value for two inputs in either order.",
+      "vacuous": "A call with the two inputs fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "first",
+          "kind": "value"
+        },
+        {
+          "name": "second",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "order-dependent"
+      ]
+    },
+    {
+      "id": "either-grouping-agrees",
+      "summary": "A call returns one value for three inputs in either grouping.",
+      "vacuous": "A call with the three inputs fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "first",
+          "kind": "value"
+        },
+        {
+          "name": "second",
+          "kind": "value"
+        },
+        {
+          "name": "third",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "grouping-dependent"
       ]
     }
   ]

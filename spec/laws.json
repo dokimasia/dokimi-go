@@ -423,6 +423,58 @@
       "distinct-from": []
     },
     {
+      "id": "failed-commit-leaves-nothing",
+      "statement": "A read finds nothing that a scope wrote before its commit failed.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "failed-scope-leaves-nothing",
+          "case": "A scope that rolls back a failed commit and keeps what a failed body wrote."
+        }
+      ]
+    },
+    {
+      "id": "failed-dependency-is-reported",
+      "statement": "A call returns an error when a call of its dependency fails.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "failed-call-leaves-no-effect",
+      "statement": "A reader finds no effect of a call that failed.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": [
+        {
+          "law": "refused-write-leaves-nothing",
+          "case": "A writer that keeps nothing of a refused value and keeps a part of a write whose dependency failed."
+        }
+      ]
+    },
+    {
+      "id": "open-breaker-skips-the-operation",
+      "statement": "After repeated failures of its operation, the callable refuses a call without calling the operation.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "one-key-one-instance",
+      "statement": "Calls with one value of the key go to one instance while it is healthy.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "failure-path-releases",
+      "statement": "The callable releases each resource that it acquired, on every path of a failure.",
+      "depth": "call-that-fails-on-demand",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
       "id": "cache-agrees-with-its-backing",
       "statement": "The cache returns the value of its backing.",
       "depth": "generated-sequences",
@@ -564,6 +616,20 @@
       "id": "error-types-are-distinct",
       "statement": "No value of an error type matches another error type of the package.",
       "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "combining-ignores-the-order",
+      "statement": "Combining two values in either order returns one value.",
+      "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "combining-ignores-the-grouping",
+      "statement": "Combining three values in either grouping returns one value.",
+      "depth": "generated-inputs",
       "since": "1.0.0",
       "distinct-from": []
     }

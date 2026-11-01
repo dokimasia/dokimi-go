@@ -262,7 +262,27 @@
     },
     {
       "id": "partial-write",
-      "meaning": "The reader found a part of a write that the call refused.",
+      "meaning": "The reader found a part of a write that failed.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "swallowed-failure",
+      "meaning": "The call returned no error while a call of its dependency failed.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "never-opened",
+      "meaning": "The callable called its failing operation on every call.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "moved-instance",
+      "meaning": "Two calls with one key went to two instances.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "leaked-resource",
+      "meaning": "A call acquired more resources than it released.",
       "since": "1.0.0"
     },
     {
@@ -318,6 +338,16 @@
     {
       "id": "lost-cause",
       "meaning": "The error type did not return the cause that the check gave it.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "order-dependent",
+      "meaning": "The two orders of two inputs returned two values.",
+      "since": "1.0.0"
+    },
+    {
+      "id": "grouping-dependent",
+      "meaning": "The two groupings of three inputs returned two values.",
       "since": "1.0.0"
     }
   ]

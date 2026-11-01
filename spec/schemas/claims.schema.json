@@ -205,6 +205,9 @@
                 },
                 "sample": {
                   "type": "integer"
+                },
+                "position": {
+                  "type": "integer"
                 }
               },
               "required": [
