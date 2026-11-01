@@ -56,6 +56,7 @@ func Generate(dir string) (err error) {
 	if err != nil {
 		return fmt.Errorf("open the directory of the spec: %w", err)
 	}
+	//dokimi:mutate-skip sbr-delete: no spec makes the close of a root fail, and the close of a directory has no effect that a caller observes
 	defer func() { err = errors.Join(err, root.Close()) }()
 	data, err := root.ReadFile("naming.json")
 	if err != nil {
