@@ -281,3 +281,13 @@ func RefusesEarly[S any](h *conform.Handle[S], call Act, sentinel error) {
 	h.Expect(spec.AcceptedEarly)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
 }
+
+// ReportsNoError calls call on the fresh subject, and fails when the call
+// returns an error.
+func ReportsNoError[S any](h *conform.Handle[S], call Act) {
+	h.Helper()
+	err := call(h.Context())
+	h.Engage()
+	h.Expect(spec.FalsePoison)
+	assert.NoError(h, err, h.Statement())
+}

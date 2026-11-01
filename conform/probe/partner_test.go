@@ -37,6 +37,7 @@ type store struct {
 	closed  bool
 	opened  bool
 	leading bool
+	leased  bool
 }
 
 // stores returns a factory of stores with the value 1 under the key 1, whose
@@ -118,6 +119,47 @@ func act(h *conform.Handle[*store], fn func(s *store) error) probe.Act {
 // version returns the observation of the version of the store of h.
 func version(h *conform.Handle[*store]) probe.Call[int] {
 	return func(context.Context) (int, error) { return h.Subject().version, nil }
+}
+
+// batchRead returns the read of the keys of the store of h in one batch. A
+// broken batch drops the value of the last key.
+func batchRead(h *conform.Handle[*store], keys ...int) probe.Call[[]int] {
+	return func(context.Context) ([]int, error) {
+		s := h.Subject()
+		out := make([]int, 0, len(keys))
+		for _, k := range keys {
+			v, err := s.get(k)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, v)
+		}
+		if s.broken == "batch" {
+			out = out[:len(out)-1]
+		}
+		return out, nil
+	}
+}
+
+// at returns the call of the store of h at a position, which fails at a
+// position from the number of values on. A broken bound admits every
+// position, and a broken first or last position refuses that position.
+func at(h *conform.Handle[*store]) func(context.Context, int) error {
+	return func(_ context.Context, p int) error {
+		s := h.Subject()
+		switch {
+		case s.broken == "bounds":
+			return nil
+		case s.broken == "first" && p == 0, s.broken == "last" && p == len(s.values)-1, p >= len(s.values):
+			return errOther
+		}
+		return nil
+	}
+}
+
+// size returns the observation of the number of values of the store of h.
+func size(h *conform.Handle[*store]) probe.Call[int] {
+	return func(context.Context) (int, error) { return len(h.Subject().values), nil }
 }
 
 // passes is an Act that succeeds, and fails an Act that fails.
@@ -538,6 +580,131 @@ func TestPartner(t *testing.T) {
 				probe.RemovesOnDelete(h, del, put, read, errMiss)
 			},
 		},
+		{
+			name: "ReadsWhatWasStored", giveProbe: spec.ReadsWhatWasStored, giveBreak: "batch", want: spec.LostAKey,
+			giveApply: func(h *conform.Handle[*store]) {
+				probe.ReadsWhatWasStored(h, batchRead(h, 2, 3), writer(h, []int{2, 3}, []int{20, 30}))
+			},
+		},
+		{
+			name: "BoundedByTheSize", giveProbe: spec.BoundedByTheSize, giveBreak: "bounds", want: spec.OutOfBounds,
+			giveApply: func(h *conform.Handle[*store]) {
+				_ = h.Subject().put(2, 2)
+				probe.BoundedByTheSize(h, at(h), size(h))
+			},
+		},
+		{
+			name:      "BoundedByTheSize fails a refused first position",
+			giveProbe: spec.BoundedByTheSize, giveBreak: "first", want: spec.OutOfBounds,
+			giveApply: func(h *conform.Handle[*store]) {
+				_ = h.Subject().put(2, 2)
+				probe.BoundedByTheSize(h, at(h), size(h))
+			},
+		},
+		{
+			name:      "BoundedByTheSize fails a refused last position",
+			giveProbe: spec.BoundedByTheSize, giveBreak: "last", want: spec.OutOfBounds,
+			giveApply: func(h *conform.Handle[*store]) {
+				_ = h.Subject().put(2, 2)
+				probe.BoundedByTheSize(h, at(h), size(h))
+			},
+		},
+		{
+			name:      "BoundedByTheSize calls an empty collection at the size alone",
+			giveProbe: spec.BoundedByTheSize, giveBreak: "bounds", want: spec.OutOfBounds,
+			giveApply: func(h *conform.Handle[*store]) {
+				clear(h.Subject().values)
+				probe.BoundedByTheSize(h, at(h), size(h))
+			},
+		},
+		{
+			name: "AgreesWithTheSibling", giveProbe: spec.AgreesWithTheSibling, giveBreak: "wrapper",
+			want: spec.DivergedFromTheSibling,
+			giveApply: func(h *conform.Handle[*store]) {
+				wrapper := func(context.Context) (int, error) {
+					if h.Subject().broken == "wrapper" {
+						return 0, nil
+					}
+					return h.Subject().get(1)
+				}
+				probe.AgreesWithTheSibling(h, wrapper, func(context.Context) (int, error) { return h.New().get(1) })
+			},
+		},
+		{
+			name:      "AgreesWithTheSibling fails a wrapper that fails where its sibling succeeds",
+			giveProbe: spec.AgreesWithTheSibling, giveBreak: "wrapper", want: spec.DivergedFromTheSibling,
+			giveApply: func(h *conform.Handle[*store]) {
+				wrapper := func(context.Context) (int, error) {
+					v, err := h.Subject().get(1)
+					if h.Subject().broken == "wrapper" {
+						return v, errOther
+					}
+					return v, err
+				}
+				probe.AgreesWithTheSibling(h, wrapper, func(context.Context) (int, error) { return h.New().get(1) })
+			},
+		},
+		{
+			name:      "AgreesWithTheSibling fails a wrapper that succeeds where its sibling fails",
+			giveProbe: spec.AgreesWithTheSibling, giveBreak: "wrapper", want: spec.DivergedFromTheSibling,
+			giveApply: func(h *conform.Handle[*store]) {
+				wrapper := func(context.Context) (int, error) {
+					v, err := h.Subject().get(9)
+					if h.Subject().broken == "wrapper" {
+						return v, nil
+					}
+					return v, err
+				}
+				probe.AgreesWithTheSibling(h, wrapper, func(context.Context) (int, error) { return h.New().get(9) })
+			},
+		},
+		{
+			name: "VerifiesAfterAppends", giveProbe: spec.VerifiesAfterAppends, giveBreak: "verifier",
+			want: spec.FalseTamper,
+			giveApply: func(h *conform.Handle[*store]) {
+				verify := act(h, func(s *store) error {
+					if s.broken == "verifier" {
+						return errOther
+					}
+					return nil
+				})
+				probe.VerifiesAfterAppends(h, verify, act(h, func(s *store) error { return s.put(2, 2) }))
+			},
+		},
+		{
+			name: "GrantsAfterRelease", giveProbe: spec.GrantsAfterRelease, giveBreak: "release",
+			want: spec.KeptAfterRelease,
+			giveApply: func(h *conform.Handle[*store]) {
+				acquire := act(h, func(s *store) error {
+					if s.leased {
+						return errOther
+					}
+					s.leased = true
+					return nil
+				})
+				release := act(h, func(s *store) error {
+					s.leased = s.leased && s.broken == "release"
+					return nil
+				})
+				probe.GrantsAfterRelease(h, acquire, release)
+			},
+		},
+		{
+			name: "MovesWithALoan", giveProbe: spec.MovesWithALoan, giveBreak: "stats", want: spec.UncountedLoan,
+			giveApply: func(h *conform.Handle[*store]) {
+				stats := func(context.Context) (int, error) {
+					if h.Subject().broken == "stats" {
+						return 0, nil
+					}
+					return len(h.Subject().lent), nil
+				}
+				lend := act(h, func(s *store) error {
+					s.lent[len(s.lent)] = true
+					return nil
+				})
+				probe.MovesWithALoan(h, stats, lend)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -587,6 +754,18 @@ func TestPartner(t *testing.T) {
 					writes++
 					return s.put(2, writes)
 				}))
+			},
+		}.Run(t, stores(""))
+	})
+
+	t.Run("AgreesWithTheSibling passes a wrapper and a sibling that fail with other values", func(t *testing.T) {
+		t.Parallel()
+
+		conform.Check[*store]{
+			ID: "Store.Call/claim", Statement: "the probe holds", Probe: spec.AgreesWithTheSibling,
+			Apply: func(h *conform.Handle[*store]) {
+				probe.AgreesWithTheSibling(h, func(context.Context) (int, error) { return 1, errOther },
+					func(context.Context) (int, error) { return 2, errOther })
 			},
 		}.Run(t, stores(""))
 	})
@@ -835,6 +1014,38 @@ func TestPartner(t *testing.T) {
 			name: "RemovesOnDelete is vacuous on a delete that fails", giveProbe: spec.RemovesOnDelete,
 			giveApply: func(h *conform.Handle[*store]) { probe.RemovesOnDelete(h, fails, passes, passes, errMiss) },
 		},
+		{
+			name: "ReadsWhatWasStored is vacuous on a first write that fails", giveProbe: spec.ReadsWhatWasStored,
+			giveApply: func(h *conform.Handle[*store]) { probe.ReadsWhatWasStored(h, batchRead(h, 1), failsFirst(1)) },
+		},
+		{
+			name: "ReadsWhatWasStored is vacuous on a second write that fails", giveProbe: spec.ReadsWhatWasStored,
+			giveApply: func(h *conform.Handle[*store]) { probe.ReadsWhatWasStored(h, batchRead(h, 1), failsSecond(1)) },
+		},
+		{
+			name: "BoundedByTheSize is vacuous on a size that fails", giveProbe: spec.BoundedByTheSize,
+			giveApply: func(h *conform.Handle[*store]) { probe.BoundedByTheSize(h, at(h), refusing[int]()) },
+		},
+		{
+			name: "VerifiesAfterAppends is vacuous on a first append that fails", giveProbe: spec.VerifiesAfterAppends,
+			giveApply: func(h *conform.Handle[*store]) { probe.VerifiesAfterAppends(h, passes, fails) },
+		},
+		{
+			name: "VerifiesAfterAppends is vacuous on a second append that fails", giveProbe: spec.VerifiesAfterAppends,
+			giveApply: func(h *conform.Handle[*store]) { probe.VerifiesAfterAppends(h, passes, writesOnce()) },
+		},
+		{
+			name: "GrantsAfterRelease is vacuous on a first acquire that fails", giveProbe: spec.GrantsAfterRelease,
+			giveApply: func(h *conform.Handle[*store]) { probe.GrantsAfterRelease(h, fails, passes) },
+		},
+		{
+			name: "GrantsAfterRelease is vacuous on a release that fails", giveProbe: spec.GrantsAfterRelease,
+			giveApply: func(h *conform.Handle[*store]) { probe.GrantsAfterRelease(h, passes, fails) },
+		},
+		{
+			name: "MovesWithALoan is vacuous on a get that fails", giveProbe: spec.MovesWithALoan,
+			giveApply: func(h *conform.Handle[*store]) { probe.MovesWithALoan(h, returning(1), fails) },
+		},
 	}
 	for _, tt := range ends {
 		t.Run(tt.name, func(t *testing.T) {
@@ -888,6 +1099,23 @@ func TestPartner(t *testing.T) {
 				}
 				probe.ContinuesFromTheCursor(h, read, func(p page) int { return p.next })
 			},
+		},
+		{
+			name:      "ReadsWhatWasStored fails the guard for a batch read that fails",
+			giveProbe: spec.ReadsWhatWasStored,
+			giveApply: func(h *conform.Handle[*store]) {
+				probe.ReadsWhatWasStored(h, refusing[[]int](), writer(h, []int{2, 3}, []int{20, 30}))
+			},
+		},
+		{
+			name:      "MovesWithALoan fails the guard for a first stats that fails",
+			giveProbe: spec.MovesWithALoan,
+			giveApply: func(h *conform.Handle[*store]) { probe.MovesWithALoan(h, failsFirst(1), passes) },
+		},
+		{
+			name:      "MovesWithALoan fails the guard for a second stats that fails",
+			giveProbe: spec.MovesWithALoan,
+			giveApply: func(h *conform.Handle[*store]) { probe.MovesWithALoan(h, failsSecond(1), passes) },
 		},
 	}
 	for _, tt := range guards {

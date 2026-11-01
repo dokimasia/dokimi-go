@@ -298,6 +298,11 @@ func TestSingle(t *testing.T) {
 			giveApply: func(h *conform.Handle[*cell]) { probe.RefusesEarly(h, acts(h), errMiss) },
 			giveGood:  failing(0, errMiss), giveBad: value(0), want: spec.AcceptedEarly,
 		},
+		{
+			name: "ReportsNoError", giveProbe: spec.ReportsNoError,
+			giveApply: func(h *conform.Handle[*cell]) { probe.ReportsNoError(h, acts(h)) },
+			giveGood:  value(0), giveBad: failing(0, errOther), want: spec.FalsePoison,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

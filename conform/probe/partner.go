@@ -411,3 +411,106 @@ func RemovesOnDelete[S any](h *conform.Handle[S], call, put, read Act, sentinel 
 	h.Expect(spec.ReadableAfterDelete)
 	assert.ErrorIs(h, err, sentinel, h.Statement())
 }
+
+// ReadsWhatWasStored writes two values through write, reads both keys through
+// call in one batch, and fails unless the batch returns the two written values
+// in the order of their keys. A write that fails ends the probe.
+func ReadsWhatWasStored[S, V any](h *conform.Handle[S], call Call[[]V], write Call[V]) {
+	h.Helper()
+	first, err := write(h.Context())
+	if err != nil {
+		return
+	}
+	second, err := write(h.Context())
+	if err != nil {
+		return
+	}
+	h.Engage()
+	got, err := call(h.Context())
+	h.Expect(spec.LostAKey)
+	assert.NoError(h, err, h.Statement())
+	assert.Equal(h, got, []V{first, second}, h.Statement())
+}
+
+// BoundedByTheSize reads the size through size, calls call at the first and
+// the last position and at the size, and fails unless the first two calls
+// succeed and the call at the size fails. A size of zero calls call at the
+// size alone. A size that fails ends the probe.
+func BoundedByTheSize[S any](h *conform.Handle[S], call func(ctx context.Context, position int) error, size Call[int]) {
+	h.Helper()
+	n, err := size(h.Context())
+	if err != nil {
+		return
+	}
+	h.Engage()
+	h.Expect(spec.OutOfBounds)
+	if n > 0 {
+		assert.NoError(h, call(h.Context(), 0), h.Statement())
+		assert.NoError(h, call(h.Context(), n-1), h.Statement())
+	}
+	assert.HasError(h, call(h.Context(), n), h.Statement())
+}
+
+// AgreesWithTheSibling calls call on the subject and sibling on a new subject
+// of the factory, with one input. It fails when one of the two calls fails
+// and the other does not, and when both succeed with different values. A
+// value beside an error has no meaning, so two failed calls agree.
+func AgreesWithTheSibling[S, V any](h *conform.Handle[S], call, sibling Call[V]) {
+	h.Helper()
+	got, err := call(h.Context())
+	want, wantErr := sibling(h.Context())
+	h.Engage()
+	h.Expect(spec.DivergedFromTheSibling)
+	if err != nil || wantErr != nil {
+		assert.Equal(h, err == nil, wantErr == nil, h.Statement())
+		return
+	}
+	assert.Equal(h, got, want, h.Statement())
+}
+
+// VerifiesAfterAppends appends twice through appends, then calls call, and
+// fails when the verify returns an error. An append that fails ends the
+// probe.
+func VerifiesAfterAppends[S any](h *conform.Handle[S], call, appends Act) {
+	h.Helper()
+	for range 2 {
+		if appends(h.Context()) != nil {
+			return
+		}
+	}
+	h.Engage()
+	err := call(h.Context())
+	h.Expect(spec.FalseTamper)
+	assert.NoError(h, err, h.Statement())
+}
+
+// GrantsAfterRelease acquires through call, releases through release, and
+// acquires through call again, and fails when the second acquire returns an
+// error. A first acquire or a release that fails ends the probe.
+func GrantsAfterRelease[S any](h *conform.Handle[S], call, release Act) {
+	h.Helper()
+	if call(h.Context()) != nil || release(h.Context()) != nil {
+		return
+	}
+	h.Engage()
+	err := call(h.Context())
+	h.Expect(spec.KeptAfterRelease)
+	assert.NoError(h, err, h.Statement())
+}
+
+// MovesWithALoan reads the stats through call, lends an object through get,
+// and reads the stats again, and fails when the two stats are equal or a read
+// of the stats fails. A get that fails ends the probe.
+func MovesWithALoan[S, V any](h *conform.Handle[S], call Call[V], get Act) {
+	h.Helper()
+	before, beforeErr := call(h.Context())
+	if get(h.Context()) != nil {
+		return
+	}
+	h.Engage()
+	after, err := call(h.Context())
+	h.Expect(spec.UncountedLoan)
+	assert.NoError(h, beforeErr, h.Statement())
+	assert.NoError(h, err, h.Statement())
+	assert.NotEqual(h, after, before, h.Statement())
+}
