@@ -50,11 +50,12 @@ var ErrReason = errors.New("conform: the probe sets a reason that its entry does
 // reports the line of the check.
 type seat interface{ assert.TB }
 
-// Doors are the doors of a handle: the subjects, the restart and the crash
-// that only the code that builds a subject can supply. An application sets
-// them through the options [Reference], [Second], [Restartable] and
-// [Crashable], and a check sets the doors of its planted defect through
-// [Check.Doors]. A nil door is not supplied.
+// Doors are the doors of a handle: the subjects, the restart, the crash and
+// the values that only the code that builds a subject can supply. An
+// application sets them through the options [Reference], [Second],
+// [Restartable], [Crashable], [Faultable] and [Supplies], and a check sets
+// the doors of its planted defect through [Check.Doors]. A nil door is not
+// supplied.
 type Doors[S any] struct {
 	// Reference returns a fresh reference implementation, which
 	// [Handle.Reference] returns.
@@ -72,10 +73,27 @@ type Doors[S any] struct {
 	// point of the crash from h.Rand(), so a property check replays and
 	// shrinks the point with its case. [Handle.Crash] returns its subject.
 	Crash func(h *Handle[S], s S, call func()) S
+
+	// Faults returns a fresh subject whose dependencies ask inj, which
+	// [Handle.Subject], [Handle.New] and [Handle.Fresh] return for a check of
+	// the machinery call-that-fails-on-demand.
+	Faults func(h *Handle[S], inj *Injector) S
+
+	// Values are the doors of values, one for each type, each from [Supply].
+	// [Open] returns the value of the door of its type.
+	Values []Supplied[S]
 }
 
-// over returns d with each door that d lacks from fallback.
+// over returns d with each door that d lacks from fallback, a door of a value
+// included.
 func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
+	values := slices.Clone(d.Values)
+	for _, v := range fallback.Values {
+		if !slices.ContainsFunc(values, v.opens) {
+			values = append(values, v)
+		}
+	}
+	d.Values = values
 	if d.Reference == nil {
 		d.Reference = fallback.Reference
 	}
@@ -87,6 +105,9 @@ func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
 	}
 	if d.Crash == nil {
 		d.Crash = fallback.Crash
+	}
+	if d.Faults == nil {
+		d.Faults = fallback.Faults
 	}
 	return d
 }
@@ -103,12 +124,13 @@ func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
 type Handle[S any] struct {
 	seat
 
-	check  *Check[S]
-	source func(h *Handle[S]) S
-	config *config[S]
-	clock  *assert.Controlled
-	random rand.Source
-	kept   *firsts
+	check    *Check[S]
+	source   func(h *Handle[S]) S
+	config   *config[S]
+	clock    *assert.Controlled
+	random   rand.Source
+	kept     *firsts
+	injector *Injector
 
 	// expected is the reason that the probe set last, and nil before the
 	// first call of Expect.
@@ -132,7 +154,10 @@ type Handle[S any] struct {
 func newHandle[S any](
 	tb assert.TB, c *Check[S], source func(h *Handle[S]) S, cfg *config[S], kept *firsts,
 ) *Handle[S] {
-	h := &Handle[S]{seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin), kept: kept}
+	h := &Handle[S]{
+		seat: tb, check: c, source: source, config: cfg, clock: assert.NewControlled(origin), kept: kept,
+		injector: new(Injector),
+	}
 	if pc, isCase := tb.(*prop.Case); isCase {
 		h.random = pc.Rand()
 	} else {
@@ -167,11 +192,16 @@ func (h *Handle[S]) New() S {
 
 // Fresh returns a fresh subject from the factory of the application, also
 // under falsification, where Subject and New return the planted defect. The
-// planted defect of a derived check wraps it. Without a factory, as under
-// [Falsify], Fresh ends the check with a fault that wraps [ErrOption], and it
-// returns the zero value to a seat that takes the fault and goes on.
+// planted defect of a derived check wraps it. Fresh builds the subject of a
+// check of the machinery call-that-fails-on-demand through the door Faults.
+// Without a factory, as under [Falsify], Fresh ends the check with a fault that
+// wraps [ErrOption], and it returns the zero value to a seat that takes the
+// fault and goes on.
 func (h *Handle[S]) Fresh() S {
 	h.Helper()
+	if h.check.faults() {
+		return h.build((*Handle[S]).faulty)
+	}
 	if h.config.fresh == nil {
 		assert.Fault(h, fmt.Errorf("%w: %s calls Fresh without a factory of subjects. A planted defect over a "+
 			"fresh subject proves its check in an application, which has the factory", ErrOption, h.check.ID))
@@ -231,7 +261,7 @@ func (h *Handle[S]) ObserveCall(call assert.Call) {
 func (h *Handle[S]) Reference() S {
 	h.Helper()
 	if h.config.doors.Reference == nil {
-		h.lacks("Reference", "conform.Reference", "func(h *conform.Handle[%[1]v]) %[1]v { … }")
+		h.lacks("calls Reference", "Reference", "conform.Reference", "func(h *conform.Handle[%[1]v]) %[1]v { … }")
 		var zero S
 		return zero
 	}
@@ -245,7 +275,7 @@ func (h *Handle[S]) Reference() S {
 func (h *Handle[S]) Second() S {
 	h.Helper()
 	if h.config.doors.Second == nil {
-		h.lacks("Second", "conform.Second", "func(h *conform.Handle[%[1]v]) %[1]v { … }")
+		h.lacks("calls Second", "Second", "conform.Second", "func(h *conform.Handle[%[1]v]) %[1]v { … }")
 		var zero S
 		return zero
 	}
@@ -259,7 +289,8 @@ func (h *Handle[S]) Second() S {
 func (h *Handle[S]) Restart(s S) S {
 	h.Helper()
 	if h.config.doors.Restart == nil {
-		h.lacks("Restart", "conform.Restartable", "func(h *conform.Handle[%[1]v], s %[1]v) %[1]v { … }")
+		h.lacks("calls Restart", "Restart", "conform.Restartable",
+			"func(h *conform.Handle[%[1]v], s %[1]v) %[1]v { … }")
 		return s
 	}
 	return h.build(func(h *Handle[S]) S { return h.config.doors.Restart(h, s) })
@@ -273,30 +304,51 @@ func (h *Handle[S]) Restart(s S) S {
 func (h *Handle[S]) Crash(s S, call func()) S {
 	h.Helper()
 	if h.config.doors.Crash == nil {
-		h.lacks("Crash", "conform.Crashable", "func(h *conform.Handle[%[1]v], s %[1]v, call func()) %[1]v { … }")
+		h.lacks("calls Crash", "Crash", "conform.Crashable",
+			"func(h *conform.Handle[%[1]v], s %[1]v, call func()) %[1]v { … }")
 		call()
 		return s
 	}
 	return h.build(func(h *Handle[S]) S { return h.config.doors.Crash(h, s, call) })
 }
 
-// lacks ends the check with the fault of the door that the handle lacks. The
-// fault of a handle on a planted defect contains the door of the check, and
-// the fault of any other handle contains the option of the application.
-// signature is the signature of the door, where %[1]v is the type of the
-// subjects.
-func (h *Handle[S]) lacks(door, option, signature string) {
+// lacks ends the check with the fault of the door that the handle lacks for
+// action, such as calls Reference. The fault of a handle on a planted defect
+// contains the door of the check, and the fault of any other handle contains
+// the option of the application. signature is the signature of the door,
+// where %[1]v is the type of the subjects.
+func (h *Handle[S]) lacks(action, door, option, signature string) {
 	h.Helper()
 	subjects := reflect.TypeFor[S]()
 	fn := fmt.Sprintf(signature, subjects)
 	if h.config.defect {
-		assert.Fault(h, fmt.Errorf("%w: %s calls %s on its planted defect, and the check has no door %s. "+
+		assert.Fault(h, fmt.Errorf("%w: %s %s on its planted defect, and the check has no door %s. "+
 			"Give the check the door:\n\tconform.Doors[%v]{%s: %s}",
-			ErrOption, h.check.ID, door, door, subjects, door, fn))
+			ErrOption, h.check.ID, action, door, subjects, door, fn))
 		return
 	}
-	assert.Fault(h, fmt.Errorf("%w: %s calls %s without the option %s. Pass the option to the application:\n\t%s(%s)",
-		ErrOption, h.check.ID, door, option, option, fn))
+	assert.Fault(h, fmt.Errorf("%w: %s %s without the option %s. Pass the option to the application:\n\t%s(%s)",
+		ErrOption, h.check.ID, action, option, option, fn))
+}
+
+// Injector returns the injector of the handle, which every subject that the
+// handle builds through the door Faults asks.
+func (h *Handle[S]) Injector() *Injector {
+	return h.injector
+}
+
+// faulty returns a subject of the door Faults over the injector of the handle.
+// Without the door it ends the check with a fault that wraps [ErrOption], and
+// it returns the zero value to a seat that takes the fault and goes on.
+func (h *Handle[S]) faulty() S {
+	h.Helper()
+	if h.config.doors.Faults == nil {
+		h.lacks("builds a subject", "Faults", "conform.Faultable",
+			"func(h *conform.Handle[%[1]v], inj *conform.Injector) %[1]v { … }")
+		var zero S
+		return zero
+	}
+	return h.config.doors.Faults(h, h.injector)
 }
 
 // Clock returns the controlled clock of the check. A factory builds a

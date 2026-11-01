@@ -932,6 +932,28 @@ func TestCheck(t *testing.T) {
 			assert.True(t, restarted.Load(), "the check of the options restarts the defect with the door of its check")
 		})
 
+		t.Run("applies a check of the options to the defect with the doors of values of the defect",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var opened atomic.Bool
+				c := keeps()
+				c.Doors = conform.Doors[Store]{Values: []conform.Supplied[Store]{
+					conform.Supply(func(*conform.Handle[Store], Store) endpoint {
+						opened.Store(true)
+						return "defect"
+					}),
+				}}
+				other := misses()
+				apply := other.Apply
+				other.Apply = func(h *conform.Handle[Store]) {
+					_ = conform.Open[endpoint](h, h.Subject())
+					apply(h)
+				}
+				c.Falsify(t, conform.With(other))
+				assert.True(t, opened.Load(), "the check of the options opens the value of the door of the defect")
+			})
+
 		t.Run("passes when the defect fails the statement inside the environment of the check", func(t *testing.T) {
 			t.Parallel()
 

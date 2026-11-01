@@ -6,6 +6,7 @@ package conform
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -180,6 +181,7 @@ type checkRecord struct {
 type refusalRecord struct {
 	Claim    spec.ClaimID `json:"claim"`
 	Callable string       `json:"callable"`
+	Gate     spec.GateID  `json:"gate"`
 	Why      string       `json:"why"`
 	Remedy   string       `json:"remedy"`
 }
@@ -224,7 +226,8 @@ type application[S any] struct {
 	falsified, judged map[int]checkRecord
 
 	// name is the name of the application, such as RunStoreSuite, and subject
-	// the name of its factory for an application with a subject record.
+	// the type of the first value that the factory of the application builds,
+	// as [typeName] writes it.
 	name, subject string
 
 	// ended lists the problems that stopped the application before its first
@@ -236,18 +239,45 @@ type application[S any] struct {
 	kinds []string
 
 	// seed is the seed of the property runs of the application.
-	seed uint64
-	mu   sync.Mutex
+	seed  uint64
+	mu    sync.Mutex
+	typed sync.Once
 }
 
 // newApplication returns the collector of the application name of the suite,
-// which writes a record of each of kinds. subject is the name of the factory
-// of the subjects.
-func newApplication[S any](suite *Suite[S], name, subject string, seed uint64, kinds ...string) *application[S] {
+// which writes a record of each of kinds.
+func newApplication[S any](suite *Suite[S], name string, seed uint64, kinds ...string) *application[S] {
 	return &application[S]{
-		suite: suite, name: name, subject: subject, seed: seed, kinds: kinds,
+		suite: suite, name: name, seed: seed, kinds: kinds,
 		falsified: map[int]checkRecord{}, judged: map[int]checkRecord{},
 	}
+}
+
+// factory returns newSubject, which also sets the subject of the application
+// to the type of the first value that it builds.
+func (a *application[S]) factory(newSubject func(h *Handle[S]) S) func(h *Handle[S]) S {
+	return func(h *Handle[S]) S {
+		s := newSubject(h)
+		a.typed.Do(func() { a.subject = typeName(s) })
+		return s
+	}
+}
+
+// typeName returns the type of v as the import path of its package, a dot and
+// its name, such as example.com/store/storetest.InMemory. A pointer has the
+// type that it points at, and an instance of a generic type has the generic
+// type, without its type arguments. typeName returns the empty string for nil
+// and for a type without a name.
+func typeName(v any) string {
+	t := reflect.TypeOf(v)
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t == nil || t.Name() == "" {
+		return ""
+	}
+	name, _, _ := strings.Cut(t.Name(), "[")
+	return t.PkgPath() + "." + name
 }
 
 // begin makes the application write its records once every test of t has

@@ -264,6 +264,20 @@ func TestBench(t *testing.T) {
 				"the benchmark reports the call that waits")
 			expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")
 		})
+
+		t.Run("reports a call that runs until its context ends", func(t *testing.T) {
+			t.Parallel()
+
+			suite := budgeted(conform.Budget{})
+			suite.Calls[0].RunsUntilCancelled = true
+			var built atomic.Int32
+			b := measured(t, 10, func(b conform.B) { conform.Bench(b, suite, storeGet, counting(&built)) })
+			expect.Equal(t, b.Messages(),
+				[]string{"the call of Store.Get runs until its context ends, and a benchmark calls it with a context " +
+					"that does not end"},
+				"the benchmark reports the call that runs until its context ends")
+			expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")
+		})
 	})
 }
 
@@ -425,6 +439,18 @@ func TestBenchProcess(t *testing.T) {
 		t.Run("reports a call that waits for another call", func(t *testing.T) {
 			suite := concurrent(getCalls)
 			suite.Calls[0].Waits = true
+			var built atomic.Int32
+			_, failed := parallel(t, func(b *testing.B) {
+				b.Helper()
+				conform.BenchParallel(b, suite, storeGet, counting(&built))
+			})
+			expect.True(t, failed, "the benchmark fails")
+			expect.Equal(t, built.Load(), int32(0), "the benchmark builds no subject")
+		})
+
+		t.Run("reports a call that runs until its context ends", func(t *testing.T) {
+			suite := concurrent(getCalls)
+			suite.Calls[0].RunsUntilCancelled = true
 			var built atomic.Int32
 			_, failed := parallel(t, func(b *testing.B) {
 				b.Helper()

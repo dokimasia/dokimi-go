@@ -234,6 +234,23 @@ func TestRun(t *testing.T) {
 			assert.Empty(t, a.errors, "the application reports no problem")
 		})
 
+		t.Run("accepts a check with a door of a value of each type", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			apply := c.Apply
+			c.Doors = conform.Doors[Store]{Values: []conform.Supplied[Store]{endpointOf("defect")}}
+			c.Apply = func(h *conform.Handle[Store]) {
+				_ = conform.Open[endpoint](h, h.Subject())
+				apply(h)
+			}
+			a := application(func(t conform.T) {
+				conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore,
+					conform.Supplies(endpointOf("primary")))
+			})
+			assert.Empty(t, a.errors, "the application reports no problem")
+		})
+
 		t.Run("isolates each derived check against the other checks of the suite under Isolate", func(t *testing.T) {
 			t.Parallel()
 
@@ -457,6 +474,16 @@ func TestRun(t *testing.T) {
 				}),
 				wantErrors: []string{"the check Store.Get/keeps-the-value entails Store.Get/misses-unknown-keys, " +
 					"which RunStoreSuite lacks"},
+			},
+			{
+				name: "reports a check with two doors of a value of one type",
+				giveSuite: broken(func(c *conform.Check[Store]) {
+					c.Doors = conform.Doors[Store]{
+						Values: []conform.Supplied[Store]{endpointOf("primary"), endpointOf("replica")},
+					}
+				}),
+				wantErrors: []string{"the check Store.Get/keeps-the-value has two doors of a value of the type " +
+					"conform_test.endpoint"},
 			},
 			{
 				name:      "reports every problem before it stops",

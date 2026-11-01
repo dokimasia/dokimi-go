@@ -50,6 +50,18 @@ func (id ID[S]) subtest() string {
 	return string(id)
 }
 
+// generated returns the identity of the check that generates the inputs of the
+// check with the identity id. It adds the case generated to an identity
+// without a case, such as Store.Get/keeps-the-value#generated, and the suffix
+// -generated to the case of any other identity, such as
+// Store.Get/expires#0-generated.
+func (id ID[S]) generated() ID[S] {
+	if strings.Contains(string(id), "#") {
+		return id + "-generated"
+	}
+	return id + "#generated"
+}
+
 // Callable is the name of a callable of a declaration whose subjects have the
 // type S, such as Store.Get. A generated suite declares one for each callable.
 type Callable[S any] string

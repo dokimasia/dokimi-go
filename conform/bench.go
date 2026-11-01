@@ -57,7 +57,9 @@ type B interface {
 // Bench reports every problem of the application on b, as [Run] does, and
 // stops b when it finds one. A callable without a call in the suite is a
 // problem. A call with Waits is a problem too, because Bench repeats the calls
-// on one subject. The contract leaves out each ceiling that the options excuse. Bench
+// on one subject, and so is a call with RunsUntilCancelled, because Bench calls
+// it with a context that does not end. The contract leaves out each ceiling
+// that the options excuse. Bench
 // falsifies each ceiling that the option [Ceilings] adds before it measures the
 // callable, as [Falsify] falsifies the ceilings of the declaration. In a run
 // that does not check allocation ceilings, it falsifies no ceiling of
@@ -149,6 +151,10 @@ func benchmarked[S any](
 		if call.Waits {
 			found = append(found, fmt.Sprintf("the call of %s waits for another call, and a benchmark repeats it "+
 				"on one subject", callable))
+		}
+		if call.RunsUntilCancelled {
+			found = append(found, fmt.Sprintf("the call of %s runs until its context ends, and a benchmark calls it "+
+				"with a context that does not end", callable))
 		}
 		return cfg, call, found
 	}

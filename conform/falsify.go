@@ -52,7 +52,7 @@ func Falsify[S any](t T, suite Suite[S]) {
 	cfg := configure[S](suite.overrides(t), nil)
 	name := suite.Declaration + "Suite"
 	seed, faults := cfg.applicationSeed(name)
-	app := newApplication(&suite, name, "", seed, falsification)
+	app := newApplication(&suite, name, seed, falsification)
 	app.begin(t, slices.Concat(problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil)),
 		budgetProblems(name, suite.Calls, nil), faults))
 	parallel := uncounted(suite.Checks)

@@ -27,7 +27,12 @@
 // The options of an application also excuse a check through [Excuse], set the
 // number of cases of each property run through [Cases], state the generator of
 // a type through [Using], and supply the machinery that only the consumer can
-// build through [Reference], [Second], [Restartable] and [Crashable]. An
+// build through [Reference], [Second], [Restartable], [Crashable],
+// [Faultable] and [Supplies]. A subject of [Faultable] asks an [Injector] at
+// each call of a dependency, through [FaultOf] for a double, so a probe can
+// fail the calls of the dependencies and read the calls that the subject
+// made. [Open] returns the value of a door of [Supplies], such as the client
+// of the backend of a store, for a subject. An
 // application falsifies each check that [With] adds before it applies the
 // check to the subject. The check must fail on its planted defect at the
 // assertion whose message is its statement. The field Doors of a [Check]
@@ -46,7 +51,9 @@
 // latency to its planted defect. The option [Ceilings] states a budget for
 // one application. A call that waits for another call, which the field Waits
 // of a [Call] marks, has no benchmark and no budget, because both repeat its
-// calls on one subject. [Fuzz] registers the fuzz target of the property
+// calls on one subject. A call that runs until its context ends, which the
+// field RunsUntilCancelled marks, has neither, because both call it with a
+// context that does not end. [Fuzz] registers the fuzz target of the property
 // checks of one callable.
 //
 // Each application writes its suite records into the output of its test,
@@ -72,5 +79,6 @@
 // # Dependency position
 //
 // The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,
-// go.dokimi.dev/assert/prop and the Go stdlib, testing among it.
+// go.dokimi.dev/assert/prop, go.dokimi.dev/fault and the Go stdlib, testing
+// among it.
 package conform

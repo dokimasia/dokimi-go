@@ -87,6 +87,69 @@ func TestSuite(t *testing.T) {
 				conform.Excuse(storeGet.Check("keeps-the-value"), "the store keeps no values"))
 		})
 
+		t.Run("skips an excused generated check", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Int32
+			c := keeps()
+			c.ID = storeGet.Check("keeps-the-value#generated")
+			c.Apply = func(*conform.Handle[Store]) { applied.Add(1) }
+			t.Cleanup(func() {
+				assert.Equal(t, applied.Load(), int32(0), "the application does not apply an excused generated check")
+			})
+			conform.Run(t, empty, newStore, conform.With(c), conform.Excuse(c.ID, "each call takes a second"))
+		})
+
+		tests := []struct {
+			name        string
+			giveCheck   string
+			giveExcused string
+			wantApplied int32
+		}{
+			{
+				name: "skips the generated check of an excused check", giveCheck: "keeps-the-value#generated",
+				giveExcused: "keeps-the-value",
+			},
+			{
+				name:      "skips the generated check of the excused check of an instance",
+				giveCheck: "keeps-the-value#a-generated", giveExcused: "keeps-the-value#a",
+			},
+			{
+				name:      "applies the check of an instance where the excusal names no instance",
+				giveCheck: "keeps-the-value#a", giveExcused: "keeps-the-value", wantApplied: 2,
+			},
+			{
+				name:      "applies the generated check of another instance",
+				giveCheck: "keeps-the-value#b-generated", giveExcused: "keeps-the-value#a", wantApplied: 2,
+			},
+			{
+				name:      "applies the check that takes the samples of an excused generated check",
+				giveCheck: "keeps-the-value", giveExcused: "keeps-the-value#generated", wantApplied: 2,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var applied atomic.Int32
+				c := keeps()
+				c.ID = storeGet.Check(tt.giveCheck)
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					applied.Add(1)
+					apply(h)
+				}
+				t.Cleanup(func() {
+					assert.Equal(t, applied.Load(), tt.wantApplied,
+						"the excusal of a check covers its generated check alone")
+				})
+				excused := keeps()
+				excused.ID = storeGet.Check(tt.giveExcused)
+				conform.Run(t, empty, newStore, conform.With(excused, c),
+					conform.Excuse(excused.ID, "the store keeps no values"))
+			})
+		}
+
 		t.Run("reports the reason of the excusal in the skip of the check", func(t *testing.T) {
 			t.Parallel()
 
@@ -270,10 +333,39 @@ func TestSuite(t *testing.T) {
 				"the message lists the other check that the defect fails")
 		})
 
+		t.Run("fails a planted defect of a derived check that fails a deeper check of another defect",
+			func(t *testing.T) {
+				t.Parallel()
+
+				c := derivedMisses()
+				c.Defect = scrambles
+				keeps := derivedKeeps()
+				keeps.Entails = []conform.ID[Store]{storeGet.Check("keeps-exactly")}
+				r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(keeps, derivedExact())) })
+				assert.Equal(t, r.Message(),
+					"the planted defect conform_test.scrambles of Store.Get/misses-unknown-keys also fails these "+
+						"checks:\n"+
+						"\tStore.Get/keeps-the-value fails at the assertion equal with the message "+
+						`"Get returns the value that Put stored"`+"\n"+
+						"A planted defect fails the check that it proves and no other. Change the defect so that it "+
+						"passes these checks, or give each check that it fails the same defect.",
+					"the message lists the check whose entailed check has another defect")
+			})
+
 		t.Run("exempts a deeper check that entails the derived check from its isolation", func(t *testing.T) {
 			t.Parallel()
 
 			derivedMisses().Run(t, newStore, isolate, conform.With(derivedExact()))
+		})
+
+		t.Run("exempts a deeper check that entails a check with the same planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			generated := derivedMisses()
+			generated.ID = storeGet.Check("misses-unknown-keys#generated")
+			exact := derivedExact()
+			exact.Entails = []conform.ID[Store]{generated.ID}
+			derivedMisses().Run(t, newStore, isolate, conform.With(exact, generated))
 		})
 
 		t.Run("passes an edge whose deeper check fails on the defect of its shallower check", func(t *testing.T) {

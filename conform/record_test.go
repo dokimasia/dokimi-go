@@ -31,7 +31,8 @@ func suiteOf(checks ...conform.Check[Store]) conform.Suite[Store] {
 		Generator:   conform.Generator{Name: "dokimi", Version: "0.1.0"},
 		Checks:      checks,
 		Refusals: []conform.Refusal{{
-			Claim: spec.ZeroOnError, Callable: "Store.Put", Why: "Put cannot fail", Remedy: "return an error",
+			Claim: spec.ZeroOnError, Callable: "Store.Put", Gate: spec.Failure, Why: "Put cannot fail",
+			Remedy: "return an error",
 		}},
 		Unclaimed: []conform.Unclaimed{{
 			Classification: "mixin:concurrent", Callable: "Store.Get", Stance: spec.Needs, Note: "needs callers",
@@ -59,6 +60,10 @@ func identities(r record) []string {
 	}
 	return ids
 }
+
+// boxed is a generic Store over a memory, whose instance has its type
+// arguments in its name.
+type boxed[T any] struct{ *memory }
 
 // failingSeed matches the seed that the failure of a property run reports.
 var failingSeed = regexp.MustCompile(`seed (\d+)`)
@@ -95,12 +100,14 @@ func TestRecord(t *testing.T) {
 			assert.Equal(t, judged.Runtime.Version, info.Main.Version,
 				"the runtime has the version of the module of conform in the build")
 			assert.Matches(t, judged.Seed, `^0x[0-9a-f]{16}$`, "the seed has 16 hexadecimal digits")
-			assert.Equal(t, judged.Subject, "conform_test.newStore", "the subject is the name of the factory")
-			assert.Empty(t, falsified.Subject, "a falsification record names no subject")
+			assert.Equal(t, judged.Subject, "go.dokimi.dev/conform_test.memory",
+				"the subject is the type that the pointer of the factory points at")
+			assert.Empty(t, falsified.Subject, "a falsification record has no subject")
 			assert.Equal(t, judged.Refusals, []map[string]string{
 				{
 					"claim":    "zero-on-error",
 					"callable": "Store.Put",
+					"gate":     "failure",
 					"why":      "Put cannot fail",
 					"remedy":   "return an error",
 				},
@@ -139,6 +146,52 @@ func TestRecord(t *testing.T) {
 			assert.True(t, judged.Checks[1].Authored, "a check of the consumer is authored")
 			assert.Equal(t, judged.Checks[1].Seed, judged.Seed, "a property check runs at the seed of the application")
 		})
+
+		tests := []struct {
+			name           string
+			giveNewSubject func(*conform.Handle[Store]) Store
+			want           string
+		}{
+			{
+				name:           "records the type of a value that is not a pointer as the subject",
+				giveNewSubject: forget,
+				want:           "go.dokimi.dev/conform_test.forgetful",
+			},
+			{
+				name:           "records the generic type of a value without its type arguments",
+				giveNewSubject: func(*conform.Handle[Store]) Store { return boxed[int]{newMemory()} },
+				want:           "go.dokimi.dev/conform_test.boxed",
+			},
+			{
+				name: "records no subject for a value of a type without a name",
+				giveNewSubject: func(*conform.Handle[Store]) Store {
+					return struct{ Store }{newMemory()}
+				},
+				want: "",
+			},
+			{
+				name:           "records no subject for a factory that builds nil",
+				giveNewSubject: func(*conform.Handle[Store]) Store { return nil },
+				want:           "",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				if os.Getenv(childEnv) == t.Name() {
+					built := keeps()
+					built.Apply = func(h *conform.Handle[Store]) { h.Subject() }
+					conform.Run(t, suiteOf(built), tt.giveNewSubject)
+					return
+				}
+				judged := recordsOf(t, childOutput(t))[1]
+
+				assert.Equal(t, judged.Subject, tt.want, "the subject is the type of the value that the factory builds")
+				assert.Equal(t, resultOf(judged, "Store.Get/keeps-the-value"), "vacuous",
+					"the check never engages, and the type of the subject does not fail it")
+			})
+		}
 
 		t.Run("records the result of each check on the subject", func(t *testing.T) {
 			t.Parallel()
@@ -383,6 +436,7 @@ func TestRecord(t *testing.T) {
 				"the falsification record has each problem")
 			assert.Equal(t, records[1].Ended, records[0].Ended, "the subject record has the same problems")
 			assert.Empty(t, records[1].Checks, "no check runs")
+			assert.Empty(t, records[1].Subject, "an application that runs no check builds no subject")
 		})
 
 		t.Run("records the fault of the seed that ends the application", func(t *testing.T) {
@@ -542,13 +596,17 @@ func TestRecordAllocs(t *testing.T) {
 				"Store.Get/allocation-budget", "Store.Get/keeps-every-value", "Store.Get/keeps-every-value-again",
 			}, "the record has the ceilings and then the counted checks")
 			want, why, census := "pass", "", "RunStoreBudgets: checks 3 pass 3 vacuous 0 fail 0 excused 0 skipped 0\n"
+			subject := "go.dokimi.dev/conform_test.memory"
 			if checked, reason := assert.AllocsChecked(); !checked {
 				want, why = "unchecked", "the run does not check allocation ceilings: "+reason
 				census = "RunStoreBudgets: checks 3 pass 0 vacuous 0 fail 0 excused 0 skipped 0 unchecked 3\n"
+				subject = ""
 			}
 			assert.Equal(t, resultOf(records[0], "Store.Get/allocation-budget"), want, "the ceiling has its result")
 			assert.Equal(t, records[0].Checks[0].Why, why, "an unchecked ceiling has the reason")
 			assert.Contains(t, out, census, "the census counts each result")
+			assert.Equal(t, records[0].Subject, subject,
+				"the subject is the type of the value that the factory builds for a check that runs")
 		})
 
 		t.Run("records the problems that end the application", func(t *testing.T) {

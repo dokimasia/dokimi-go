@@ -65,7 +65,8 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 	name := "Run" + suite.Declaration + "Budgets"
 	cfg := configure(suite.overrides(t), opts)
 	seed, faults := cfg.applicationSeed(name)
-	app := newApplication(&suite, name, funcName(newSubject), seed, onSubject)
+	app := newApplication(&suite, name, seed, onSubject)
+	newSubject = app.factory(newSubject)
 	app.begin(t, append(validate(name, suite, cfg), faults...))
 	ceilings := allocationCeilings(suite.Calls, cfg.ceilings)
 	for i, c := range ceilings {
@@ -128,7 +129,7 @@ func FalsifyAllocs[S any](t T, suite Suite[S]) {
 	cfg := configure[S](suite.overrides(t), nil)
 	name := suite.Declaration + "Suite"
 	seed, faults := cfg.applicationSeed(name)
-	app := newApplication(&suite, name, "", seed, falsification)
+	app := newApplication(&suite, name, seed, falsification)
 	app.begin(t, slices.Concat(problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil)),
 		budgetProblems(name, suite.Calls, nil), faults))
 	ceilings := allocationCeilings(suite.Calls, nil)
@@ -322,8 +323,8 @@ func ceilingIDs[S any](calls []Call[S], ceilings []stated[S]) []ID[S] {
 // no two calls have one callable. A budget with a mean has a p99 as well, and
 // a warm-up of a budget is 0 iterations or more. The option Ceilings states
 // one budget of a callable of a call, and only for a callable whose
-// declaration states none. A call with Waits has no budget, and the option
-// Ceilings states none for it.
+// declaration states none. A call with Waits or RunsUntilCancelled has no
+// budget, and the option Ceilings states none for it.
 func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) []string {
 	var found []string
 	byCallable := make(map[Callable[S]]*Call[S], len(calls))
@@ -341,6 +342,10 @@ func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) [
 		byCallable[c.Callable] = c
 		if c.Waits && c.Budget != (Budget{}) {
 			found = append(found, fmt.Sprintf("the budget of %s repeats a call that waits for another call",
+				c.Callable))
+		}
+		if c.RunsUntilCancelled && c.Budget != (Budget{}) {
+			found = append(found, fmt.Sprintf("the budget of %s repeats a call that runs until its context ends",
 				c.Callable))
 		}
 		budget, _ := budgetOf(c, ceilings)
@@ -364,6 +369,9 @@ func budgetProblems[S any](name string, calls []Call[S], ceilings []stated[S]) [
 				s.callable, name))
 		case c.Waits:
 			found = append(found, fmt.Sprintf("the ceiling of %s repeats a call that waits for another call",
+				s.callable))
+		case c.RunsUntilCancelled:
+			found = append(found, fmt.Sprintf("the ceiling of %s repeats a call that runs until its context ends",
 				s.callable))
 		case c.Budget != (Budget{}):
 			found = append(found, fmt.Sprintf("the option Ceilings states a budget of %s, whose declaration states "+

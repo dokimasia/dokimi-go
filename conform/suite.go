@@ -91,6 +91,9 @@ type Refusal struct {
 	// Callable is the declaration and the callable, such as Store.Scan.
 	Callable string
 
+	// Gate is the gate of the spec that fails for the callable.
+	Gate spec.GateID
+
 	// Why is the reason of the gate that fails.
 	Why string
 
@@ -144,6 +147,13 @@ type Call[S any] struct {
 	// a ceiling repeat the calls of a callable on one subject, so a benchmark
 	// of the call and a ceiling of the call are problems of the application.
 	Waits bool
+
+	// RunsUntilCancelled reports that a call runs until its context ends, as
+	// the mixin runs-until-cancelled states. A benchmark and the check of a
+	// ceiling call the callable with a context that does not end, so a
+	// benchmark of the call and a ceiling of the call are problems of the
+	// application.
+	RunsUntilCancelled bool
 }
 
 // Budget is the budget of one call of a callable. A nil Allocs or Bytes, and a
@@ -182,9 +192,14 @@ func With[S any](checks ...Check[S]) Option[S] {
 
 // Excuse excuses the check with the identity id from an application. The
 // application skips the check with the reason. It fails when the identity
-// matches no check of the application, and when the reason is empty.
+// matches no check of the application, and when the reason is empty. The
+// excusal of a check also excuses the check that generates its inputs, such as
+// Store.Get/keeps-the-value#generated for Store.Get/keeps-the-value. The
+// excusal of a generated check excuses that check alone.
 func Excuse[S any](id ID[S], reason string) Option[S] {
-	return Option[S]{set: func(c *config[S]) { c.excusals = append(c.excusals, excusal[S]{id: id, reason: reason}) }}
+	return Option[S]{set: func(c *config[S]) {
+		c.excusals = append(c.excusals, excusal[S]{id: id, generated: id.generated(), reason: reason})
+	}}
 }
 
 // Reference supplies the reference implementations of an application.
@@ -209,6 +224,13 @@ func Restartable[S any](restart func(h *Handle[S], s S) S) Option[S] {
 // [Handle.Crash] returns the subject that crash returns.
 func Crashable[S any](crash func(h *Handle[S], s S, call func()) S) Option[S] {
 	return Option[S]{set: func(c *config[S]) { c.doors.Crash = crash }}
+}
+
+// Faultable supplies the subjects of an application whose dependencies fail
+// on demand. A handle builds each subject of a check of the machinery
+// call-that-fails-on-demand from newFaulty, with the injector of the handle.
+func Faultable[S any](newFaulty func(h *Handle[S], inj *Injector) S) Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.doors.Faults = newFaulty }}
 }
 
 // Cases sets the number of valid cases that each property run of an
@@ -306,17 +328,20 @@ func (c *config[S]) onDefect(d Doors[S]) *config[S] {
 	return &defect
 }
 
-// excusal is the excusal of the check with the identity id.
+// excusal is the excusal of the check with the identity id. It also excuses
+// the check with the identity generated, which generates the inputs of the
+// check.
 type excusal[S any] struct {
-	id     ID[S]
-	reason string
+	id        ID[S]
+	generated ID[S]
+	reason    string
 }
 
 // excused returns the reason of the excusal of the check with the identity
 // id, and whether the options excuse the check.
 func (c *config[S]) excused(id ID[S]) (string, bool) {
 	for _, e := range c.excusals {
-		if e.id == id {
+		if e.id == id || e.generated == id {
 			return e.reason, true
 		}
 	}

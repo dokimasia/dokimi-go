@@ -79,6 +79,15 @@ const (
 // keepsTheValue is the statement of the check of keeps.
 const keepsTheValue = "Get returns the value that Put stored"
 
+// endpoint is the value of a door of the specs: the address of the backend of
+// a store.
+type endpoint string
+
+// endpointOf returns the door of the endpoint e for every subject.
+func endpointOf(e endpoint) conform.Supplied[Store] {
+	return conform.Supply(func(*conform.Handle[Store], Store) endpoint { return e })
+}
+
 // childEnv is the environment variable that names the test whose child
 // process runs a check that fails or that a suite excuses.
 const childEnv = "CONFORM_TEST_CHILD"

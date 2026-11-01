@@ -161,6 +161,27 @@ func TestBudget(t *testing.T) {
 				wantErrors: []string{"the ceiling of Store.Get repeats a call that waits for another call"},
 			},
 			{
+				name: "reports a budget of a call that runs until its context ends",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{Allocs: new(uint64(0))})
+					s.Calls[0].RunsUntilCancelled = true
+					return s
+				}(),
+				wantErrors: []string{"the budget of Store.Get repeats a call that runs until its context ends"},
+			},
+			{
+				name: "reports the option Ceilings for a call that runs until its context ends",
+				giveSuite: func() conform.Suite[Store] {
+					s := budgeted(conform.Budget{})
+					s.Calls[0].RunsUntilCancelled = true
+					return s
+				}(),
+				giveOpts: []conform.Option[Store]{
+					conform.Ceilings(storeGet, conform.Budget{Allocs: new(uint64(0))}),
+				},
+				wantErrors: []string{"the ceiling of Store.Get repeats a call that runs until its context ends"},
+			},
+			{
 				name: "reports a call without a call generator",
 				giveSuite: func() conform.Suite[Store] {
 					s := budgeted(conform.Budget{})

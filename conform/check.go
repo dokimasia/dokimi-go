@@ -102,7 +102,9 @@ type Check[S any] struct {
 	Law spec.LawID
 
 	// Machineries are the machineries of the claim, the deepest first, and nil
-	// for a check of the consumer.
+	// for a check of the consumer. A handle builds the subjects of a check
+	// whose machineries include call-that-fails-on-demand through the door
+	// Faults, also for a check of the consumer that lists the machinery.
 	Machineries []spec.MachineryID
 
 	// Entails are the identities of the shallower checks whose laws the law
@@ -204,6 +206,9 @@ type firsts struct {
 // failed. The test of the check sets every other result.
 func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S], v *verdict) {
 	tb.Helper()
+	if c.faults() {
+		source = (*Handle[S]).faulty
+	}
 	env, ok := c.environment(tb)
 	if !ok {
 		return
@@ -240,6 +245,13 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S],
 	v.result = resultVacuous
 	tb.Errorf("%s never engaged: %s. Pass a subject that engages the check, or excuse the check with the "+
 		"directive excuse or conform.Excuse and a reason.", c.ID, c.vacuity())
+}
+
+// faults reports whether the machineries of the check include
+// call-that-fails-on-demand, so a handle builds its subjects through the door
+// Faults.
+func (c *Check[S]) faults() bool {
+	return slices.Contains(c.Machineries, spec.CallThatFailsOnDemand)
 }
 
 // failed reports whether the run of a check on tb failed: tb failed, or a
@@ -438,7 +450,9 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 // reports whether the defect passes each of them. It leaves out each check
 // that shares the defect, c among them, each check that the options excuse,
 // each check of an edge of c, which [Check.edges] proves, and each check of
-// the consumer where c is a derived check. It fails tb when
+// the consumer where c is a derived check. A check that entails another check
+// with the defect of c, such as the generated binding of c, which shares the
+// defect, is a check of an edge of c as well. It fails tb when
 // the defect fails one of them, because a planted defect proves its check
 // only when no other check fails on it. The failure lists each check that
 // fails, with its first assertion or its panic. A check that skips or ends
@@ -453,7 +467,8 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 	for i := range others {
 		o := &others[i]
 		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect ||
-			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) || c.Claim != "" && o.Claim == "" {
+			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) || entailsDefect(o, others, defect) ||
+			c.Claim != "" && o.Claim == "" {
 
 			continue
 		}
@@ -478,6 +493,14 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 		return false
 	}
 	return true
+}
+
+// entailsDefect reports whether the check o entails a check of others whose
+// planted defect is defect.
+func entailsDefect[S any](o *Check[S], others []Check[S], defect uintptr) bool {
+	return slices.ContainsFunc(others, func(e Check[S]) bool {
+		return reflect.ValueOf(e.Defect).Pointer() == defect && slices.Contains(o.Entails, e.ID)
+	})
 }
 
 // edges proves each edge of c to a check of others, and reports whether each

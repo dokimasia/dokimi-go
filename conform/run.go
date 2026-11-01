@@ -53,9 +53,10 @@ func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Op
 	t.Helper()
 	name := "Run" + suite.Declaration + "Suite"
 	cfg := configure(suite.overrides(t), opts)
-	cfg.fresh = newSubject
 	seed, faults := cfg.applicationSeed(name)
-	app := newApplication(&suite, name, funcName(newSubject), seed, falsification, onSubject)
+	app := newApplication(&suite, name, seed, falsification, onSubject)
+	newSubject = app.factory(newSubject)
+	cfg.fresh = newSubject
 	app.begin(t, append(validate(name, suite, cfg), faults...))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
 	parallel := uncounted(checks)
@@ -148,6 +149,9 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S], know
 		}
 		if c.Claim != "" && c.Reason == "" {
 			found = append(found, fmt.Sprintf("the check %s has the claim %s and no reason", c.ID, c.Claim))
+		}
+		if of, twice := repeated(c.Doors.Values); twice {
+			found = append(found, fmt.Sprintf("the check %s has two doors of a value of the type %v", c.ID, of))
 		}
 		for _, id := range c.Entails {
 			if !slices.ContainsFunc(checks, func(o Check[S]) bool { return o.ID == id }) {

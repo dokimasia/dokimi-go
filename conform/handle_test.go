@@ -561,6 +561,174 @@ func TestHandle(t *testing.T) {
 		})
 	})
 
+	t.Run("Injector", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the one injector of the handle", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				first := h.Injector()
+				assert.True(h, first != nil && first == h.Injector(), "the handle has one injector")
+			}
+			c.Run(t, newStore)
+		})
+
+		t.Run("gives each case of a property check an injector of its own", func(t *testing.T) {
+			t.Parallel()
+
+			var mu sync.Mutex
+			seen := map[*conform.Injector]bool{}
+			cases := 0
+			c := keepsEvery()
+			property := c.Property
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				mu.Lock()
+				seen[h.Injector()] = true
+				cases++
+				mu.Unlock()
+				property(h, pc)
+			}
+			c.Run(t, newStore, conform.Cases[Store](3))
+			assert.True(t, cases > 1, "the property runs more than one case")
+			assert.Length(t, seen, cases, "each case has an injector of its own")
+		})
+	})
+
+	t.Run("Faults", func(t *testing.T) {
+		t.Parallel()
+
+		// faulting returns the check keeps of the machinery that fails a call
+		// of a dependency on demand.
+		faulting := func() conform.Check[Store] {
+			c := keeps()
+			c.Machineries = []spec.MachineryID{spec.CallThatFailsOnDemand}
+			return c
+		}
+
+		t.Run("builds the subjects of a check of the machinery through the door of the application",
+			func(t *testing.T) {
+				t.Parallel()
+
+				door := Store(newMemory())
+				var got *conform.Injector
+				c := faulting()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					assert.True(h, h.Subject() == door, "Subject returns the subject of the door")
+					assert.True(h, got == h.Injector(), "the door receives the injector of the handle")
+					assert.True(h, h.New() == door, "New returns a subject of the door")
+					assert.True(h, h.Fresh() == door, "Fresh returns a subject of the door")
+					apply(h)
+				}
+				c.Run(t, newStore, conform.Faultable(func(_ *conform.Handle[Store], inj *conform.Injector) Store {
+					got = inj
+					return door
+				}))
+			})
+
+		t.Run("builds the fresh subject of a planted defect through the door of the options", func(t *testing.T) {
+			t.Parallel()
+
+			door := Store(newMemory())
+			var fromDoor atomic.Bool
+			c := faulting()
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				fromDoor.Store(h.Fresh() == door)
+				return forgetful{}
+			}
+			c.Falsify(t, conform.Faultable(func(*conform.Handle[Store], *conform.Injector) Store { return door }))
+			assert.True(t, fromDoor.Load(), "Fresh returns the subject of the door")
+		})
+
+		t.Run("builds the fresh subject of a planted defect through the door of its check", func(t *testing.T) {
+			t.Parallel()
+
+			door := Store(newMemory())
+			var fromDoor atomic.Bool
+			c := faulting()
+			c.Doors = conform.Doors[Store]{
+				Faults: func(*conform.Handle[Store], *conform.Injector) Store { return door },
+			}
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				fromDoor.Store(h.Fresh() == door)
+				return forgetful{}
+			}
+			c.Falsify(t)
+			assert.True(t, fromDoor.Load(), "Fresh returns the subject of the door of the check")
+		})
+
+		t.Run("builds the subjects of a check without the machinery through the factory", func(t *testing.T) {
+			t.Parallel()
+
+			door := Store(newMemory())
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isMemory := h.Subject().(*memory)
+				assert.True(h, isMemory && h.Subject() != door, "Subject returns a subject of the factory")
+				apply(h)
+			}
+			c.Run(t, newStore, conform.Faultable(func(*conform.Handle[Store], *conform.Injector) Store { return door }))
+		})
+
+		t.Run("ends the check with a fault without the option Faultable", func(t *testing.T) {
+			t.Parallel()
+
+			var continued atomic.Bool
+			c := faulting()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Subject()
+				continued.Store(true)
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "the subject ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door that the handle lacks")
+			expect.Equal(t, faults[0].Error(), "conform: the handle lacks the door: "+
+				"Store.Get/keeps-the-value builds a subject without the option conform.Faultable. "+
+				"Pass the option to the application:\n"+
+				"\tconform.Faultable(func(h *conform.Handle[conform_test.Store], inj *conform.Injector) "+
+				"conform_test.Store { … })", "the fault contains the option of the door")
+			expect.False(t, continued.Load(), "the check ends at the subject")
+		})
+
+		t.Run("ends the falsification with a fault without the door of the check", func(t *testing.T) {
+			t.Parallel()
+
+			var continued atomic.Bool
+			c := faulting()
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				s := h.Fresh()
+				continued.Store(true)
+				return s
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			faults := r.Faults()
+			assert.Length(t, faults, 1, "Fresh ends the falsification with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door that the handle lacks")
+			expect.Equal(t, faults[0].Error(), "conform: the handle lacks the door: "+
+				"Store.Get/keeps-the-value builds a subject on its planted defect, and the check has no door "+
+				"Faults. Give the check the door:\n"+
+				"\tconform.Doors[conform_test.Store]{Faults: "+
+				"func(h *conform.Handle[conform_test.Store], inj *conform.Injector) conform_test.Store { … }}",
+				"the fault contains the door of the check")
+			expect.False(t, continued.Load(), "the planted defect ends at Fresh")
+		})
+
+		t.Run("returns the zero subject to a seat that goes on after a fatal failure", func(t *testing.T) {
+			t.Parallel()
+
+			got := Store(newMemory())
+			c := faulting()
+			c.Apply = func(h *conform.Handle[Store]) { got = h.Subject() }
+			c.Run(assert.NewRecorder(), newStore)
+			assert.Equal(t, got, nil, "the subject is the zero value")
+		})
+	})
+
 	t.Run("Context", func(t *testing.T) {
 		t.Parallel()
 
