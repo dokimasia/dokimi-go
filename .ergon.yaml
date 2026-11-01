@@ -290,7 +290,7 @@ go:
   # every package of the module example.com/fixtures.
   mutate:
     timeout: 0s
-    args: []
+    args: [--confirm]
     skip: []
     workers: 1
   # generate-go runs each command line of commands in order with the paths in every module.
