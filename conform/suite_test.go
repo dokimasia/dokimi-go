@@ -13,6 +13,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // The options of an application add checks, excuse checks, and supply the
@@ -366,6 +367,63 @@ func TestSuite(t *testing.T) {
 			exact := derivedExact()
 			exact.Entails = []conform.ID[Store]{generated.ID}
 			derivedMisses().Run(t, newStore, isolate, conform.With(exact, generated))
+		})
+
+		t.Run("leaves out a sequence check of another callable", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			sequence := derivedKeeps()
+			sequence.ID = storePut.Check("keeps-the-value")
+			sequence.Machineries = []spec.MachineryID{spec.GeneratedSequences}
+			c.Run(t, newStore, isolate, conform.With(sequence))
+		})
+
+		t.Run("isolates a planted defect against a check of another callable without sequences", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			other := derivedKeeps()
+			other.ID = storePut.Check("keeps-the-value")
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(other)) })
+			assert.Equal(t, r.Message(),
+				"the planted defect conform_test.scrambles of Store.Get/misses-unknown-keys also fails these "+
+					"checks:\n"+
+					"\tStore.Put/keeps-the-value fails at the assertion equal with the message "+
+					`"Get returns the value that Put stored"`+"\n"+
+					"A planted defect fails the check that it proves and no other. Change the defect so that it "+
+					"passes these checks, or give each check that it fails the same defect.",
+				"the message lists the check of the other callable")
+		})
+
+		t.Run("isolates a planted defect against a sequence check of its own callable", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			sequence := derivedKeeps()
+			sequence.Machineries = []spec.MachineryID{spec.GeneratedSequences}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(sequence)) })
+			assert.Equal(t, r.Message(),
+				"the planted defect conform_test.scrambles of Store.Get/misses-unknown-keys also fails these "+
+					"checks:\n"+
+					"\tStore.Get/keeps-the-value fails at the assertion equal with the message "+
+					`"Get returns the value that Put stored"`+"\n"+
+					"A planted defect fails the check that it proves and no other. Change the defect so that it "+
+					"passes these checks, or give each check that it fails the same defect.",
+				"the message lists the sequence check of the same callable")
+		})
+
+		t.Run("leaves out the check of agreement with a reference", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			agrees := derivedKeeps()
+			agrees.ID, agrees.Claim = "Store/agrees-with-the-reference", spec.AgreesWithTheReference
+			c.Run(t, newStore, isolate, conform.With(agrees))
 		})
 
 		t.Run("passes an edge whose deeper check fails on the defect of its shallower check", func(t *testing.T) {

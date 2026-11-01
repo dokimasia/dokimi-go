@@ -76,9 +76,14 @@
 // a [Suite] lists them. [NewBytes] returns a [Bytes], a value of the
 // interfaces of io over bytes.
 //
+// An action of a generated sequence records each call in the history of its
+// case through [Complete]. A call that returned an error has an [Output]
+// without values. A partner or a reference that a probe applies returns the
+// Output that [OutputOf] builds.
+//
 // # Dependency position
 //
 // The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,
-// go.dokimi.dev/assert/prop, go.dokimi.dev/fault and the Go stdlib, testing
-// among it.
+// go.dokimi.dev/assert/history, go.dokimi.dev/assert/prop,
+// go.dokimi.dev/fault and the Go stdlib, testing among it.
 package conform

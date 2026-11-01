@@ -452,13 +452,20 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 // each check of an edge of c, which [Check.edges] proves, and each check of
 // the consumer where c is a derived check. A check that entails another check
 // with the defect of c, such as the generated binding of c, which shares the
-// defect, is a check of an edge of c as well. It fails tb when
-// the defect fails one of them, because a planted defect proves its check
-// only when no other check fails on it. The failure lists each check that
-// fails, with its first assertion or its panic. A check that skips or ends
-// with a fault on the defect has no verdict on it. A check with Around runs
-// inside its environment on the test of tb. isolate sets the result
-// not-isolated in v with the first check that fails, before it fails tb.
+// defect, is a check of an edge of c as well.
+//
+// A sequence check, whose machineries include generated-sequences, calls each
+// callable of its declaration. isolate leaves it out for the planted defect of
+// another callable. It leaves out the check of agreement with a reference,
+// which compares each call of each callable, for every planted defect.
+//
+// isolate fails tb when the defect fails one of the checks, because a planted
+// defect proves its check only when no other check fails on it. The failure
+// lists each check that fails, with its first assertion or its panic. A check
+// that skips or ends with a fault on the defect has no verdict on it. A check
+// with Around runs inside its environment on the test of tb. isolate sets the
+// result not-isolated in v with the first check that fails, before it fails
+// tb.
 func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *verdict, kept *firsts) bool {
 	tb.Helper()
 	defect := reflect.ValueOf(c.Defect).Pointer()
@@ -468,7 +475,8 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 		o := &others[i]
 		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect ||
 			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) || entailsDefect(o, others, defect) ||
-			c.Claim != "" && o.Claim == "" {
+			c.Claim != "" && o.Claim == "" || o.Claim == spec.AgreesWithTheReference ||
+			slices.Contains(o.Machineries, spec.GeneratedSequences) && o.ID.callable() != c.ID.callable() {
 
 			continue
 		}
