@@ -329,7 +329,7 @@
     {
       "id": "repeated-calls-compound",
       "statement": "Each call changes the named observation again.",
-      "depth": "nothing-beyond-a-caller",
+      "depth": "generated-sequences",
       "since": "1.0.0",
       "distinct-from": []
     },
@@ -630,6 +630,83 @@
       "id": "combining-ignores-the-grouping",
       "statement": "Combining three values in either grouping returns one value.",
       "depth": "generated-inputs",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "batch-read-returns-each-stored-value",
+      "statement": "A batch read returns the stored value of each key, in the order of the keys.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "fresh-receiver-is-healthy",
+      "statement": "The accessor of a fresh receiver reports no error.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "positions-are-below-the-size",
+      "statement": "The callable admits each position below the size of the collection and refuses the position equal to the size.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "wrapper-returns-what-its-sibling-returns",
+      "statement": "The callable returns what its sibling returns for one input.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "appended-chain-verifies",
+      "statement": "The verify of a chain that appends alone produced reports no error.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "released-lease-is-granted-again",
+      "statement": "An acquire after the release of a lease succeeds.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "stats-move-with-a-loan",
+      "statement": "The stats of a pool change when the pool lends an object.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "every-sequence-agrees-with-the-reference",
+      "statement": "Each call of any sequence returns on the subject what it returns on the reference.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "use-is-within-its-bounds",
+      "statement": "The use that the reader of the resource reads is between the lower and the upper bound after each call of any sequence.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "merge-order-does-not-matter",
+      "statement": "Two replicas that any sequences of writes made diverge read the same state after a merge in either order.",
+      "depth": "generated-sequences",
+      "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "states-follow-the-graph",
+      "statement": "Each state that the reader reads after a call is the state before the call or one of its successors in the graph.",
+      "depth": "generated-sequences",
       "since": "1.0.0",
       "distinct-from": []
     }

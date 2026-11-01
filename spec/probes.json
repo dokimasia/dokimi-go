@@ -1611,6 +1611,577 @@
       "reasons": [
         "grouping-dependent"
       ]
+    },
+    {
+      "id": "reads-what-was-stored",
+      "summary": "A batch read returns the two values that two writes stored, in the order of their keys.",
+      "vacuous": "A write fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "write",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "lost-a-key"
+      ]
+    },
+    {
+      "id": "reports-no-error",
+      "summary": "A call on a fresh subject returns no error.",
+      "vacuous": "Never, because the probe makes its one call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "false-poison"
+      ]
+    },
+    {
+      "id": "bounded-by-the-size",
+      "summary": "Calls at the first and the last position succeed, and a call at the size fails.",
+      "vacuous": "The size fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "size",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "out-of-bounds"
+      ]
+    },
+    {
+      "id": "agrees-with-the-sibling",
+      "summary": "The callable and its sibling fail together for one input, and return one value where both succeed.",
+      "vacuous": "Never, because the probe calls both.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "sibling",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "diverged-from-the-sibling"
+      ]
+    },
+    {
+      "id": "verifies-after-appends",
+      "summary": "The verify of a chain after two appends returns no error.",
+      "vacuous": "An append fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "append",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "false-tamper"
+      ]
+    },
+    {
+      "id": "grants-after-release",
+      "summary": "An acquire after the release of a lease succeeds.",
+      "vacuous": "The first acquire or the release fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "release",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "kept-after-release"
+      ]
+    },
+    {
+      "id": "moves-with-a-loan",
+      "summary": "The stats of a pool change when the pool lends an object.",
+      "vacuous": "The get fails.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "get",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "uncounted-loan"
+      ]
+    },
+    {
+      "id": "results-never-fall",
+      "summary": "Each result of the read over a generated sequence is at least the result before it.",
+      "vacuous": "No sequence calls the read twice.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        }
+      ],
+      "reasons": [
+        "regressed"
+      ]
+    },
+    {
+      "id": "read-versions-never-fall",
+      "summary": "The version of each value that the read returns over a generated sequence is at least the version before it.",
+      "vacuous": "No sequence calls the read twice.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "regressed"
+      ]
+    },
+    {
+      "id": "drains-agree-between-writes",
+      "summary": "Two drains of a generated sequence without another call between them yield their elements in one order.",
+      "vacuous": "No sequence drains twice without another call between the drains.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "drain",
+          "kind": "operation"
+        }
+      ],
+      "reasons": [
+        "reordered-drain"
+      ]
+    },
+    {
+      "id": "written-versions-rise",
+      "summary": "After each write of a generated sequence, the read returns a version above the version that it returned after the write before it.",
+      "vacuous": "No sequence writes one key twice.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "read",
+          "kind": "apply"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unobserved-write"
+      ]
+    },
+    {
+      "id": "reads-see-the-last-write",
+      "summary": "Each read of a generated sequence returns a version at least the highest version of a write of its key.",
+      "vacuous": "No sequence reads a key after a write of it.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "readback",
+          "kind": "apply"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unobserved-write"
+      ]
+    },
+    {
+      "id": "writes-rise-above-reads",
+      "summary": "Each write of a generated sequence has a version above the version that the last read of its key returned.",
+      "vacuous": "No sequence writes a key after a read of it.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "readback",
+          "kind": "apply"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unordered-write"
+      ]
+    },
+    {
+      "id": "positions-rise",
+      "summary": "The position that each append of a generated sequence returns is above the position before it.",
+      "vacuous": "No sequence appends twice.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "append",
+          "kind": "operation"
+        }
+      ],
+      "reasons": [
+        "not-ascending"
+      ]
+    },
+    {
+      "id": "replays-follow-the-stamps",
+      "summary": "Each replay of a generated sequence returns its entries in the order of their stamps.",
+      "vacuous": "No replay of a sequence returns two entries.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "replay",
+          "kind": "operation"
+        },
+        {
+          "name": "stamp",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unordered-history"
+      ]
+    },
+    {
+      "id": "drains-without-repeats",
+      "summary": "No drain of a generated sequence yields an element twice.",
+      "vacuous": "No drain of a sequence yields two elements.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "drain",
+          "kind": "operation"
+        }
+      ],
+      "reasons": [
+        "repeated-element"
+      ]
+    },
+    {
+      "id": "drains-contain-the-writes",
+      "summary": "Each drain of a generated sequence gains over the drain before it each element written since.",
+      "vacuous": "No sequence drains after writes whose elements the drain before it did not return.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "drain",
+          "kind": "operation"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "shrunk-drain"
+      ]
+    },
+    {
+      "id": "drains-gain-the-writes",
+      "summary": "Each drain of a generated sequence gains over the drain before it exactly the elements written since, each as often as a write wrote it.",
+      "vacuous": "No sequence drains after writes whose elements the drain before it did not return.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "drain",
+          "kind": "operation"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "miscounted-drain"
+      ]
+    },
+    {
+      "id": "each-call-moves-the-observation",
+      "summary": "The reader reads another value for the arguments of each call of a generated sequence than it read before the call.",
+      "vacuous": "No call of the callable of a sequence succeeds.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "call",
+          "kind": "operation"
+        },
+        {
+          "name": "observe",
+          "kind": "apply"
+        }
+      ],
+      "reasons": [
+        "uncompounded"
+      ]
+    },
+    {
+      "id": "reads-return-the-last-write",
+      "summary": "After each write of a generated sequence, the read returns the value that the write wrote.",
+      "vacuous": "No sequence writes.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "readback",
+          "kind": "apply"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unobserved-write"
+      ]
+    },
+    {
+      "id": "reads-agree-with-the-backing",
+      "summary": "Each read through the cache in a generated sequence agrees with the read of the backing for its arguments.",
+      "vacuous": "No sequence reads through the cache.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "backing",
+          "kind": "apply"
+        }
+      ],
+      "reasons": [
+        "cache-disagrees"
+      ]
+    },
+    {
+      "id": "sequences-agree-with-the-reference",
+      "summary": "Each call of a generated sequence returns on the subject what it returns on the reference.",
+      "vacuous": "No sequence makes a call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "reference",
+          "kind": "reference"
+        }
+      ],
+      "reasons": [
+        "diverges-from-the-reference"
+      ]
+    },
+    {
+      "id": "use-is-within-the-bounds",
+      "summary": "The use that the reader reads after each call of a generated sequence is between the bounds.",
+      "vacuous": "No sequence makes a call.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "observe",
+          "kind": "call"
+        },
+        {
+          "name": "min",
+          "kind": "count"
+        },
+        {
+          "name": "limit",
+          "kind": "count"
+        }
+      ],
+      "reasons": [
+        "exceeded-bound"
+      ]
+    },
+    {
+      "id": "merges-commute",
+      "summary": "Two replicas that generated sequences of writes made diverge read one state after a merge in either order.",
+      "vacuous": "No sequence writes.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "apply",
+          "kind": "reference"
+        },
+        {
+          "name": "merge",
+          "kind": "operation"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        }
+      ],
+      "reasons": [
+        "order-dependent-merge"
+      ]
+    },
+    {
+      "id": "states-move-along-the-graph",
+      "summary": "The state that the reader reads after each call of a generated sequence is the state before it or one of its successors.",
+      "vacuous": "No call of the callable of a sequence has a state before it and after it.",
+      "since": "1.0.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "fn",
+          "kind": "operation"
+        },
+        {
+          "name": "observe",
+          "kind": "apply"
+        },
+        {
+          "name": "transitions",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "forbidden-transition"
+      ]
     }
   ]
 }

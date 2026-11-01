@@ -155,6 +155,13 @@
       "since": "1.0.0"
     },
     {
+      "id": "write-returns-the-value",
+      "passes": "Each partner of the claim returns first a value of the type that the callable returns, so the check reads the version of a write from its result.",
+      "why": "the partner {partner} of {callable} returns no value of the type that {callable} returns",
+      "remedy": "return the written value from the partner {partner} of {callable}",
+      "since": "1.0.0"
+    },
+    {
       "id": "members",
       "passes": "The enumeration has a variant.",
       "why": "{declaration} has no variant",
@@ -271,6 +278,34 @@
       "passes": "No classification of the callable states the fidelity lossy.",
       "why": "the codec of {callable} states the fidelity lossy, and the claim states the exact round trip",
       "remedy": "check the lossy round trip of {callable} with a check of the consumer",
+      "since": "1.0.0"
+    },
+    {
+      "id": "countable-use",
+      "passes": "The callable that the param observe names returns an integer, or a list, a map or a text whose length is the use.",
+      "why": "the reader that observe names for {callable} returns no number and no length",
+      "remedy": "name with observe a callable that returns the use of {callable} as a number or a list",
+      "since": "1.0.0"
+    },
+    {
+      "id": "takes-a-replica",
+      "passes": "The callable takes one input that another subject can be, a pointer to the struct of the declaration or an interface that the subject type implements, so a merge can pass it another replica.",
+      "why": "{callable} takes no input that another replica of {declaration} can be",
+      "remedy": "give {callable} an input of an interface that {declaration} implements",
+      "since": "1.0.0"
+    },
+    {
+      "id": "graph-of-states",
+      "passes": "The variable that the param transitions names is a map from the type that observe returns to a list of that type.",
+      "why": "the variable that transitions names for {callable} is no graph of the states that observe reads",
+      "remedy": "declare transitions as a map from each state to the list of its successors",
+      "since": "1.0.0"
+    },
+    {
+      "id": "returns-a-value",
+      "passes": "The callable returns a value on its own before its context ends, so a planted defect of the declaration can change the value.",
+      "why": "no callable of {declaration} returns a value on its own",
+      "remedy": "give {declaration} a callable that returns a value without the mixin waits or runs-until-cancelled",
       "since": "1.0.0"
     }
   ]

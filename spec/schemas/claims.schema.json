@@ -89,6 +89,9 @@
                 },
                 "context": {
                   "type": "boolean"
+                },
+                "declaration": {
+                  "type": "boolean"
                 }
               },
               "additionalProperties": false
@@ -198,6 +201,9 @@
                   "type": "string"
                 },
                 "param": {
+                  "type": "string"
+                },
+                "default": {
                   "type": "string"
                 },
                 "partner": {

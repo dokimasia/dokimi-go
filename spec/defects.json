@@ -433,6 +433,181 @@
       "does": "The callable returns its first input where that input equals the value of its first call.",
       "since": "1.0.0",
       "min-steps": 4
+    },
+    {
+      "id": "drops-the-last-key",
+      "changes": "callable",
+      "does": "The callable returns the list of the fresh subject without its last value.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reports-poison",
+      "changes": "callable",
+      "does": "The callable fails with an error that no directive declares on every call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "admits-the-size",
+      "changes": "callable",
+      "does": "The callable returns its second samples and no error for every position.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "stops-delegating",
+      "changes": "callable",
+      "does": "The callable returns its second samples and no error on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reports-tamper",
+      "changes": "callable",
+      "does": "The verify fails with an error that no directive declares on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "release-keeps-the-lease",
+      "changes": "partner:release",
+      "does": "The release returns no error and does nothing.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "frozen-stats",
+      "changes": "callable",
+      "does": "The stats return the zero value on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "goes-back-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first result again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reads-the-past-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reorders-after-three",
+      "changes": "callable",
+      "does": "The callable reverses the elements that it returns from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reorders-writes-after-three",
+      "changes": "partner:write",
+      "does": "The write stores nothing from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reads-a-stale-version-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "stamps-the-past-after-three",
+      "changes": "partner:write",
+      "does": "The write returns each value with the version 0 from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "descends-after-three",
+      "changes": "callable",
+      "does": "The callable returns the position 0 from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reverses-after-three",
+      "changes": "partner:replay",
+      "does": "The replay reverses the entries that it returns from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "repeats-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first element twice from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-after-three",
+      "changes": "callable",
+      "does": "The callable drops the last element that it returns from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-a-repeat-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and does nothing from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reads-a-stale-value-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-a-write-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and does nothing from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "serves-a-stale-value-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "diverges-after-three",
+      "changes": "declaration",
+      "does": "The first callable of the declaration with a value result returns its second sample from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "grows-past-the-limit-after-three",
+      "changes": "partner:observe",
+      "does": "The reader of the use returns a use one above the limit from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "ignores-the-other-replica",
+      "changes": "callable",
+      "does": "The merge returns no error and does nothing on every call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "admits-any-transition-after-three",
+      "changes": "callable",
+      "does": "The callable makes its transition twice from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
     }
   ]
 }
