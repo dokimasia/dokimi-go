@@ -17,4 +17,10 @@
 // being true, such as after an establishing write that succeeded. A probe
 // that ends before that call, such as after a write that failed, leaves its
 // check vacuous on the subject.
+//
+// A probe of generated sequences runs the [Actions] of a declaration on the
+// subject through the machine of the package stateful of the assert library.
+// It judges the calls that the history of the case records after each step.
+// It calls a partner through an [Apply] and a reference through a
+// [Reference].
 package probe

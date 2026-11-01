@@ -98,13 +98,19 @@ func gain[S, E any](h *conform.Handle[S], drain Call[[]E], write Act) ([]E, bool
 	if !ok {
 		return nil, false
 	}
-	for _, e := range before {
-		at := slices.IndexFunc(after, func(a E) bool { return reflect.DeepEqual(a, e) })
-		if at >= 0 {
-			after = slices.Delete(after, at, at+1)
+	return without(after, before), true
+}
+
+// without returns the elements of from without one element for each element
+// of matched, which it compares as reflect.DeepEqual compares them.
+func without[E any](from, matched []E) []E {
+	rest := slices.Clone(from)
+	for _, m := range matched {
+		if at := slices.IndexFunc(rest, func(e E) bool { return reflect.DeepEqual(e, m) }); at >= 0 {
+			rest = slices.Delete(rest, at, at+1)
 		}
 	}
-	return after, true
+	return rest
 }
 
 // ReadsNeverRegress writes, reads, writes and reads, and fails when the

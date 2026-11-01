@@ -1,0 +1,38 @@
+{
+  "store": 1,
+  "definition": "13.6.0",
+  "property": "the probe holds",
+  "identity": {
+    "assertion": "empty",
+    "file": "sequence.go",
+    "line": 244
+  },
+  "choices": "prop1:AAEAAAAAAAEAAQABAAAAAAABAAEAAQAAAAAAAQAB",
+  "counterexample": [
+    {
+      "label": "keys",
+      "value": {
+        "type": "list",
+        "of": "string",
+        "value": [
+          "a"
+        ]
+      }
+    },
+    {
+      "label": "Append.value",
+      "value": {
+        "type": "int",
+        "value": 0
+      }
+    },
+    {
+      "label": "Append.value",
+      "value": {
+        "type": "int",
+        "value": 0
+      }
+    }
+  ],
+  "found": "2026-11-01"
+}
