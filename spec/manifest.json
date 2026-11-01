@@ -1,4 +1,5 @@
 {
+    "commit": "793f4dc8dcf8500b3b16da2fb07d69bfa1110fea",
     "digest": "sha256:e5055d0a93bedcc3f62c1bf381afa4a361171cecebfc5dadb11625b8cc4e1cd2",
     "files": {
         "VERSION": "sha256:59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
@@ -26,7 +27,6 @@
     "languages": {
         "go": []
     },
-    "local": true,
     "repo": "dokimasia/dokimi",
     "version": "1.0.0"
 }
