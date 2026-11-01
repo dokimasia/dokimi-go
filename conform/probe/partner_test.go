@@ -204,7 +204,11 @@ func TestPartner(t *testing.T) {
 					}
 					return snapshot[1], nil
 				}
-				probe.PinnedAcrossWrite(h, read, act(h, func(s *store) error { return s.put(1, 8) }))
+				writes := 0
+				probe.PinnedAcrossWrite(h, read, act(h, func(s *store) error {
+					writes++
+					return s.put(1, 6+writes)
+				}))
 			},
 		},
 		{
@@ -561,6 +565,32 @@ func TestPartner(t *testing.T) {
 		})
 	}
 
+	t.Run("PinnedAcrossWrite writes before its first read", func(t *testing.T) {
+		t.Parallel()
+
+		conform.Check[*store]{
+			ID: "Store.Call/claim", Statement: "the probe holds", Probe: spec.PinnedAcrossWrite,
+			Apply: func(h *conform.Handle[*store]) {
+				pinned, read := 0, false
+				pin := func(context.Context) (int, error) {
+					if !read {
+						v, err := h.Subject().get(2)
+						if err != nil {
+							return 0, err
+						}
+						pinned, read = v, true
+					}
+					return pinned, nil
+				}
+				writes := 0
+				probe.PinnedAcrossWrite(h, pin, act(h, func(s *store) error {
+					writes++
+					return s.put(2, writes)
+				}))
+			},
+		}.Run(t, stores(""))
+	})
+
 	closeHandle := func(context.Context, int) error { return nil }
 	failHandle := func(context.Context, int) error { return errOther }
 	ends := []struct {
@@ -579,6 +609,14 @@ func TestPartner(t *testing.T) {
 		{
 			name: "PinnedAcrossWrite is vacuous on a write that fails", giveProbe: spec.PinnedAcrossWrite,
 			giveApply: func(h *conform.Handle[*store]) { probe.PinnedAcrossWrite(h, failsSecond(1), fails) },
+		},
+		{
+			name: "PinnedAcrossWrite is vacuous on a first write that fails", giveProbe: spec.PinnedAcrossWrite,
+			giveApply: func(h *conform.Handle[*store]) { probe.PinnedAcrossWrite(h, returning(1), failsOnce()) },
+		},
+		{
+			name: "PinnedAcrossWrite is vacuous on a second write that fails", giveProbe: spec.PinnedAcrossWrite,
+			giveApply: func(h *conform.Handle[*store]) { probe.PinnedAcrossWrite(h, returning(1), writesOnce()) },
 		},
 		{
 			name: "SecondWriteReplaces is vacuous on a first write that fails", giveProbe: spec.SecondWriteReplaces,

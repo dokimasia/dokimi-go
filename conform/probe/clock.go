@@ -71,14 +71,15 @@ func CountsWithinWindow[S any, N cmp.Ordered](h *conform.Handle[S], call Act, co
 // RunsOnSchedule registers the task with call, which returns the delay of
 // its instant, reads count halfway to the instant and once more a nanosecond
 // past it, and fails unless count is unchanged halfway and higher past the
-// instant. A registration that fails ends the probe, and the guard of the
-// probe fails a count that fails.
+// instant. A registration that fails or a delay that is not positive ends the
+// probe. Such a delay puts the instant of the task at its registration, so
+// the task has no halfway. The guard of the probe fails a count that fails.
 func RunsOnSchedule[S any, N cmp.Ordered](h *conform.Handle[S], call Call[time.Duration], count Call[N]) {
 	h.Helper()
 	before, err := count(h.Context())
 	assert.NoError(h, err, h.Statement())
 	delay, err := call(h.Context())
-	if err != nil {
+	if err != nil || delay <= 0 {
 		return
 	}
 	h.Engage()

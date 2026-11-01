@@ -107,12 +107,16 @@ func gain[S, E any](h *conform.Handle[S], drain Call[[]E], write Act) ([]E, bool
 	return after, true
 }
 
-// ReadsNeverRegress reads, writes and reads, and fails when the version of
-// the second read is below the version of the first. A first read or a
-// write that fails ends the probe, and the guard of the probe fails a second
-// read that fails.
+// ReadsNeverRegress writes, reads, writes and reads, and fails when the
+// version of the second read is below the version of the first. The first
+// write gives the first read a version to find. A write or the first read
+// that fails ends the probe, and the guard of the probe fails a second read
+// that fails.
 func ReadsNeverRegress[S, V any, O cmp.Ordered](h *conform.Handle[S], read Call[V], write Act, version func(v V) O) {
 	h.Helper()
+	if write(h.Context()) != nil {
+		return
+	}
 	first, err := read(h.Context())
 	if err != nil || write(h.Context()) != nil {
 		return

@@ -33,11 +33,15 @@ func WriteThenRead[S, V any](h *conform.Handle[S], read, write Call[V]) {
 	assert.Equal(h, got, written, h.Statement())
 }
 
-// PinnedAcrossWrite calls read, write and read on one snapshot, and fails
-// when the two reads differ. A first read or a write that fails ends the
-// probe.
+// PinnedAcrossWrite calls write, read, write and read on one snapshot, and
+// fails when the two reads differ. The first write gives the first read a
+// value to pin, and the second write changes it. A write or the first read
+// that fails ends the probe.
 func PinnedAcrossWrite[S, V any](h *conform.Handle[S], read Call[V], write Act) {
 	h.Helper()
+	if write(h.Context()) != nil {
+		return
+	}
 	first, err := read(h.Context())
 	if err != nil || write(h.Context()) != nil {
 		return

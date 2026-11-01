@@ -184,6 +184,25 @@ func TestDrain(t *testing.T) {
 		}.Run(t, consuming(""))
 	})
 
+	t.Run("ReadsNeverRegress writes before its first read", func(t *testing.T) {
+		t.Parallel()
+
+		conform.Check[*queue]{
+			ID: "Queue.Call/claim", Statement: "the probe holds", Claim: "claim",
+			Probe: spec.ReadsNeverRegress, Reason: spec.Regressed, Defect: queues("regress"),
+			Apply: func(h *conform.Handle[*queue]) {
+				read := func(context.Context) (int, error) {
+					q := h.Subject()
+					if len(q.entries) == 0 {
+						return 0, errOther
+					}
+					return q.version, nil
+				}
+				probe.ReadsNeverRegress(h, read, writes(h), itself)
+			},
+		}.Run(t, queues(""))
+	})
+
 	one := returning([]int{1})
 	failing := func(context.Context) error { return errOther }
 	ends := []struct {
@@ -233,6 +252,18 @@ func TestDrain(t *testing.T) {
 			name: "ReadsNeverRegress is vacuous on a write that fails", giveProbe: spec.ReadsNeverRegress,
 			giveApply: func(h *conform.Handle[*queue]) {
 				probe.ReadsNeverRegress(h, failsSecond(1), failing, itself)
+			},
+		},
+		{
+			name: "ReadsNeverRegress is vacuous on a first write that fails", giveProbe: spec.ReadsNeverRegress,
+			giveApply: func(h *conform.Handle[*queue]) {
+				probe.ReadsNeverRegress(h, returning(1), failsOnce(), itself)
+			},
+		},
+		{
+			name: "ReadsNeverRegress is vacuous on a second write that fails", giveProbe: spec.ReadsNeverRegress,
+			giveApply: func(h *conform.Handle[*queue]) {
+				probe.ReadsNeverRegress(h, returning(1), writesOnce(), itself)
 			},
 		},
 		{

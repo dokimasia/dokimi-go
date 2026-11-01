@@ -312,7 +312,13 @@ func TestClock(t *testing.T) {
 		{
 			name: "RunsOnSchedule is vacuous on a registration that fails", giveProbe: spec.RunsOnSchedule,
 			giveApply: func(h *conform.Handle[*timer]) {
-				probe.RunsOnSchedule(h, refusing[time.Duration](), returning(1))
+				probe.RunsOnSchedule(h, failsFirst(time.Second), returning(1))
+			},
+		},
+		{
+			name: "RunsOnSchedule is vacuous on a delay that is not positive", giveProbe: spec.RunsOnSchedule,
+			giveApply: func(h *conform.Handle[*timer]) {
+				probe.RunsOnSchedule(h, returning(time.Duration(0)), returning(1))
 			},
 		},
 		{

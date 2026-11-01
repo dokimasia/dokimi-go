@@ -57,6 +57,26 @@ func acts(h *conform.Handle[*cell]) probe.Act {
 	}
 }
 
+// failsOnce returns an Act that fails at its first call and succeeds from its
+// second call on.
+func failsOnce() probe.Act {
+	call := failsFirst(0)
+	return func(ctx context.Context) error {
+		_, err := call(ctx)
+		return err
+	}
+}
+
+// writesOnce returns an Act that succeeds at its first call and fails from its
+// second call on.
+func writesOnce() probe.Act {
+	call := failsSecond(0)
+	return func(ctx context.Context) error {
+		_, err := call(ctx)
+		return err
+	}
+}
+
 // proves applies a derived check of the probe p to a subject of good, and
 // falsifies it on a subject of bad, which fails it with reason.
 func proves(
