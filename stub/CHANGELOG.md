@@ -1,5 +1,13 @@
 # go.dokimi.dev/stub
 
+## 0.2.1
+
+### Patch Changes
+
+- e708642: Require `go.dokimi.dev/assert` v0.12.0.
+- Updated dependencies [e708642]
+  - go.dokimi.dev/fault@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
