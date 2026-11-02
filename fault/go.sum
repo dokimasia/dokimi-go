@@ -1,2 +1,6 @@
 go.dokimi.dev/assert v0.14.1 h1:rHvyO47LufLTzSUK9sDMpXcncsWBnvoRxVIjL0g6POU=
 go.dokimi.dev/assert v0.14.1/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
+go.dokimi.dev/assert v0.14.2-0.20261102161013-cb6f57ea3893 h1:sfZ6g+sVc97ffGXJ4pSX+UJObhp2smuZ+8VXQMBYMOI=
+go.dokimi.dev/assert v0.14.2-0.20261102161013-cb6f57ea3893/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
+go.dokimi.dev/assert v0.14.2-0.20261102175602-48658cd22f27 h1:EaEAvFopi47yqo2aGJHy8OTbiTVDZGBnP47rjY45KoQ=
+go.dokimi.dev/assert v0.14.2-0.20261102175602-48658cd22f27/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
