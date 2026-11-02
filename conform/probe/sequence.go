@@ -6,6 +6,7 @@ package probe
 import (
 	"cmp"
 	"context"
+	"errors"
 	"reflect"
 	"slices"
 
@@ -485,6 +486,158 @@ func StatesMoveAlongTheGraph[S any, T comparable](
 			assert.Contains(h, append([]T{from}, transitions[from]...), value[T](after), h.Statement())
 		}),
 	})
+}
+
+// MovesKeepTheTotal runs generated sequences of the actions, and calls observe
+// right before and right after each call of call. It fails when the total
+// that observe returns after the call differs from the total before it, and
+// when observe fails.
+func MovesKeepTheTotal[S, T any](h *conform.Handle[S], c *prop.Case, actions Actions[S], call string, observe Call[T]) {
+	h.Helper()
+	listed := actions(c, h.Subject)
+	for i := range listed {
+		if listed[i].Name != call {
+			continue
+		}
+		run := listed[i].Run
+		listed[i].Run = func(c *prop.Case, client int, input any) {
+			before, err := observe(c.Context())
+			run(c, client, input)
+			after, errAfter := observe(c.Context())
+			h.Engage()
+			h.Expect(spec.NotConserved)
+			assert.NoError(h, errors.Join(err, errAfter), h.Statement())
+			assert.Equal(h, after, before, h.Statement())
+		}
+	}
+	stateful.Steps(c, stateful.Machine[struct{}]{Actions: listed})
+}
+
+// FailedCallsLeaveNoTrace runs generated sequences of the actions with one
+// more action: the action of call with every call of a dependency failing,
+// which applies readback to the arguments of the call right before and right
+// after it. It fails when a call of that action that fails after a failed
+// call of a dependency changes the output of readback.
+func FailedCallsLeaveNoTrace[S any](
+	h *conform.Handle[S], c *prop.Case, actions Actions[S], call string, readback Apply,
+) {
+	h.Helper()
+	listed := actions(c, h.Subject)
+	at := slices.IndexFunc(listed, func(a stateful.Action[struct{}]) bool { return a.Name == call })
+	if at >= 0 {
+		failing, run := listed[at], listed[at].Run
+		failing.Name = call + " with failing dependencies"
+		failing.Run = func(c *prop.Case, client int, input any) {
+			args, _ := input.([]any)
+			before := readback(c.Context(), args)
+			inj := h.Injector()
+			failures := inj.Failures()
+			inj.FailUntilHealed(conform.ErrInjected)
+			run(c, client, input)
+			inj.Heal()
+			events := c.History().Events()
+			out, _ := events[len(events)-1].Output.(conform.Output)
+			if !out.Failed || inj.Failures() == failures {
+				return
+			}
+			h.Engage()
+			h.Expect(spec.PartialWrite)
+			assert.Equal(h, readback(c.Context(), args), before, h.Statement())
+		}
+		listed = append(listed, failing)
+	}
+	stateful.Steps(c, stateful.Machine[struct{}]{Actions: listed})
+}
+
+// IterationsSeeTheMutations runs generated sequences of the actions. After the
+// first step at which stream yields a value, it keeps that iteration, and
+// after the last step it pulls the rest of the iteration. It fails when the
+// rest misses a value that a call of mutate after that step wrote, unless the
+// first value is that value or a later call of remove removed it. It also
+// fails when the rest yields a value that a call of remove after that step
+// removed and no later call of mutate wrote again. written and removed return
+// the value that a call of mutate writes and a call of remove removes. After
+// a step at which stream fails or yields no value, the probe starts the
+// iteration again after the next step.
+func IterationsSeeTheMutations[S, E any](
+	h *conform.Handle[S], c *prop.Case, actions Actions[S], stream Pull[E], mutate, remove string,
+	written, removed func(args []any) E,
+) {
+	h.Helper()
+	var it *iteration[E]
+	stateful.Steps(c, stateful.Machine[struct{}]{
+		Actions: actions(c, h.Subject),
+		Invariant: func(c *prop.Case, _ struct{}) {
+			if it != nil {
+				return
+			}
+			next, stop, err := stream(h.Context())
+			if err != nil {
+				return
+			}
+			first, yielded := next()
+			if !yielded {
+				stop()
+				return
+			}
+			it = &iteration[E]{next: next, stop: stop, first: first, from: len(c.History().Events())}
+		},
+	})
+	if it == nil {
+		return
+	}
+	defer it.stop()
+	var values []E
+	var present []bool
+	for _, call := range completions(c.History().Events(), it.from) {
+		var v E
+		switch {
+		case call.out.Failed:
+			continue
+		case call.operation == mutate:
+			v = written(call.args)
+		case call.operation == remove:
+			v = removed(call.args)
+		default:
+			continue
+		}
+		at := slices.IndexFunc(values, func(e E) bool { return reflect.DeepEqual(e, v) })
+		if at < 0 {
+			values, present, at = append(values, v), append(present, false), len(values)
+		}
+		present[at] = call.operation == mutate
+	}
+	if len(values) == 0 {
+		return
+	}
+	var rest []E
+	for v, more := it.next(); more; v, more = it.next() {
+		rest = append(rest, v)
+	}
+	var missed, removedYet []E
+	for i, v := range values {
+		yielded := slices.ContainsFunc(rest, func(e E) bool { return reflect.DeepEqual(e, v) })
+		switch {
+		case present[i] && !yielded && !reflect.DeepEqual(it.first, v):
+			missed = append(missed, v)
+		case !present[i] && yielded:
+			removedYet = append(removedYet, v)
+		}
+	}
+	h.Engage()
+	h.Expect(spec.StaleIteration)
+	assert.Empty(h, missed, h.Statement())
+	assert.Empty(h, removedYet, h.Statement())
+}
+
+// iteration is the iteration of a stream that a probe keeps across the steps
+// of a sequence: its pull functions, its first value, and the index of the
+// history event after the step at which it started.
+type iteration[E any] struct {
+	next  func() (E, bool)
+	stop  func()
+	first E
+	from  int
 }
 
 // completed is a call of a sequence that completed with an output.

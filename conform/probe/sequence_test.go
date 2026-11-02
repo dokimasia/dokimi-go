@@ -48,14 +48,18 @@ type ledger struct {
 	totals map[string]int
 	states map[string]int
 	set    []int
+	ever   []int
+	open   int
+	dep    *conform.Dependency
 }
 
-// ledgers returns a factory of ledgers with the defect broken.
+// ledgers returns a factory of ledgers with the defect broken. Each ledger
+// commits through a dependency of the injector of its handle.
 func ledgers(broken string) func(*conform.Handle[*ledger]) *ledger {
-	return func(*conform.Handle[*ledger]) *ledger {
+	return func(h *conform.Handle[*ledger]) *ledger {
 		return &ledger{
 			broken: broken, calls: map[string]int{}, items: map[string]item{}, lists: map[string][]int{},
-			totals: map[string]int{}, states: map[string]int{},
+			totals: map[string]int{}, states: map[string]int{}, dep: h.Injector().Dependency(),
 		}
 	}
 }
@@ -65,11 +69,13 @@ func ledgers(broken string) func(*conform.Handle[*ledger]) *ledger {
 var (
 	keyed = map[string]bool{
 		"Put": true, "Get": true, "Add": true, "Total": true, "Advance": true, "State": true, "Push": true,
-		"Lists": true, "Rewind": true, "Save": true, "Set": true, "Grow": true, "Stage": true,
+		"Lists": true, "Rewind": true, "Save": true, "Set": true, "Grow": true, "Stage": true, "Transfer": true,
+		"Commit": true, "Fetch": true,
 	}
 	valued = map[string]bool{
 		"Put": true, "Append": true, "Insert": true, "Bit": true, "Push": true, "Has": true, "Broadcast": true,
-		"Save": true, "Move": true, "Where": true, "Set": true, "Poke": true, "Peek": true,
+		"Save": true, "Move": true, "Where": true, "Set": true, "Poke": true, "Peek": true, "Transfer": true,
+		"Commit": true, "Erase": true,
 	}
 )
 
@@ -84,7 +90,8 @@ var operations = map[string]func(l *ledger, key string, value int, late bool) (a
 	"Insert": (*ledger).insert, "Bit": (*ledger).bit, "Members": (*ledger).members, "Has": (*ledger).has,
 	"Broadcast": (*ledger).broadcast, "Rewind": (*ledger).rewind, "Save": (*ledger).save, "Move": (*ledger).move,
 	"Where": (*ledger).where, "Set": (*ledger).setValue, "Grow": (*ledger).grow, "Stage": (*ledger).stage,
-	"Poke": (*ledger).poke, "Peek": (*ledger).peek,
+	"Poke": (*ledger).poke, "Peek": (*ledger).peek, "Transfer": (*ledger).transfer, "Sum": (*ledger).sum,
+	"Commit": (*ledger).commit, "Fetch": (*ledger).fetch, "Erase": (*ledger).erase,
 }
 
 // do calls the operation op of the ledger with key and value.
@@ -370,9 +377,11 @@ func (l *ledger) state(key string, _ int, _ bool) (any, error) {
 	return l.states[key], nil
 }
 
-// insert adds the value to the set, and returns the size of the set.
+// insert adds the value to the set and to the values that the set ever had,
+// and returns the size of the set.
 func (l *ledger) insert(_ string, value int, _ bool) (any, error) {
 	l.set = slices.Compact(slices.Sorted(slices.Values(append(l.set, value))))
+	l.ever = slices.Compact(slices.Sorted(slices.Values(append(l.ever, value))))
 	return len(l.set), nil
 }
 
@@ -398,6 +407,135 @@ func (l *ledger) members(_ string, _ int, late bool) (any, error) {
 // has reports whether the set has the value.
 func (l *ledger) has(_ string, value int, _ bool) (any, error) {
 	return slices.Contains(l.set, value), nil
+}
+
+// successors maps each key of a pool to the key that a transfer moves units
+// to.
+var successors = map[string]string{"a": "b", "b": "c", "c": "a"}
+
+// transfer moves value units from the total of the key to the total of its
+// successor, and returns no value. A leak defect moves one unit more into the
+// successor than it takes from the key.
+func (l *ledger) transfer(key string, value int, late bool) (any, error) {
+	l.totals[key] -= value
+	l.totals[successors[key]] += value
+	if late && l.broken == "leak" {
+		l.totals[successors[key]]++
+	}
+	return nil, nil
+}
+
+// sum returns the sum of the totals of every key. An unsummable defect fails
+// with errOther.
+func (l *ledger) sum(_ string, _ int, late bool) (any, error) {
+	if late && l.broken == "unsummable" {
+		return 0, errOther
+	}
+	total := 0
+	for _, t := range l.totals {
+		total += t
+	}
+	return total, nil
+}
+
+// commit stores the value under the key once the dependency of the ledger
+// confirms the write, and returns no value. A presume defect stores the value
+// before the dependency confirms it, an unguarded defect stores it without a
+// call of the dependency, a stubborn defect stores it and fails without a call
+// of the dependency, and a swallow defect returns no error for a write whose
+// dependency failed.
+func (l *ledger) commit(key string, value int, late bool) (any, error) {
+	if late && l.broken == "presume" {
+		l.items[key] = item{Value: value}
+	}
+	switch l.broken {
+	case "unguarded":
+		l.items[key] = item{Value: value}
+		return nil, nil
+	case "stubborn":
+		l.items[key] = item{Value: value}
+		return nil, errOther
+	}
+	if err := l.dep.Call("Put"); err != nil {
+		if l.broken == "swallow" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	l.items[key] = item{Value: value}
+	return nil, nil
+}
+
+// fetch returns the value under the key once the dependency of the ledger
+// answers, and errMiss for a key without one.
+func (l *ledger) fetch(key string, _ int, _ bool) (any, error) {
+	if err := l.dep.Call("Get"); err != nil {
+		return 0, err
+	}
+	got, found := l.items[key]
+	if !found {
+		return 0, errMiss
+	}
+	return got.Value, nil
+}
+
+// erase removes the value from the set, and returns the size of the set. It
+// fails with errMiss for a value that the set lacks.
+func (l *ledger) erase(_ string, value int, _ bool) (any, error) {
+	if !slices.Contains(l.set, value) {
+		return 0, errMiss
+	}
+	l.set = slices.DeleteFunc(l.set, func(v int) bool { return v == value })
+	return len(l.set), nil
+}
+
+// iterate starts a pull iteration of the set, and counts it as open until it
+// stops. Each value that next yields is the lowest value that the set has and
+// the iteration has not yielded. Once next yields no value, the iteration has
+// ended, as an iteration of iter.Pull ends. A copy defect iterates the set as
+// it was at the start, and a ghost defect iterates every value that the set
+// ever had. An unstreamable defect fails with errOther.
+func (l *ledger) iterate() (next func() (int, bool), stop func(), err error) {
+	source := func() []int { return l.set }
+	switch l.broken {
+	case "unstreamable":
+		return nil, nil, errOther
+	case "copy":
+		snapshot := slices.Clone(l.set)
+		source = func() []int { return snapshot }
+	case "ghost":
+		source = func() []int { return l.ever }
+	}
+	l.open++
+	seen := map[int]bool{}
+	ended := false
+	next = func() (int, bool) {
+		if ended {
+			return 0, false
+		}
+		for _, v := range source() {
+			if !seen[v] {
+				seen[v] = true
+				return v, true
+			}
+		}
+		ended = true
+		return 0, false
+	}
+	return next, func() { l.open-- }, nil
+}
+
+// sums returns the call of the sum of the totals of the ledger of h.
+func sums(h *conform.Handle[*ledger]) probe.Call[int] {
+	return func(context.Context) (int, error) {
+		v, err := h.Subject().do("Sum", "", 0)
+		return v.(int), err
+	}
+}
+
+// iterates returns the pull iteration of the set of the ledger of h.
+func iterates(h *conform.Handle[*ledger]) probe.Pull[int] {
+	return func(context.Context) (func() (int, bool), func(), error) { return h.Subject().iterate() }
 }
 
 // merge adds the values of the set of other to the set. A detached defect
@@ -553,14 +691,15 @@ var cycle = map[int][]int{0: {1}, 1: {2}, 2: {0}}
 // property is the property of a check over ledgers.
 type property = func(h *conform.Handle[*ledger], c *prop.Case)
 
-// unengaged applies a property check of the probe p to a correct ledger, and
-// fails t unless the check fails once for the vacuous condition of p.
-func unengaged(t *testing.T, p spec.ProbeID, check property) {
+// unengaged applies a property check of the probe p to a ledger with the
+// defect broken, and fails t unless the check fails once for the vacuous
+// condition of p.
+func unengaged(t *testing.T, p spec.ProbeID, broken string, check property) {
 	t.Helper()
 	r := assert.NewRecorder()
 	conform.Check[*ledger]{
 		ID: "Ledger.Call/claim", Statement: "the probe holds", Probe: p, Property: check,
-	}.Run(r, ledgers(""), conform.Cases[*ledger](10), conform.Reference(ledgers("")))
+	}.Run(r, ledgers(broken), conform.Cases[*ledger](10), conform.Reference(ledgers("")))
 	entry, _ := spec.ProbeOf(p)
 	condition := strings.ToLower(entry.Vacuous[:1]) + strings.TrimSuffix(entry.Vacuous[1:], ".")
 	assert.Equal(t, r.Messages(), []string{"Ledger.Call/claim never engaged: " + condition + ". Pass a subject " +
@@ -840,6 +979,49 @@ func TestSequence(t *testing.T) {
 					applying(h, "State"), cycle)
 			},
 		},
+		{
+			name: "MovesKeepTheTotal", giveProbe: spec.MovesKeepTheTotal, giveBreak: "leak", want: spec.NotConserved,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.MovesKeepTheTotal(h, c, actionsOf("Transfer", "Sum"), "Transfer", sums(h))
+			},
+		},
+		{
+			name: "MovesKeepTheTotal fails an observation that fails", giveProbe: spec.MovesKeepTheTotal,
+			giveBreak: "unsummable", want: spec.NotConserved,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.MovesKeepTheTotal(h, c, actionsOf("Transfer"), "Transfer", sums(h))
+			},
+		},
+		{
+			name: "FailedCallsLeaveNoTrace", giveProbe: spec.FailedCallsLeaveNoTrace, giveBreak: "presume",
+			want: spec.PartialWrite,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.FailedCallsLeaveNoTrace(h, c, actionsOf("Fetch", "Commit"), "Commit", applying(h, "Fetch"))
+			},
+		},
+		{
+			name:      "FailedCallsLeaveNoTrace fails the first action of the list",
+			giveProbe: spec.FailedCallsLeaveNoTrace, giveBreak: "presume", want: spec.PartialWrite,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.FailedCallsLeaveNoTrace(h, c, actionsOf("Commit", "Fetch"), "Commit", applying(h, "Fetch"))
+			},
+		},
+		{
+			name: "IterationsSeeTheMutations", giveProbe: spec.IterationsSeeTheMutations, giveBreak: "copy",
+			want: spec.StaleIteration,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.IterationsSeeTheMutations(h, c, actionsOf("Insert", "Erase"), iterates(h), "Insert", "Erase",
+					entryOf, entryOf)
+			},
+		},
+		{
+			name:      "IterationsSeeTheMutations fails a rest that yields an erased value",
+			giveProbe: spec.IterationsSeeTheMutations, giveBreak: "ghost", want: spec.StaleIteration,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.IterationsSeeTheMutations(h, c, actionsOf("Insert", "Erase", "Has"), iterates(h), "Insert",
+					"Erase", entryOf, entryOf)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -885,6 +1067,19 @@ func TestSequence(t *testing.T) {
 		}.Run(t, ledgers(""))
 	})
 
+	t.Run("IterationsSeeTheMutations stops the iteration that it keeps", func(t *testing.T) {
+		t.Parallel()
+
+		conform.Check[*ledger]{
+			ID: "Ledger.Call/claim", Statement: "the probe holds", Probe: spec.IterationsSeeTheMutations,
+			Property: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.IterationsSeeTheMutations(h, c, actionsOf("Insert", "Erase"), iterates(h), "Insert", "Erase",
+					entryOf, entryOf)
+				assert.Equal(h, h.Subject().open, 0, "the probe stops its iteration")
+			},
+		}.Run(t, ledgers(""))
+	})
+
 	t.Run("ResultsNeverFall compares the calls with the same arguments", func(t *testing.T) {
 		t.Parallel()
 
@@ -899,6 +1094,7 @@ func TestSequence(t *testing.T) {
 	ends := []struct {
 		name         string
 		giveProbe    spec.ProbeID
+		giveBreak    string
 		giveProperty property
 	}{
 		{
@@ -1017,12 +1213,62 @@ func TestSequence(t *testing.T) {
 				probe.StatesMoveAlongTheGraph(h, c, actionsOf("State"), "Advance", applying(h, "State"), cycle)
 			},
 		},
+		{
+			name: "MovesKeepTheTotal is vacuous on sequences without a call", giveProbe: spec.MovesKeepTheTotal,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.MovesKeepTheTotal(h, c, actionsOf("Sum"), "Transfer", sums(h))
+			},
+		},
+		{
+			name:      "FailedCallsLeaveNoTrace is vacuous on sequences without a call",
+			giveProbe: spec.FailedCallsLeaveNoTrace,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.FailedCallsLeaveNoTrace(h, c, actionsOf("Fetch"), "Commit", applying(h, "Fetch"))
+			},
+		},
+		{
+			name:      "FailedCallsLeaveNoTrace is vacuous on a write without a dependency",
+			giveProbe: spec.FailedCallsLeaveNoTrace, giveBreak: "unguarded",
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.FailedCallsLeaveNoTrace(h, c, actionsOf("Commit"), "Commit", applying(h, "Fetch"))
+			},
+		},
+		{
+			name:      "FailedCallsLeaveNoTrace is vacuous on a write that fails without a dependency",
+			giveProbe: spec.FailedCallsLeaveNoTrace, giveBreak: "stubborn",
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.FailedCallsLeaveNoTrace(h, c, actionsOf("Commit"), "Commit", applying(h, "Fetch"))
+			},
+		},
+		{
+			name:      "FailedCallsLeaveNoTrace is vacuous on a write that hides a failed dependency",
+			giveProbe: spec.FailedCallsLeaveNoTrace, giveBreak: "swallow",
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.FailedCallsLeaveNoTrace(h, c, actionsOf("Commit"), "Commit", applying(h, "Fetch"))
+			},
+		},
+		{
+			name:      "IterationsSeeTheMutations is vacuous on sequences without a mutation",
+			giveProbe: spec.IterationsSeeTheMutations,
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.IterationsSeeTheMutations(h, c, actionsOf("Insert", "Has"), iterates(h), "Bit", "Erase",
+					entryOf, entryOf)
+			},
+		},
+		{
+			name:      "IterationsSeeTheMutations is vacuous on a stream that fails",
+			giveProbe: spec.IterationsSeeTheMutations, giveBreak: "unstreamable",
+			giveProperty: func(h *conform.Handle[*ledger], c *prop.Case) {
+				probe.IterationsSeeTheMutations(h, c, actionsOf("Insert", "Erase"), iterates(h), "Insert", "Erase",
+					entryOf, entryOf)
+			},
+		},
 	}
 	for _, tt := range ends {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			unengaged(t, tt.giveProbe, tt.giveProperty)
+			unengaged(t, tt.giveProbe, tt.giveBreak, tt.giveProperty)
 		})
 	}
 }

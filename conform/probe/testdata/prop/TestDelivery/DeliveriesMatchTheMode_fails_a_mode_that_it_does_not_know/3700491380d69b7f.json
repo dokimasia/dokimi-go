@@ -1,0 +1,12 @@
+{
+  "store": 1,
+  "definition": "13.6.0",
+  "property": "the probe holds",
+  "identity": {
+    "file": "handle.go",
+    "line": 502
+  },
+  "choices": "prop1:",
+  "counterexample": [],
+  "found": "2026-11-01"
+}

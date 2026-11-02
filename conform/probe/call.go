@@ -21,6 +21,12 @@ type Act func(ctx context.Context) error
 // [Pair].
 type Lookup[V any] func(ctx context.Context) (V, bool)
 
+// Pull starts a pull iteration of the stream of a callable. next returns the
+// next value of the stream and whether the stream had one, and stop ends the
+// iteration. A stream that ends with an error ends the iteration. err is the
+// error of a call of the callable that fails.
+type Pull[E any] func(ctx context.Context) (next func() (E, bool), stop func(), err error)
+
 // Pair contains the two values of a callable that returns two values.
 type Pair[A, B any] struct {
 	First  A
