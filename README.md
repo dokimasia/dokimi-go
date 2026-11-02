@@ -18,6 +18,7 @@ calls through stub.
 | [`go.dokimi.dev/conform`](https://pkg.go.dev/go.dokimi.dev/conform) | The runtime of the conformance suites: the checks and their handle, the applications, the falsification of each check on its planted defect, the budgets, the fuzz targets and the benchmarks |
 | [`go.dokimi.dev/stub`](https://pkg.go.dev/go.dokimi.dev/stub) | The runtime of the doubles: the record of each call, the order of results, faults, latency, strict mode and the expected counts of calls |
 | [`go.dokimi.dev/fault`](https://pkg.go.dev/go.dokimi.dev/fault) | The strategies that select the calls of a double that fail |
+| [`go.dokimi.dev/sim`](https://pkg.go.dev/go.dokimi.dev/sim) | The runtime of the deterministic simulations: the world of a system of sans-IO machines, its faults, the scheduling strategies, the rules of a runtime and the run of a simulation |
 
 The tags of the releases of each module start with the directory of the module, such as
 `conform/v0.7.0`.
