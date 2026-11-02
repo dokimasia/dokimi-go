@@ -1,5 +1,60 @@
 # go.dokimi.dev/conform
 
+## 0.9.0
+
+### Minor Changes
+
+- e708642: Add `Handle.Expect` and `Handle.Fresh`.
+- e708642: Add `conform.Named`.
+- 62fce73: Add the field `RunsUntilCancelled` of `conform.Call` for a call that runs until its context ends.
+- 62fce73: Add the door `Faults` with the option `conform.Faultable`, and build each subject of a check of the machinery `call-that-fails-on-demand` through it.
+- 62fce73: Add `conform.Supply`, `conform.Supplies`, `conform.Open` and the field `Values` of `conform.Doors` for the doors of a value.
+- e708642: Add the fields `Claim`, `Probe`, `Reason`, `Law`, `Machineries`, `Shallow` and `Entails` of `conform.Check`.
+- 62fce73: Add `Handle.Injector`, which returns the injector of the dependencies of the subjects of a handle.
+- 62fce73: Add `conform.Injector`, `conform.Dependency`, `conform.FaultOf` and `conform.ErrInjected` to fail the calls of the dependencies of a subject on demand.
+- e708642: Add the option `conform.Isolate` to isolate the planted defect of each derived check and to check the edges of its claim.
+- 39612ce: Add `conform.Output`, `conform.OutputOf` and `conform.Complete` to record the calls of generated sequences in the history of a case.
+- e708642: Add the package `conform/probe` with a Go function for each probe of the conformance spec.
+- 19d25da: Add `Suite.Package`, `Suite.Generator`, `Suite.Refusals` and `Suite.Unclaimed`.
+- 1e87d26: Add `probe.EitherOrderAgrees` and `probe.EitherGroupingAgrees` for the claims `commutative` and `associative`.
+- 1e87d26: Add the seven probes of the machinery `call-that-fails-on-demand`, such as `probe.ReportsAFailedDependency` and `probe.ReleasesWhatItAcquires`.
+- f0b64bd: Add the 18 probes of generated sequences, such as `probe.ResultsNeverFall` and `probe.SequencesAgreeWithTheReference`.
+- 68d618c: Add the seven probes of the classifications without a claim, such as `probe.ReadsWhatWasStored` and `probe.BoundedByTheSize`.
+- 19d25da: Call `Handle.Engage` in each probe of `conform/probe` where its vacuous condition stops being true.
+- 62fce73: Excuse the generated check of each check that `conform.Excuse` excuses, such as `Store.Get/keeps-the-value#generated` for `Store.Get/keeps-the-value`.
+- 19d25da: Add `Handle.Engage` and `Handle.ObserveCall`, and fail each check that passes without engaging its claim.
+- e708642: Falsify each derived check in `conform.Run` on its planted defect by the reason of its claim.
+- 39612ce: Leave a sequence check of another callable and the check of agreement with a reference out of the isolation of a planted defect.
+- 19d25da: Log the census of each application of `conform.Run` with the counts of each result.
+- 19d25da: Add the number of cases and the counterexample of each property check to the suite records of `conform`.
+- 19d25da: Write the suite records of an application that problems stop, with the problems in the field `ended`.
+- 62fce73: **Breaking:** Record the type of the value that the factory builds as the subject of a suite record, in place of the name of the factory.
+- e708642: **Breaking:** Register each cleanup of `Handle.Cleanup` with the seat of the check through `assert.Cleanup`.
+- 19d25da: Report a malformed `DOKIMI_ASSERT_PROP_SEED` as a problem of the application of a suite.
+- 19d25da: Pass one seed of each application to every property run of `conform.Run` and `conform.RunBudgets`.
+- 19d25da: Take a hexadecimal `DOKIMI_SEED` after the prefix `0x`.
+- 1e87d26: Write before the first read in `probe.PinnedAcrossWrite` and `probe.ReadsNeverRegress`.
+- 62fce73: Add `conform.Refusal.Gate`, and write the gate of each refusal into the suite record.
+- 19d25da: Write the suite records of `conform.Run`, `conform.Falsify`, `conform.FalsifyAllocs` and `conform.RunBudgets` into the output of `go test`.
+
+### Patch Changes
+
+- 1e87d26: End `probe.RunsOnSchedule` without an engagement for a delay that is not positive.
+- 19d25da: Fix `probe.NoElementTwice` and `probe.ReplaysInStampOrder` to end without an assertion after a write that fails.
+- 62fce73: Exempt a check from the isolation of the generated binding of each check that it entails.
+- 42d4231: Fix `probe.ReturnsWithin` to fail the check with the value of a panic of its call.
+- 42d4231: Fix `conform.Isolate` to isolate a derived check against the other derived checks alone.
+- 42d4231: Fix `conform.Isolate` to leave out the planted defects of the reasons `panicked` and `overran-budget`.
+- 42d4231: Fix `probe.RefusedLeavesNothing` to pass a reader that fails, because it finds nothing.
+- 19d25da: Fix the suite record of a property check to contain the failure of its smallest failing case.
+- e708642: Require `go.dokimi.dev/assert` v0.12.0 and `go.dokimi.dev/spec`.
+- 2a27078: Require `go.dokimi.dev/spec` at commit d177901 in place of the unpublished v0.1.0.
+- 494250b: Fix the key of a check in the suite records to split each name into its words, as `spec.Key` does.
+- 7c91c62: Fix `probe.RefusesWhatThePredicateRejects` to write a first value before it asks the predicate.
+- Updated dependencies [f68d5b8, 4cf3c26, 9bfacac, e708642, 9421c56, 3da277c, 3e3aa34, 49e6f5f]
+  - go.dokimi.dev/spec@0.1.0
+  - go.dokimi.dev/fault@0.2.1
+
 ## 0.8.0
 
 ### Minor Changes
