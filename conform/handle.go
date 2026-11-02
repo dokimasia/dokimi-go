@@ -18,6 +18,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/assert/stateful"
 
 	"go.dokimi.dev/spec"
 )
@@ -135,6 +136,10 @@ type Handle[S any] struct {
 	// expected is the reason that the probe set last, and nil before the
 	// first call of Expect.
 	expected atomic.Pointer[spec.ReasonID]
+
+	// scheduler runs the clients of a planted defect as tasks, and is nil
+	// before the first call of Schedule on a handle on a planted defect.
+	scheduler atomic.Pointer[stateful.Scheduler]
 
 	// subject is the subject of the check once built is true. mu guards
 	// both.
@@ -335,6 +340,34 @@ func (h *Handle[S]) lacks(action, door, option, signature string) {
 // handle builds through the door Faults asks.
 func (h *Handle[S]) Injector() *Injector {
 	return h.injector
+}
+
+// Schedule returns the option of [stateful.Steps] that runs the clients of a
+// concurrent section of c. A handle on a subject returns the zero option, so
+// the clients run on threads, which interleave the calls of a subject that
+// never yields. A handle on a planted defect returns the option that runs the
+// clients as tasks of a scheduler of c with the strategy Uniform, so the race
+// of the defect replays from the seed of c, and [Handle.Yield] yields to that
+// scheduler. Uniform chooses the next task at each yield, so a race behind
+// one yield shows in a few cases.
+func (h *Handle[S]) Schedule(c *prop.Case) stateful.Option {
+	if !h.config.defect {
+		return stateful.Option{}
+	}
+	s := stateful.NewScheduler(c, stateful.Uniform())
+	h.scheduler.Store(s)
+	return stateful.Tasks(s)
+}
+
+// Yield lets the scheduler of [Handle.Schedule] run another client of a
+// planted defect before the caller goes on. It returns at once outside a
+// task of that scheduler, and on a handle on a subject. A planted defect
+// calls it between the two halves of an operation that a correct subject
+// runs whole.
+func (h *Handle[S]) Yield() {
+	if s := h.scheduler.Load(); s != nil {
+		s.Yield()
+	}
 }
 
 // faulty returns a subject of the door Faults over the injector of the handle.

@@ -426,6 +426,16 @@ func TestSuite(t *testing.T) {
 			c.Run(t, newStore, isolate, conform.With(agrees))
 		})
 
+		t.Run("leaves out the check of linearizability against a reference", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			linear := derivedKeeps()
+			linear.ID, linear.Claim = "Store/linearizable", spec.Linearizable
+			c.Run(t, newStore, isolate, conform.With(linear))
+		})
+
 		t.Run("passes an edge whose deeper check fails on the defect of its shallower check", func(t *testing.T) {
 			t.Parallel()
 

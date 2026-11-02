@@ -20,6 +20,7 @@ import (
 	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/files"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/assert/stateful"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/spec"
@@ -558,6 +559,72 @@ func TestHandle(t *testing.T) {
 				"calls Fresh without a factory of subjects. A planted defect over a fresh subject proves its check "+
 				"in an application, which has the factory", "the fault names the missing factory")
 			expect.False(t, continued.Load(), "the planted defect ends at Fresh")
+		})
+	})
+
+	t.Run("Schedule", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("runs the clients of a subject on the threads of stateful", func(t *testing.T) {
+			t.Parallel()
+
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				pc.Draw(prop.String(), "key")
+				h.Engage()
+				assert.Equal(h, h.Schedule(pc), stateful.Option{}, "the schedule of a subject changes nothing")
+			}
+			c.Run(t, newStore)
+		})
+
+		t.Run("runs the clients of a planted defect as tasks that a yield interleaves", func(t *testing.T) {
+			t.Parallel()
+
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				var owner atomic.Int64
+				interleaved := false
+				stateful.Steps(pc, stateful.Machine[struct{}]{Actions: []stateful.Action[struct{}]{{
+					Name: "own",
+					Run: func(_ *prop.Case, client int, _ any) {
+						owner.Store(int64(client))
+						h.Yield()
+						interleaved = interleaved || owner.Load() != int64(client)
+					},
+				}}}, stateful.Clients(2), h.Schedule(pc))
+				assert.False(h, interleaved, h.Statement())
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			assert.False(t, r.Failed(), "a case of the planted defect interleaves two clients at a yield")
+		})
+	})
+
+	t.Run("Yield", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns at once for a subject", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				h.Yield()
+				keeps().Apply(h)
+			}
+			c.Run(t, newStore)
+		})
+
+		t.Run("returns at once outside a task of a planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				h.Schedule(pc)
+				h.Yield()
+				keepsEvery().Property(h, pc)
+			}
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+			assert.False(t, r.Failed(), "the check fails on the planted defect after the yield")
 		})
 	})
 
