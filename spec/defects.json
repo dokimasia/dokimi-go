@@ -608,6 +608,118 @@
       "does": "The callable makes its transition twice from its fourth call on.",
       "since": "1.0.0",
       "min-steps": 4
+    },
+    {
+      "id": "leaks-one-unit",
+      "changes": "partner:observe",
+      "does": "The reader of the total returns one unit more than on the call before it, on every call.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "half-applied-after-three",
+      "changes": "partner:read",
+      "does": "The reader returns its second sample once a call of a dependency failed, from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "iterates-a-copy",
+      "changes": "callable",
+      "does": "The callable returns a stream over a copy of its source, on every call.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "drops-appends-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and records nothing from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "breaks-the-mode-after-three",
+      "changes": "callable",
+      "does": "From its fourth call on, the callable publishes nothing under at-least-once and exactly-once, and publishes each event twice under at-most-once.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "skips-a-redelivery-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and does nothing from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "misses-updates-after-three",
+      "changes": "partner:trigger",
+      "does": "The trigger returns no error and does nothing from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "replies-twice",
+      "changes": "machine",
+      "does": "The machine returns each reply of a step twice.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "forgets-a-call-on-stop",
+      "changes": "machine",
+      "does": "The machine drops the replies that it returns on the stop event.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "writes-after-stop",
+      "changes": "machine",
+      "does": "On the stop event, the machine returns once more the last effect with a token that it returned before.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "steps-after-error",
+      "changes": "machine",
+      "does": "The error method of the machine returns an error from its first step on, and the machine keeps returning the effects of each step.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reuses-a-token",
+      "changes": "machine",
+      "does": "In each step that starts a call or a wait, the machine returns the first such effect of its run once more.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-read-write",
+      "changes": "declaration",
+      "does": "Every callable but the first callable of the declaration with a value result marks its call, yields, and then calls the subject. The first callable with a value result returns its second sample while another call is marked.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-read",
+      "changes": "callable",
+      "does": "The callable keeps the results of the subject in a field of the defect, yields, and returns the field, so a call that overlaps another returns the results of the other.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "computes-per-call",
+      "changes": "callable",
+      "does": "The callable calls a fresh subject for each call, so each call computes its result.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "check-then-grant",
+      "changes": "callable",
+      "does": "Each call of the callable marks itself and yields. A call that finds another call marked returns the zero value of each result and no error without the subject. Any other call calls the subject.",
+      "since": "1.1.0",
+      "min-steps": 2
     }
   ]
 }

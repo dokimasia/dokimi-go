@@ -103,16 +103,6 @@
       "note": "The mixin documents that the callable runs until its context ends."
     },
     {
-      "id": "mixin:concurrent",
-      "stance": "needs",
-      "note": "The claims of the mixin need concurrent callers."
-    },
-    {
-      "id": "mixin:concurrent-readers",
-      "stance": "needs",
-      "note": "The claims of the mixin need concurrent callers."
-    },
-    {
       "id": "mixin:serializable",
       "stance": "needs",
       "note": "The claims of the mixin need concurrent callers."
@@ -123,56 +113,6 @@
       "note": "The claims of the mixin need concurrent callers."
     },
     {
-      "id": "contract:single-flight/fn",
-      "stance": "needs",
-      "note": "The claims of the contract need concurrent callers."
-    },
-    {
-      "id": "mixin:conservative",
-      "stance": "needs",
-      "note": "The claims of the mixin need generated sequences."
-    },
-    {
-      "id": "mixin:stream-reflects-mutations",
-      "stance": "needs",
-      "note": "The claims of the mixin need generated sequences."
-    },
-    {
-      "id": "contract:outbox/append",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
-      "id": "contract:outbox/subscribe",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
-      "id": "contract:publisher/publish",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
-      "id": "contract:publisher/subscribe",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
-      "id": "contract:publisher/redeliver",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
-      "id": "contract:watcher/watch",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
-      "id": "contract:watcher/trigger",
-      "stance": "needs",
-      "note": "The claims of the contract need generated sequences."
-    },
-    {
       "id": "mixin:durable",
       "stance": "needs",
       "note": "The claims of the mixin need a killable process or a breakable medium."
@@ -181,6 +121,11 @@
       "id": "mixin:default-on-error",
       "stance": "blocked",
       "note": "The mixin declares no default value for a check to compare."
+    },
+    {
+      "id": "mixin:returns-on-error",
+      "stance": "gap",
+      "note": "No claim checks that a failed call returns the field of its request."
     }
   ]
 }

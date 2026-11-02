@@ -4650,6 +4650,156 @@
       "since": "1.0.0"
     },
     {
+      "id": "linearizable",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "concurrent"
+        }
+      ],
+      "scope": "declaration",
+      "gates": [
+        "returns-a-value"
+      ],
+      "law": "concurrent-history-is-linearizable",
+      "machineries": [
+        "concurrent-callers",
+        "generated-sequences",
+        "reference-implementation"
+      ],
+      "statement": "every concurrent history of {declaration} has an order in which the reference returns the same results",
+      "probe": "linearizable-history",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "reference",
+          "from": "declaration"
+        }
+      ],
+      "defect": {
+        "form": "racy-read-write",
+        "clause": "a {declaration} whose first callable with a value result returns another value while another call is in progress",
+        "reason": "not-linearizable"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "reads-agree-under-concurrency",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "concurrent-readers"
+        }
+      ],
+      "gates": [
+        "returns-a-value"
+      ],
+      "law": "reads-beside-reads-return-what-one-read-returns",
+      "machineries": [
+        "concurrent-callers",
+        "generated-sequences"
+      ],
+      "statement": "{callable} returns beside other reads what it returns with the same arguments when it runs alone",
+      "probe": "concurrent-reads-agree",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "again",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "racy-read",
+        "clause": "a {declaration} whose {callable} returns the results of another read that overlaps it",
+        "reason": "inconsistent-concurrent-read"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "computes-once",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "single-flight",
+          "role": "fn"
+        }
+      ],
+      "law": "calls-at-once-share-one-computation",
+      "machineries": [
+        "concurrent-callers",
+        "call-that-fails-on-demand"
+      ],
+      "statement": "calls of {callable} with one key at once share one computation of their result",
+      "probe": "shares-one-computation",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "computes-per-call",
+        "clause": "a {declaration} whose {callable} computes its result for each call",
+        "reason": "repeated-computation"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "one-holder-at-a-time",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "lease",
+          "role": "acquire",
+          "conflicts": [
+            {
+              "mixin": "idempotent"
+            }
+          ]
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "failure"
+      ],
+      "law": "granted-lease-is-not-granted-twice",
+      "machineries": [
+        "concurrent-callers"
+      ],
+      "statement": "calls of {callable} with one key at once grant the lease once",
+      "probe": "exclusive-under-concurrency",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "sentinel",
+          "from": "param",
+          "param": "taken"
+        }
+      ],
+      "defect": {
+        "form": "check-then-grant",
+        "clause": "a {declaration} whose {callable} grants a lease to two calls at once",
+        "reason": "unguarded-write"
+      },
+      "since": "1.1.0",
+      "entails": [
+        "lease"
+      ]
+    },
+    {
       "id": "keeps-within-its-bounds",
       "generator": "suite",
       "licences": [
@@ -4813,6 +4963,419 @@
         "reason": "forbidden-transition"
       },
       "since": "1.0.0"
+    },
+    {
+      "id": "conserves-the-quantity",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "conservative"
+        }
+      ],
+      "gates": [
+        "numeric-total"
+      ],
+      "partners": [
+        {
+          "name": "observe",
+          "mode": "named",
+          "param": "observe"
+        }
+      ],
+      "law": "moves-conserve-the-total",
+      "machineries": [
+        "generated-sequences"
+      ],
+      "statement": "each call of {callable} keeps the total that {observe} reads, over any sequence of calls",
+      "probe": "moves-keep-the-total",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "observe",
+          "from": "partner",
+          "partner": "observe"
+        }
+      ],
+      "defect": {
+        "form": "leaks-one-unit",
+        "clause": "a {declaration} whose {observe} reads one unit more on each call",
+        "reason": "not-conserved"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "no-trace-of-a-failed-call",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "atomic",
+          "needs-param": "read"
+        }
+      ],
+      "gates": [
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "reader",
+          "param": "read"
+        }
+      ],
+      "law": "failed-call-leaves-no-effect",
+      "machineries": [
+        "generated-sequences",
+        "call-that-fails-on-demand"
+      ],
+      "statement": "{read} finds no effect of a {callable} that failed with its dependencies, over any sequence of calls",
+      "probe": "failed-calls-leave-no-trace",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "readback",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "half-applied-after-three",
+        "clause": "a {declaration} whose {read} finds a part of a failed {callable} from its fourth read on",
+        "reason": "partial-write"
+      },
+      "since": "1.1.0",
+      "entails": [
+        "no-partial-write"
+      ]
+    },
+    {
+      "id": "iteration-sees-mutations",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "stream-reflects-mutations"
+        }
+      ],
+      "gates": [
+        "stream-mutations"
+      ],
+      "partners": [
+        {
+          "name": "mutate",
+          "mode": "named",
+          "param": "mutate"
+        },
+        {
+          "name": "delete",
+          "mode": "named",
+          "param": "delete"
+        }
+      ],
+      "law": "iteration-reflects-its-source",
+      "machineries": [
+        "generated-sequences"
+      ],
+      "statement": "an iteration of {callable} yields each value that {mutate} writes and no value that {delete} removes while it runs",
+      "probe": "iterations-see-the-mutations",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "stream",
+          "from": "callable"
+        },
+        {
+          "name": "mutate",
+          "from": "partner",
+          "partner": "mutate"
+        },
+        {
+          "name": "delete",
+          "from": "partner",
+          "partner": "delete"
+        },
+        {
+          "name": "written",
+          "from": "partner",
+          "partner": "mutate"
+        },
+        {
+          "name": "removed",
+          "from": "partner",
+          "partner": "delete"
+        }
+      ],
+      "defect": {
+        "form": "iterates-a-copy",
+        "clause": "a {declaration} whose {callable} iterates a copy of its source",
+        "reason": "stale-iteration"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "delivers-each-append",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "outbox",
+          "role": "append"
+        }
+      ],
+      "gates": [
+        "delivers-on-a-channel"
+      ],
+      "partners": [
+        {
+          "name": "subscribe",
+          "mode": "role",
+          "role": "subscribe"
+        }
+      ],
+      "law": "each-append-is-delivered",
+      "machineries": [
+        "generated-sequences"
+      ],
+      "statement": "each message that {callable} records arrives on the channel of {subscribe}",
+      "probe": "appends-arrive",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "append",
+          "from": "callable"
+        },
+        {
+          "name": "subscribe",
+          "from": "partner",
+          "partner": "subscribe"
+        },
+        {
+          "name": "written",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "drops-appends-after-three",
+        "clause": "a {declaration} whose {callable} records nothing from its fourth call on",
+        "reason": "lost-message"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "delivers-by-its-mode",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "publisher",
+          "role": "publish"
+        }
+      ],
+      "gates": [
+        "delivers-on-a-channel"
+      ],
+      "partners": [
+        {
+          "name": "subscribe",
+          "mode": "role",
+          "role": "subscribe"
+        }
+      ],
+      "law": "deliveries-follow-the-mode",
+      "machineries": [
+        "generated-sequences"
+      ],
+      "statement": "each event that {callable} publishes arrives on the channel of {subscribe} as its delivery mode states",
+      "probe": "deliveries-match-the-mode",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "publish",
+          "from": "callable"
+        },
+        {
+          "name": "subscribe",
+          "from": "partner",
+          "partner": "subscribe"
+        },
+        {
+          "name": "written",
+          "from": "callable"
+        },
+        {
+          "name": "mode",
+          "from": "param",
+          "param": "mode"
+        }
+      ],
+      "defect": {
+        "form": "breaks-the-mode-after-three",
+        "clause": "a {declaration} whose {callable} breaks its delivery mode from its fourth call on",
+        "reason": "wrong-delivery-count"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "redelivers-on-demand",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "publisher",
+          "role": "redeliver"
+        }
+      ],
+      "gates": [
+        "delivers-on-a-channel",
+        "at-least-once-mode"
+      ],
+      "partners": [
+        {
+          "name": "publish",
+          "mode": "role",
+          "role": "publish"
+        },
+        {
+          "name": "subscribe",
+          "mode": "role",
+          "role": "subscribe"
+        }
+      ],
+      "law": "redelivery-delivers-again",
+      "machineries": [
+        "generated-sequences"
+      ],
+      "statement": "each event that {callable} redelivers arrives on the channel of {subscribe} once more",
+      "probe": "redeliveries-arrive",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "publish",
+          "from": "partner",
+          "partner": "publish"
+        },
+        {
+          "name": "redeliver",
+          "from": "callable"
+        },
+        {
+          "name": "subscribe",
+          "from": "partner",
+          "partner": "subscribe"
+        },
+        {
+          "name": "written",
+          "from": "partner",
+          "partner": "publish"
+        },
+        {
+          "name": "redelivered",
+          "from": "callable"
+        }
+      ],
+      "defect": {
+        "form": "skips-a-redelivery-after-three",
+        "clause": "a {declaration} whose {callable} does nothing from its fourth call on",
+        "reason": "not-redelivered"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "watch-sees-each-trigger",
+      "generator": "suite",
+      "licences": [
+        {
+          "contract": "watcher",
+          "role": "watch"
+        }
+      ],
+      "gates": [
+        "subscription-methods"
+      ],
+      "partners": [
+        {
+          "name": "trigger",
+          "mode": "role",
+          "role": "trigger"
+        }
+      ],
+      "law": "watch-returns-each-trigger",
+      "machineries": [
+        "generated-sequences"
+      ],
+      "statement": "a subscription of {callable} returns each update that {trigger} causes for its key, in order, and no update after its stop",
+      "probe": "watches-see-the-triggers",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "watch",
+          "from": "callable"
+        },
+        {
+          "name": "trigger",
+          "from": "partner",
+          "partner": "trigger"
+        },
+        {
+          "name": "next",
+          "from": "param",
+          "param": "next"
+        },
+        {
+          "name": "stop",
+          "from": "param",
+          "param": "stop"
+        },
+        {
+          "name": "retrigger",
+          "from": "partner",
+          "partner": "trigger"
+        },
+        {
+          "name": "watch-key",
+          "from": "callable"
+        },
+        {
+          "name": "trigger-key",
+          "from": "partner",
+          "partner": "trigger"
+        },
+        {
+          "name": "triggered",
+          "from": "partner",
+          "partner": "trigger"
+        }
+      ],
+      "defect": {
+        "form": "misses-updates-after-three",
+        "clause": "a {declaration} whose {trigger} does nothing from its fourth call on",
+        "reason": "missed-update"
+      },
+      "since": "1.1.0"
     },
     {
       "id": "values-in-order",
@@ -5183,6 +5746,91 @@
         "reason": "shared-identity"
       },
       "since": "1.0.0"
+    },
+    {
+      "id": "replies-once",
+      "generator": "sim",
+      "law": "no-second-reply",
+      "machineries": [
+        "simulated-system"
+      ],
+      "statement": "each machine of {declaration} returns at most one reply to each inbound call",
+      "probe": "replies-at-most-once",
+      "inputs": [],
+      "defect": {
+        "form": "replies-twice",
+        "clause": "a {declaration} whose machine returns each reply twice",
+        "reason": "second-reply"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "replies-before-stop",
+      "generator": "sim",
+      "law": "stop-replies-to-each-call",
+      "machineries": [
+        "simulated-system"
+      ],
+      "statement": "on the stop event, each machine of {declaration} replies to each inbound call that it has not replied to",
+      "probe": "replies-on-stop",
+      "inputs": [],
+      "defect": {
+        "form": "forgets-a-call-on-stop",
+        "clause": "a {declaration} whose machine drops its replies on the stop event",
+        "reason": "call-without-reply"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "quiet-after-stop",
+      "generator": "sim",
+      "law": "no-effect-after-stop",
+      "machineries": [
+        "simulated-system"
+      ],
+      "statement": "from the stop event on, each machine of {declaration} returns replies alone",
+      "probe": "only-replies-after-stop",
+      "inputs": [],
+      "defect": {
+        "form": "writes-after-stop",
+        "clause": "a {declaration} whose machine starts a call on the stop event",
+        "reason": "effect-after-stop"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "quiet-after-error",
+      "generator": "sim",
+      "law": "no-effect-after-error",
+      "machineries": [
+        "simulated-system"
+      ],
+      "statement": "each machine of {declaration} returns no effect after the step in which its error method returns an error",
+      "probe": "no-effects-after-error",
+      "inputs": [],
+      "defect": {
+        "form": "steps-after-error",
+        "clause": "a {declaration} whose machine returns effects after it reports an error",
+        "reason": "effect-after-error"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "fresh-tokens",
+      "generator": "sim",
+      "law": "no-reused-token",
+      "machineries": [
+        "simulated-system"
+      ],
+      "statement": "each effect of a machine of {declaration} that starts a call or a wait has a token that no earlier effect of the machine in its epoch has",
+      "probe": "tokens-differ",
+      "inputs": [],
+      "defect": {
+        "form": "reuses-a-token",
+        "clause": "a {declaration} whose machine starts its first call or wait again with its token",
+        "reason": "reused-token"
+      },
+      "since": "1.1.0"
     }
   ]
 }

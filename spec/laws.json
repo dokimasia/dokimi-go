@@ -444,7 +444,7 @@
     {
       "id": "failed-call-leaves-no-effect",
       "statement": "A reader finds no effect of a call that failed.",
-      "depth": "call-that-fails-on-demand",
+      "depth": "generated-sequences",
       "since": "1.0.0",
       "distinct-from": [
         {
@@ -708,6 +708,104 @@
       "statement": "Each state that the reader reads after a call is the state before the call or one of its successors in the graph.",
       "depth": "generated-sequences",
       "since": "1.0.0",
+      "distinct-from": []
+    },
+    {
+      "id": "moves-conserve-the-total",
+      "statement": "Each call of the callable leaves the total of the quantity unchanged.",
+      "depth": "generated-sequences",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "iteration-reflects-its-source",
+      "statement": "The rest of an iteration yields each value that a mutation wrote while it ran and no value that a delete removed while it ran.",
+      "depth": "generated-sequences",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "each-append-is-delivered",
+      "statement": "Each message that an append recorded arrives on the channel of a subscription at least once.",
+      "depth": "generated-sequences",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "deliveries-follow-the-mode",
+      "statement": "Each published event arrives at least once, at most once or exactly once, as the delivery mode states.",
+      "depth": "generated-sequences",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "redelivery-delivers-again",
+      "statement": "Each event that a redelivery passed arrives once more than its publishes alone deliver.",
+      "depth": "generated-sequences",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "watch-returns-each-trigger",
+      "statement": "A subscription returns each update that a trigger of its key caused after the watch started, in order, and no update after its stop.",
+      "depth": "generated-sequences",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-second-reply",
+      "statement": "A machine returns at most one reply to each inbound call.",
+      "depth": "simulated-system",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "stop-replies-to-each-call",
+      "statement": "On the stop event, a machine replies to each inbound call that it has not replied to.",
+      "depth": "simulated-system",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-effect-after-stop",
+      "statement": "From the stop event on, a machine returns replies alone.",
+      "depth": "simulated-system",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-effect-after-error",
+      "statement": "A machine returns no effect after the step in which its error method returns an error.",
+      "depth": "simulated-system",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "no-reused-token",
+      "statement": "Each effect that starts a call or a wait has a token that no earlier effect of its machine in the same epoch has.",
+      "depth": "simulated-system",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "concurrent-history-is-linearizable",
+      "statement": "Every history of concurrent calls has an order that keeps the real-time order of its calls and in which the reference returns the same results.",
+      "depth": "concurrent-callers",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "reads-beside-reads-return-what-one-read-returns",
+      "statement": "A read that runs beside other reads, without a write, returns what it returns with the same arguments when it runs alone.",
+      "depth": "concurrent-callers",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "calls-at-once-share-one-computation",
+      "statement": "Calls with one key that run at once share one computation of their result.",
+      "depth": "concurrent-callers",
+      "since": "1.1.0",
       "distinct-from": []
     }
   ]

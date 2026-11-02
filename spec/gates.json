@@ -288,6 +288,41 @@
       "since": "1.0.0"
     },
     {
+      "id": "numeric-total",
+      "passes": "The callable that the param observe names returns an integer or a float, so a planted defect can add a unit to the total.",
+      "why": "the reader that observe names for {callable} returns no number",
+      "remedy": "name with observe a callable that returns the total that {callable} moves as a number",
+      "since": "1.1.0"
+    },
+    {
+      "id": "delivers-on-a-channel",
+      "passes": "The callable of the role subscribe returns a channel, and the callable passes a value of the type of its elements.",
+      "why": "{subscribe} returns no channel of a value that {callable} passes",
+      "remedy": "subscribe through a callable that returns a channel of the values that {callable} passes",
+      "since": "1.1.0"
+    },
+    {
+      "id": "at-least-once-mode",
+      "passes": "The callable of the role publish states the delivery mode at-least-once, so a redelivery delivers an event once more.",
+      "why": "{publish} states no delivery mode at-least-once, so a redelivery of {callable} need not deliver an event again",
+      "remedy": "state the delivery mode of {publish}, whose check judges the redeliveries of {callable} under any mode",
+      "since": "1.1.0"
+    },
+    {
+      "id": "stream-mutations",
+      "passes": "The callable returns a stream, and the callables that the params mutate and delete name each take a value of the type of its elements.",
+      "why": "{callable} returns no stream of a value that {mutate} and {delete} take",
+      "remedy": "name with mutate and delete the callables that write and remove an element of the stream of {callable}",
+      "since": "1.1.0"
+    },
+    {
+      "id": "subscription-methods",
+      "passes": "The method that the param next names takes a wait and returns an update and a presence flag, the method that the param stop names takes and returns nothing, and the trigger passes a value of the type of the update.",
+      "why": "the methods that next and stop name on the subscription of {callable}, or the value that {trigger} passes, do not fit a read of updates",
+      "remedy": "name with next a method that takes a wait and returns the update and a flag, and with stop a method without parameters and results",
+      "since": "1.1.0"
+    },
+    {
       "id": "takes-a-replica",
       "passes": "The callable takes one input that another subject can be, a pointer to the struct of the declaration or an interface that the subject type implements, so a merge can pass it another replica.",
       "why": "{callable} takes no input that another replica of {declaration} can be",

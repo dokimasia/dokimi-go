@@ -2182,6 +2182,353 @@
       "reasons": [
         "forbidden-transition"
       ]
+    },
+    {
+      "id": "moves-keep-the-total",
+      "summary": "Each call of the callable in a generated sequence leaves the total that the reader of the quantity reads unchanged.",
+      "vacuous": "No sequence calls the callable.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "call",
+          "kind": "operation"
+        },
+        {
+          "name": "observe",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "not-conserved"
+      ]
+    },
+    {
+      "id": "failed-calls-leave-no-trace",
+      "summary": "A call of a generated sequence whose dependencies fail leaves what the reader reads for its arguments as it was.",
+      "vacuous": "No call of the callable fails with the error of a failed dependency.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "call",
+          "kind": "operation"
+        },
+        {
+          "name": "readback",
+          "kind": "apply"
+        }
+      ],
+      "reasons": [
+        "partial-write"
+      ]
+    },
+    {
+      "id": "iterations-see-the-mutations",
+      "summary": "The rest of an iteration that started before a generated sequence yields each value that a mutation wrote and no value that a delete removed.",
+      "vacuous": "No sequence calls the mutation while the iteration runs.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "stream",
+          "kind": "pull"
+        },
+        {
+          "name": "mutate",
+          "kind": "operation"
+        },
+        {
+          "name": "delete",
+          "kind": "operation"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        },
+        {
+          "name": "removed",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "stale-iteration"
+      ]
+    },
+    {
+      "id": "appends-arrive",
+      "summary": "Each message that an append of a generated sequence recorded arrives on the channel of a subscription.",
+      "vacuous": "No append of a sequence succeeds.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "append",
+          "kind": "operation"
+        },
+        {
+          "name": "subscribe",
+          "kind": "channel"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "lost-message"
+      ]
+    },
+    {
+      "id": "deliveries-match-the-mode",
+      "summary": "Each event that a generated sequence published arrives as often as the delivery mode allows.",
+      "vacuous": "No publish of a sequence succeeds.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "publish",
+          "kind": "operation"
+        },
+        {
+          "name": "subscribe",
+          "kind": "channel"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        },
+        {
+          "name": "mode",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "wrong-delivery-count"
+      ]
+    },
+    {
+      "id": "redeliveries-arrive",
+      "summary": "Each event that a redelivery of a generated sequence passed arrives once more than its publishes alone deliver.",
+      "vacuous": "No redelivery of a sequence succeeds.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "publish",
+          "kind": "operation"
+        },
+        {
+          "name": "redeliver",
+          "kind": "operation"
+        },
+        {
+          "name": "subscribe",
+          "kind": "channel"
+        },
+        {
+          "name": "written",
+          "kind": "projection"
+        },
+        {
+          "name": "redelivered",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "not-redelivered"
+      ]
+    },
+    {
+      "id": "watches-see-the-triggers",
+      "summary": "A subscription of a watch in a generated sequence returns each update that a later trigger of its key caused, in order, and no update after its stop.",
+      "vacuous": "No trigger of a sequence follows a watch of its key.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "watch",
+          "kind": "operation"
+        },
+        {
+          "name": "trigger",
+          "kind": "operation"
+        },
+        {
+          "name": "next",
+          "kind": "handle-method"
+        },
+        {
+          "name": "stop",
+          "kind": "handle-method"
+        },
+        {
+          "name": "retrigger",
+          "kind": "apply"
+        },
+        {
+          "name": "watch-key",
+          "kind": "projection"
+        },
+        {
+          "name": "trigger-key",
+          "kind": "projection"
+        },
+        {
+          "name": "triggered",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "missed-update"
+      ]
+    },
+    {
+      "id": "replies-at-most-once",
+      "summary": "No inbound call of the log of a simulation has two replies of its machine.",
+      "vacuous": "No step of a run returns a reply.",
+      "since": "1.1.0",
+      "inputs": [],
+      "reasons": [
+        "second-reply"
+      ]
+    },
+    {
+      "id": "replies-on-stop",
+      "summary": "The step of the stop event of each machine replies to each inbound call that the machine has not replied to.",
+      "vacuous": "No machine of a run takes the stop event while an inbound call of it is open.",
+      "since": "1.1.0",
+      "inputs": [],
+      "reasons": [
+        "call-without-reply"
+      ]
+    },
+    {
+      "id": "only-replies-after-stop",
+      "summary": "Each effect that a machine returns on or after the stop event is a reply.",
+      "vacuous": "No machine of a run takes the stop event.",
+      "since": "1.1.0",
+      "inputs": [],
+      "reasons": [
+        "effect-after-stop"
+      ]
+    },
+    {
+      "id": "no-effects-after-error",
+      "summary": "No machine returns an effect in a step after the step in which its error method returned an error.",
+      "vacuous": "No machine of a run reports an error.",
+      "since": "1.1.0",
+      "inputs": [],
+      "reasons": [
+        "effect-after-error"
+      ]
+    },
+    {
+      "id": "tokens-differ",
+      "summary": "No effect that starts a call or a wait has the token of an earlier effect of its machine in the same epoch.",
+      "vacuous": "No machine of a run starts two calls or waits in one epoch.",
+      "since": "1.1.0",
+      "inputs": [],
+      "reasons": [
+        "reused-token"
+      ]
+    },
+    {
+      "id": "linearizable-history",
+      "summary": "The history of generated sequences on concurrent clients has an order in which the reference returns the same results.",
+      "vacuous": "The checker decides no history with a call within its budget.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "reference",
+          "kind": "reference"
+        }
+      ],
+      "reasons": [
+        "not-linearizable"
+      ]
+    },
+    {
+      "id": "concurrent-reads-agree",
+      "summary": "After generated sequences, each read beside other reads returns what the read returns with the same arguments when it runs alone.",
+      "vacuous": "No read runs beside another read.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "again",
+          "kind": "apply"
+        }
+      ],
+      "reasons": [
+        "inconsistent-concurrent-read"
+      ]
+    },
+    {
+      "id": "shares-one-computation",
+      "summary": "Calls with one key from several clients at once record one computation in the dependencies.",
+      "vacuous": "No dependency records a computation.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        }
+      ],
+      "reasons": [
+        "repeated-computation"
+      ]
+    },
+    {
+      "id": "exclusive-under-concurrency",
+      "summary": "Generated sequences of calls with one key on several clients take the lease once, and every other call fails with the declared sentinel.",
+      "vacuous": "No call takes the lease.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "sentinel",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "unguarded-write"
+      ]
     }
   ]
 }
