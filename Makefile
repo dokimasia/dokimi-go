@@ -1,4 +1,4 @@
-# Managed by ergon init. Add repository settings to .ergon/local/Makefile and run ergon init sync.
+# Managed by ergon init, with .ergon/local/Makefile merged in. Change the repository's settings there and run ergon init sync.
 #
 # make check is the gate of the repository. lint-common lints the Markdown files, and lint-github
 # lints the workflows. Each language adds its own fmt, lint, test, generate, audit and check
@@ -183,3 +183,12 @@ audit-go: ## Scan every Go module for known vulnerabilities that its code reache
 	@$(GO) list -m -f '{{.Dir}}' | { status=0; while IFS= read -r dir; do echo "govulncheck $$dir"; \
 		$(GOVULNCHECK) -C "$$dir" $(GO_AUDIT_ARGS) $(GO_PATHS) || status=1; done; exit $$status; }
 check-go: lint-go test-go race-go audit-go ## Run the gate of Go
+
+# The settings of the repository of dokimi-go, which ergon init appends to the Makefile.
+
+# The tests of the gate run their properties under the profile ci of assert, which derives the
+# seed of each run from the contract of its property. The hooks and CI then run the same cases,
+# so a gate that passes before a push passes in CI, and a failure in CI repeats on a workstation.
+# A value of DOKIMI_ASSERT_PROP_PROFILE in the environment takes precedence, such as default for
+# new random seeds.
+test-go race-go: export DOKIMI_ASSERT_PROP_PROFILE ?= ci
