@@ -535,6 +535,35 @@ func TestSuite(t *testing.T) {
 			c.Run(t, newStore, isolate, conform.With(sequence))
 		})
 
+		t.Run("leaves out a check of another callable with a builder of the subject", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			built := derivedKeeps()
+			built.ID = storePut.Check("keeps-the-value")
+			built.Machineries = []spec.MachineryID{spec.InputsBuiltFromTheSubject, spec.NothingBeyondACaller}
+			c.Run(t, newStore, isolate, conform.With(built))
+		})
+
+		t.Run("isolates a planted defect against a check of its own callable with a builder", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedMisses()
+			c.Defect = scrambles
+			built := derivedKeeps()
+			built.Machineries = []spec.MachineryID{spec.InputsBuiltFromTheSubject, spec.NothingBeyondACaller}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(built)) })
+			assert.Equal(t, r.Message(),
+				"the planted defect conform_test.scrambles of Store.Get/misses-unknown-keys also fails these "+
+					"checks:\n"+
+					"\tStore.Get/keeps-the-value fails at the assertion equal with the message "+
+					`"Get returns the value that Put stored"`+"\n"+
+					"A planted defect fails the check that it proves and no other. Change the defect so that it "+
+					"passes these checks, or give each check that it fails the same defect.",
+				"the message lists the check of the same callable")
+		})
+
 		t.Run("isolates a planted defect against a check of another callable without sequences", func(t *testing.T) {
 			t.Parallel()
 
@@ -542,6 +571,7 @@ func TestSuite(t *testing.T) {
 			c.Defect = scrambles
 			other := derivedKeeps()
 			other.ID = storePut.Check("keeps-the-value")
+			other.Machineries = []spec.MachineryID{spec.NothingBeyondACaller}
 			r := recorded(func(tb assert.TB) { c.Run(tb, newStore, isolate, conform.With(other)) })
 			assert.Equal(t, r.Message(),
 				"the planted defect conform_test.scrambles of Store.Get/misses-unknown-keys also fails these "+

@@ -34,6 +34,10 @@ type cell struct {
 // answer decides the value and the error of a call of a cell.
 type answer func(ctx context.Context, c *cell) (int, error)
 
+// itself returns v, the projection of a whole value of an int, such as a
+// version that is the value.
+func itself(v int) int { return v }
+
 // answering returns a factory of cells whose calls answer with a.
 func answering(a answer) func(*conform.Handle[*cell]) *cell {
 	return func(*conform.Handle[*cell]) *cell { return &cell{answer: a} }

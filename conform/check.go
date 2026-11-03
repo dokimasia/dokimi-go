@@ -486,7 +486,9 @@ func (c Check[S]) outside(tb assert.TB, message string) {
 // defect, is a check of an edge of c as well.
 //
 // A sequence check, whose machineries include generated-sequences, calls each
-// callable of its declaration. isolate leaves it out for the planted defect of
+// callable of its declaration. A check whose machineries include
+// inputs-built-from-the-subject can call each of them through the builder of
+// its inputs. isolate leaves out such a check for the planted defect of
 // another callable. It leaves out the checks of agreement with a reference and
 // of linearizability, which compare each call of each callable with the
 // reference, for every planted defect.
@@ -508,7 +510,7 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 		if _, excused := cfg.excused(o.ID); excused || reflect.ValueOf(o.Defect).Pointer() == defect ||
 			slices.Contains(c.Entails, o.ID) || slices.Contains(o.Entails, c.ID) || entailsDefect(o, others, defect) ||
 			c.Claim != "" && o.Claim == "" || slices.Contains(referenced, o.Claim) ||
-			slices.Contains(o.Machineries, spec.GeneratedSequences) && o.ID.callable() != c.ID.callable() {
+			slices.ContainsFunc(o.Machineries, callsEach) && o.ID.callable() != c.ID.callable() {
 
 			continue
 		}
@@ -538,6 +540,13 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 // referenced are the claims whose checks compare each call of each callable
 // with a reference.
 var referenced = []spec.ClaimID{spec.AgreesWithTheReference, spec.Linearizable}
+
+// callsEach reports whether a check with the machinery m can call each
+// callable of its declaration: through the actions of generated sequences, or
+// through a builder of its inputs that takes the subject.
+func callsEach(m spec.MachineryID) bool {
+	return m == spec.GeneratedSequences || m == spec.InputsBuiltFromTheSubject
+}
 
 // entailsDefect reports whether the check o entails a check of others whose
 // planted defect is defect.

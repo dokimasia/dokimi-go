@@ -93,9 +93,6 @@ func versionedWrites(h *conform.Handle[*queue]) probe.Call[int] {
 	}
 }
 
-// itself returns its version.
-func itself(v int) int { return v }
-
 func TestDrain(t *testing.T) {
 	t.Parallel()
 

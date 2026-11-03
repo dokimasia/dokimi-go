@@ -200,6 +200,27 @@ func TestSingle(t *testing.T) {
 			giveGood:  failing(0, errOther), giveBad: zeroWhenCancelled(1), want: spec.ValueBesideError,
 		},
 		{
+			name: "FieldBesideError", giveProbe: spec.FieldBesideError,
+			giveApply: func(h *conform.Handle[*cell]) { probe.FieldBesideError(h, calls(h), itself, 7) },
+			giveGood:  cancelValue(7), giveBad: cancelAware(7), want: spec.FieldLostOnError,
+		},
+		{
+			name: "FieldBesideError on a first call that fails", giveProbe: spec.FieldBesideError,
+			giveApply: func(h *conform.Handle[*cell]) { probe.FieldBesideError(h, calls(h), itself, 7) },
+			giveGood:  failing(7, errOther), giveBad: fromCall(failing(8, errOther), cancelValue(7)),
+			want: spec.FieldLostOnError,
+		},
+		{
+			name:      "FieldBesideError on a subject that appends to the field before it fails",
+			giveProbe: spec.FieldBesideError,
+			giveApply: func(h *conform.Handle[*cell]) {
+				probe.FieldBesideError(h, pairs(h), func(p probe.Pair[int, int]) int { return p.First }, 7)
+			},
+			giveGood: failing(7, errOther),
+			giveBad:  failing(8, errOther),
+			want:     spec.FieldLostOnError,
+		},
+		{
 			name: "ZeroPairBesideError", giveProbe: spec.ZeroPairBesideError,
 			giveApply: func(h *conform.Handle[*cell]) {
 				probe.ZeroPairBesideError(h, pairs(h), probe.Pair[int, int]{})
@@ -326,6 +347,11 @@ func TestSingle(t *testing.T) {
 			name:      "ZeroBesideError is vacuous on a call that never fails",
 			giveProbe: spec.ZeroBesideError, give: value(1),
 			giveApply: func(h *conform.Handle[*cell]) { probe.ZeroBesideError(h, calls(h), 0) },
+		},
+		{
+			name:      "FieldBesideError is vacuous on a call that never fails",
+			giveProbe: spec.FieldBesideError, give: value(7),
+			giveApply: func(h *conform.Handle[*cell]) { probe.FieldBesideError(h, calls(h), itself, 7) },
 		},
 		{
 			name:      "ZeroBesideFalse is vacuous on a call that returns a true flag",

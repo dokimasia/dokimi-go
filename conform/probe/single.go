@@ -55,6 +55,25 @@ func ZeroBesideError[S, V any](h *conform.Handle[S], call Call[V], zero V) {
 	assert.Equal(h, v, zero, h.Statement())
 }
 
+// FieldBesideError calls call, and calls it again with a cancelled context
+// where the first call succeeds. It fails when a call that returns an error
+// returns a field other than want, the value of the field of the request
+// before the call. field returns the field of the result that the mixin
+// names, or the whole result.
+func FieldBesideError[S, V, F any](h *conform.Handle[S], call Call[V], field func(V) F, want F) {
+	h.Helper()
+	v, err := call(h.Context())
+	if err == nil {
+		v, err = call(cancelled(h.Context()))
+	}
+	if err == nil {
+		return
+	}
+	h.Engage()
+	h.Expect(spec.FieldLostOnError)
+	assert.Equal(h, field(v), want, h.Statement())
+}
+
 // ZeroPairBesideError is [ZeroBesideError] for a callable with two values.
 func ZeroPairBesideError[S, A, B any](h *conform.Handle[S], call Call[Pair[A, B]], zero Pair[A, B]) {
 	h.Helper()
