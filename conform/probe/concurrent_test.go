@@ -29,15 +29,23 @@ import (
 // put, yields, and then writes the value, so a get between the two steps
 // returns a value that no put wrote. A racy store keeps the result of a get in
 // its fields last and lastErr, yields, and returns the fields, so a get that
-// overlaps another returns the result of the other.
+// overlaps another returns the result of the other. A pinning store keeps the
+// value of the first get of each key that succeeds in pins, and returns it on
+// each later get of the key. A stamping store raises its revision rev by step
+// on each put, writes the revision in place of the value of the put, and
+// returns it.
 type guarded struct {
-	lastErr error
-	values  map[string]int
-	yield   func()
-	last    int
-	mu      sync.Mutex
-	torn    bool
-	racy    bool
+	lastErr  error
+	values   map[string]int
+	pins     map[string]int
+	yield    func()
+	last     int
+	rev      int
+	step     int
+	mu       sync.Mutex
+	torn     bool
+	racy     bool
+	stamping bool
 }
 
 // newGuarded returns an empty guarded store.
@@ -53,6 +61,32 @@ func racyGuarded(h *conform.Handle[*guarded]) *guarded {
 	return &guarded{values: map[string]int{}, yield: h.Yield, racy: true}
 }
 
+// newPinning returns an empty pinning store.
+func newPinning(*conform.Handle[*guarded]) *guarded {
+	return &guarded{values: map[string]int{}, pins: map[string]int{}}
+}
+
+// racyPinning returns an empty pinning store that is racy and yields to the
+// scheduler of h.
+func racyPinning(h *conform.Handle[*guarded]) *guarded {
+	return &guarded{values: map[string]int{}, pins: map[string]int{}, yield: h.Yield, racy: true}
+}
+
+// newStamping returns an empty stamping store whose revision rises by 1.
+func newStamping(*conform.Handle[*guarded]) *guarded {
+	return &guarded{values: map[string]int{}, step: 1, stamping: true}
+}
+
+// racyStamping returns an empty stamping store whose revision rises by 1, and
+// that is racy and yields to the scheduler of h.
+func racyStamping(h *conform.Handle[*guarded]) *guarded {
+	return &guarded{values: map[string]int{}, yield: h.Yield, step: 1, racy: true, stamping: true}
+}
+
+// revision returns the version of a value of a stamping store, which is the
+// value.
+func revision(v int) int { return v }
+
 // guardedGet returns the apply that calls Get on the subject of h with the
 // arguments of a call.
 func guardedGet(h *conform.Handle[*guarded]) probe.Apply {
@@ -65,6 +99,74 @@ func guardedGet(h *conform.Handle[*guarded]) probe.Apply {
 // putsOnly are the actions of guardedActions without Get.
 func putsOnly(c *prop.Case, subject func() *guarded) []stateful.Action[struct{}] {
 	return guardedActions(c, subject)[:1]
+}
+
+// getsOnly are the actions of guardedActions without Put.
+func getsOnly(c *prop.Case, subject func() *guarded) []stateful.Action[struct{}] {
+	return guardedActions(c, subject)[1:]
+}
+
+// scriptStep is one step of a scripted history. It starts or completes a call
+// of the history of c, and open contains the calls that the script started by
+// their names.
+type scriptStep func(c *prop.Case, open map[string]history.Call)
+
+// started starts the call name of client with the operation op on key.
+func started(name string, client int, op, key string) scriptStep {
+	return func(c *prop.Case, open map[string]history.Call) {
+		open[name] = c.History().Invoke(client, op, []any{key}, key)
+	}
+}
+
+// returned completes the call name with the version.
+func returned(name string, version int) scriptStep {
+	return func(c *prop.Case, open map[string]history.Call) {
+		conform.Complete(c.Context(), open[name], nil, version)
+	}
+}
+
+// made starts and completes a call of client with the operation op on key,
+// which returns the version.
+func made(client int, op, key string, version int) scriptStep {
+	return func(c *prop.Case, open map[string]history.Call) {
+		started("", client, op, key)(c, open)
+		returned("", version)(c, open)
+	}
+}
+
+// scripted returns the actions of one action, which records the steps in the
+// history of a case once.
+func scripted(steps ...scriptStep) probe.Actions[*guarded] {
+	return func(*prop.Case, func() *guarded) []stateful.Action[struct{}] {
+		done := false
+		return []stateful.Action[struct{}]{{
+			Name: "Script",
+			Run: func(c *prop.Case, _ int, _ any) {
+				if done {
+					return
+				}
+				done = true
+				open := map[string]history.Call{}
+				for _, step := range steps {
+					step(c, open)
+				}
+			},
+		}}
+	}
+}
+
+// oneKey are the actions of guardedActions, each of which calls with the key a.
+func oneKey(c *prop.Case, subject func() *guarded) []stateful.Action[struct{}] {
+	actions := guardedActions(c, subject)
+	for i := range actions {
+		input := actions[i].Input
+		actions[i].Input = func(c *prop.Case, s struct{}) any {
+			args, _ := input(c, s).([]any)
+			args[0] = "a"
+			return args
+		}
+	}
+	return actions
 }
 
 // withNever are the actions of guardedActions and the action Never, which is
@@ -207,11 +309,25 @@ func (g *guarded) set(key string, value int) {
 	g.values[key] = value
 }
 
+// stamp raises the revision of g by its step, writes the revision under the
+// key and returns it.
+func (g *guarded) stamp(key string) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.rev += g.step
+	g.values[key] = g.rev
+	return g.rev
+}
+
 // call applies the operation Put or Get to g with args. Put returns no value,
-// and Get fails with errMiss for a key without a value.
+// except on a stamping store, and Get fails with errMiss for a key without a
+// value.
 func (g *guarded) call(op string, args []any) (any, error) {
 	key := args[0].(string)
 	if op == "Put" {
+		if g.stamping {
+			return g.stamp(key), nil
+		}
 		if g.torn {
 			g.set(key, -1)
 			g.yield()
@@ -221,6 +337,11 @@ func (g *guarded) call(op string, args []any) (any, error) {
 	}
 	g.mu.Lock()
 	v, found := g.values[key]
+	if pinned, isPinned := g.pins[key]; isPinned {
+		v = pinned
+	} else if found && g.pins != nil {
+		g.pins[key] = v
+	}
 	g.mu.Unlock()
 	var err error
 	if !found {
@@ -275,6 +396,32 @@ func doubledActions(c *prop.Case, subject func() *guarded) []stateful.Action[str
 		}
 	}
 	return actions
+}
+
+// ordering runs the check of VersionsFollowTheCausalOrder over the actions on
+// a subject of source, and returns the recorder of the check.
+func ordering(
+	actions probe.Actions[*guarded], source func(*conform.Handle[*guarded]) *guarded,
+	opts ...conform.Option[*guarded],
+) *assert.Recorder {
+	r := assert.NewRecorder()
+	conform.Check[*guarded]{
+		ID: "Guarded.Get/causal-history", Statement: "the probe passes", Probe: spec.VersionsFollowTheCausalOrder,
+		Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+			probe.VersionsFollowTheCausalOrder(h, c, actions, "Get", "Put", revision, 2)
+		},
+	}.Run(r, source, opts...)
+	return r
+}
+
+// failsAt fails t unless the check that r recorded fails at the assertion.
+func failsAt(t *testing.T, r *assert.Recorder, assertion string) {
+	t.Helper()
+	failures := r.Failures()
+	assert.NotEmpty(t, failures, "the check fails")
+	failure, _ := failures[0].CaseFailure()
+	expect.Equal(t, []any{failure.Assertion, failure.Contract}, []any{assertion, "the probe passes"},
+		"the check fails at the assertion of the order")
 }
 
 // guardedReference applies an operation to the guarded store r by its name.
@@ -498,6 +645,307 @@ func TestConcurrent(t *testing.T) {
 			assert.Equal(t, r.Messages(), []string{"Flight.Run/computes-once never engaged: " + condition + ". Pass " +
 				"a subject that engages the check, or excuse the check with the directive excuse or " +
 				"conform.Excuse and a reason."}, "the check fails for the vacuous condition of its probe")
+		})
+	})
+
+	t.Run("PinnedUnderConcurrentWrites", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("proves the check on a pinning store against a racy pinning store", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Check[*guarded]{
+				ID: "Guarded.Get/pins-the-snapshot-under-writes", Statement: "the probe passes", Claim: "claim",
+				Probe: spec.PinnedUnderConcurrentWrites, Reason: spec.UnpinnedRead,
+				Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+					probe.PinnedUnderConcurrentWrites(h, c, guardedActions, "Get", "Put", 2)
+				},
+				Defect: racyPinning,
+			}.Run(t, newPinning)
+		})
+
+		t.Run("fails a store whose reads of one key return the last write", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder()
+			conform.Check[*guarded]{
+				ID: "Guarded.Get/pins-the-snapshot-under-writes", Statement: "the probe passes",
+				Probe: spec.PinnedUnderConcurrentWrites,
+				Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+					probe.PinnedUnderConcurrentWrites(h, c, oneKey, "Get", "Put", 2)
+				},
+			}.Run(r, newGuarded, conform.Cases[*guarded](50))
+			failures := r.Failures()
+			assert.NotEmpty(t, failures, "the check fails")
+			failure, _ := failures[0].CaseFailure()
+			expect.Equal(t, []any{failure.Assertion, failure.Contract}, []any{"equal", "the probe passes"},
+				"the check fails at the comparison with the first read")
+		})
+
+		t.Run("engages no case without a read after a read with the same arguments", func(t *testing.T) {
+			t.Parallel()
+
+			r := assert.NewRecorder()
+			conform.Check[*guarded]{
+				ID: "Guarded.Get/pins-the-snapshot-under-writes", Statement: "the probe passes",
+				Probe: spec.PinnedUnderConcurrentWrites,
+				Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+					probe.PinnedUnderConcurrentWrites(h, c, putsOnly, "Get", "Put", 2)
+				},
+			}.Run(r, newPinning, conform.Cases[*guarded](10))
+			entry, _ := spec.ProbeOf(spec.PinnedUnderConcurrentWrites)
+			condition := strings.ToLower(entry.Vacuous[:1]) + strings.TrimSuffix(entry.Vacuous[1:], ".")
+			assert.Equal(t, r.Messages(), []string{"Guarded.Get/pins-the-snapshot-under-writes never engaged: " +
+				condition + ". Pass a subject that engages the check, or excuse the check with the directive " +
+				"excuse or conform.Excuse and a reason."}, "the check fails for the vacuous condition of its probe")
+		})
+
+		t.Run("keeps an action that is never enabled out of the steps", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Check[*guarded]{
+				ID: "Guarded.Get/pins-the-snapshot-under-writes", Statement: "the probe passes",
+				Probe: spec.PinnedUnderConcurrentWrites,
+				Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+					probe.PinnedUnderConcurrentWrites(h, c, withNever, "Get", "Put", 2)
+				},
+			}.Run(t, newPinning)
+		})
+
+		t.Run("runs each other action on client 0 alone", func(t *testing.T) {
+			t.Parallel()
+
+			var elsewhere atomic.Int32
+			conform.Check[*guarded]{
+				ID: "Guarded.Get/pins-the-snapshot-under-writes", Statement: "the probe passes",
+				Probe: spec.PinnedUnderConcurrentWrites,
+				Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+					probe.PinnedUnderConcurrentWrites(h, c,
+						func(c *prop.Case, subject func() *guarded) []stateful.Action[struct{}] {
+							return append(guardedActions(c, subject), stateful.Action[struct{}]{
+								Name: "Solo",
+								Run: func(_ *prop.Case, client int, _ any) {
+									if client != 0 {
+										elsewhere.Add(1)
+									}
+								},
+							})
+						}, "Get", "Put", 2)
+				},
+			}.Run(t, newPinning)
+			expect.Equal(t, elsewhere.Load(), int32(0), "the action Solo runs on client 0 alone")
+		})
+	})
+
+	t.Run("VersionsFollowTheCausalOrder", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("proves the check on a stamping store against a racy stamping store", func(t *testing.T) {
+			t.Parallel()
+
+			conform.Check[*guarded]{
+				ID: "Guarded.Get/causal-history", Statement: "the probe passes", Claim: "claim",
+				Probe: spec.VersionsFollowTheCausalOrder, Reason: spec.UnobservedWrite,
+				Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+					probe.VersionsFollowTheCausalOrder(h, c, guardedActions, "Get", "Put", revision, 2)
+				},
+				Defect: racyStamping,
+			}.Run(t, newStamping)
+		})
+
+		t.Run("fails a store whose reads return the first version of each key", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(guardedActions, func(*conform.Handle[*guarded]) *guarded {
+				return &guarded{values: map[string]int{}, pins: map[string]int{}, step: 1, stamping: true}
+			}, conform.Cases[*guarded](50)), "pairwise")
+		})
+
+		t.Run("fails a store whose writes keep the version", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(guardedActions, func(*conform.Handle[*guarded]) *guarded {
+				return &guarded{values: map[string]int{}, stamping: true}
+			}, conform.Cases[*guarded](50)), "pairwise")
+		})
+
+		t.Run("fails a read below a write that its client made before", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(
+				made(1, "Put", "a", 1), made(1, "Put", "a", 2), made(1, "Get", "a", 1),
+			), newGuarded), "pairwise")
+		})
+
+		t.Run("fails a read below the version that a read of its client returned", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(made(1, "Get", "a", 5), made(1, "Get", "a", 3)), newGuarded), "pairwise")
+		})
+
+		t.Run("fails a write that is not above the version that a read of its client returned", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(made(1, "Get", "a", 5), made(1, "Put", "a", 5)), newGuarded), "pairwise")
+		})
+
+		t.Run("fails a write that is not above the write that a read of its client returned", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(
+				made(1, "Put", "a", 1), made(2, "Get", "a", 1), made(2, "Put", "a", 1),
+			), newGuarded), "pairwise")
+		})
+
+		t.Run("fails a read below a write before the write that a read of its client returned", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(
+				made(3, "Put", "a", 1), made(1, "Put", "a", 2), made(1, "Put", "b", 3), made(2, "Get", "b", 3),
+				made(2, "Get", "a", 1),
+			), newGuarded), "pairwise")
+		})
+
+		t.Run("follows a write that starts before the read returns", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(
+				made(3, "Put", "a", 0), made(2, "Put", "a", 1), started("read", 1, "Get", "b"),
+				started("write", 2, "Put", "b"), returned("write", 2), returned("read", 2), made(1, "Get", "a", 0),
+			), newGuarded), "pairwise")
+		})
+
+		t.Run("keeps the highest version of a key among the calls that a call follows", func(t *testing.T) {
+			t.Parallel()
+
+			failsAt(t, ordering(scripted(
+				made(2, "Put", "a", 3), made(2, "Put", "b", 6), made(1, "Put", "a", 5), made(1, "Get", "b", 6),
+				made(1, "Get", "a", 3),
+			), newGuarded), "pairwise")
+		})
+
+		t.Run("fails a read after a write of its key that returns the version of no write of the key",
+			func(t *testing.T) {
+				t.Parallel()
+
+				failsAt(t, ordering(scripted(made(1, "Put", "a", 2), made(1, "Get", "a", 5)), newGuarded), "contains")
+			})
+
+		t.Run("fails a read after a returned write of its key that returns the version of no write of the key",
+			func(t *testing.T) {
+				t.Parallel()
+
+				failsAt(t, ordering(scripted(
+					made(1, "Put", "a", 2), made(2, "Get", "a", 2), made(2, "Get", "a", 9),
+				), newGuarded), "contains")
+			})
+
+		t.Run("fails a read after a read and a write of its key that returns the version of no write of the key",
+			func(t *testing.T) {
+				t.Parallel()
+
+				failsAt(t, ordering(scripted(
+					made(1, "Get", "a", 5), made(1, "Put", "a", 6), made(1, "Get", "a", 9),
+				), newGuarded), "contains")
+			})
+
+		t.Run("accepts a read of the version of no write after reads of its key alone", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(scripted(made(1, "Get", "a", 7), made(1, "Get", "a", 8), made(1, "Get", "a", 9)), newGuarded)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("ignores a write that starts after the read returns", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(scripted(
+				made(2, "Put", "c", 4), made(2, "Get", "c", 4), made(1, "Get", "a", 5), made(1, "Get", "c", 0),
+				made(2, "Put", "a", 5),
+			), newGuarded)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("ignores a write of the key of the read with another version", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(scripted(
+				made(1, "Put", "c", 4), made(1, "Get", "c", 4), made(1, "Put", "a", 1), made(3, "Get", "a", 5),
+				made(3, "Get", "c", 0),
+			), newGuarded)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("ignores a write of another key with the version of the read", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(scripted(
+				made(1, "Put", "c", 4), made(1, "Get", "c", 4), made(1, "Put", "b", 7), made(2, "Get", "a", 7),
+				made(2, "Get", "c", 0),
+			), newGuarded)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("draws no order from a version that two writes of a key share", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(scripted(
+				made(1, "Put", "c", 4), made(1, "Get", "c", 4), made(1, "Put", "a", 7), made(2, "Put", "a", 7),
+				made(3, "Get", "a", 7), made(3, "Get", "c", 0),
+			), newGuarded)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("compares only the calls that the history records as calls of the read and the write",
+			func(t *testing.T) {
+				t.Parallel()
+
+				r := ordering(scripted(made(1, "Put", "a", 3), made(1, "Peek", "a", 1), made(1, "Get", "a", 3)),
+					newGuarded)
+				expect.False(t, r.Failed(), "the check passes")
+			})
+
+		t.Run("orders versions below zero", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(scripted(made(1, "Put", "a", -2), made(1, "Get", "a", -2)), newGuarded)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("engages no case without a call after a write of its keys", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(getsOnly, newStamping, conform.Cases[*guarded](10))
+			entry, _ := spec.ProbeOf(spec.VersionsFollowTheCausalOrder)
+			condition := strings.ToLower(entry.Vacuous[:1]) + strings.TrimSuffix(entry.Vacuous[1:], ".")
+			assert.Equal(t, r.Messages(), []string{"Guarded.Get/causal-history never engaged: " + condition +
+				". Pass a subject that engages the check, or excuse the check with the directive excuse or " +
+				"conform.Excuse and a reason."}, "the check fails for the vacuous condition of its probe")
+		})
+
+		t.Run("keeps an action that is never enabled out of the steps", func(t *testing.T) {
+			t.Parallel()
+
+			r := ordering(withNever, newStamping)
+			expect.False(t, r.Failed(), "the check passes")
+		})
+
+		t.Run("runs each other action on client 0 alone", func(t *testing.T) {
+			t.Parallel()
+
+			var elsewhere atomic.Int32
+			r := ordering(func(c *prop.Case, subject func() *guarded) []stateful.Action[struct{}] {
+				return append(guardedActions(c, subject), stateful.Action[struct{}]{
+					Name: "Solo",
+					Run: func(_ *prop.Case, client int, _ any) {
+						if client != 0 {
+							elsewhere.Add(1)
+						}
+					},
+				})
+			}, newStamping)
+			expect.False(t, r.Failed(), "the check passes")
+			expect.Equal(t, elsewhere.Load(), int32(0), "the action Solo runs on client 0 alone")
 		})
 	})
 
