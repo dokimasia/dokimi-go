@@ -2512,6 +2512,56 @@
       ]
     },
     {
+      "id": "pinned-under-concurrent-writes",
+      "summary": "After generated sequences with a concurrent section of reads and writes, each read that succeeds returns what the first read with the same arguments returned, across the writes between them.",
+      "vacuous": "No read succeeds after another read with the same arguments.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        }
+      ],
+      "reasons": [
+        "unpinned-read"
+      ]
+    },
+    {
+      "id": "versions-follow-the-causal-order",
+      "summary": "After generated sequences with a concurrent section of reads and writes, each write returns a version above the versions of its keys that it causally follows, and each read returns a version not below them.",
+      "vacuous": "No read or write causally follows a read or a write of its keys.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        },
+        {
+          "name": "read",
+          "kind": "operation"
+        },
+        {
+          "name": "write",
+          "kind": "operation"
+        },
+        {
+          "name": "version",
+          "kind": "projection"
+        }
+      ],
+      "reasons": [
+        "unobserved-write"
+      ]
+    },
+    {
       "id": "exclusive-under-concurrency",
       "summary": "Generated sequences of calls with one key on several clients take the lease once, and every other call fails with the declared sentinel.",
       "vacuous": "No call takes the lease.",

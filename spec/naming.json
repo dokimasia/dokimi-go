@@ -53,6 +53,10 @@
         "go": "Causal",
         "typescript": "causal"
       },
+      "causal-history": {
+        "go": "CausalHistory",
+        "typescript": "causalHistory"
+      },
       "chain": {
         "go": "Chain",
         "typescript": "chain"
@@ -308,6 +312,10 @@
       "persists-each-last-write": {
         "go": "PersistsEachLastWrite",
         "typescript": "persistsEachLastWrite"
+      },
+      "pins-the-snapshot-under-writes": {
+        "go": "PinsTheSnapshotUnderWrites",
+        "typescript": "pinsTheSnapshotUnderWrites"
       },
       "point-in-time": {
         "go": "PointInTime",
@@ -786,6 +794,14 @@
       "put-refuses": {
         "go": "PutRefuses",
         "typescript": "putRefuses"
+      },
+      "racy-causal-read": {
+        "go": "RacyCausalRead",
+        "typescript": "racyCausalRead"
+      },
+      "racy-pin": {
+        "go": "RacyPin",
+        "typescript": "racyPin"
       },
       "racy-read": {
         "go": "RacyRead",
@@ -1855,6 +1871,10 @@
         "go": "PinnedAcrossWrite",
         "typescript": "pinnedAcrossWrite"
       },
+      "pinned-under-concurrent-writes": {
+        "go": "PinnedUnderConcurrentWrites",
+        "typescript": "pinnedUnderConcurrentWrites"
+      },
       "positions-rise": {
         "go": "PositionsRise",
         "typescript": "positionsRise"
@@ -2086,6 +2106,10 @@
       "verifies-after-appends": {
         "go": "VerifiesAfterAppends",
         "typescript": "verifiesAfterAppends"
+      },
+      "versions-follow-the-causal-order": {
+        "go": "VersionsFollowTheCausalOrder",
+        "typescript": "versionsFollowTheCausalOrder"
       },
       "watches-see-the-triggers": {
         "go": "WatchesSeeTheTriggers",

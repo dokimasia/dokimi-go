@@ -4800,6 +4800,114 @@
       ]
     },
     {
+      "id": "pins-the-snapshot-under-writes",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "point-in-time"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "interposed",
+          "param": "write"
+        }
+      ],
+      "law": "read-keeps-its-snapshot",
+      "machineries": [
+        "concurrent-callers",
+        "generated-sequences"
+      ],
+      "statement": "calls of {callable} with the same arguments return one value beside concurrent calls of {write}",
+      "probe": "pinned-under-concurrent-writes",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        }
+      ],
+      "defect": {
+        "form": "racy-pin",
+        "clause": "a {declaration} whose {callable} returns the value of another read that overlaps it",
+        "reason": "unpinned-read"
+      },
+      "since": "1.1.0",
+      "entails": [
+        "point-in-time"
+      ]
+    },
+    {
+      "id": "causal-history",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "causal"
+        }
+      ],
+      "gates": [
+        "cancellation",
+        "one-value",
+        "write-returns-the-value"
+      ],
+      "partners": [
+        {
+          "name": "write",
+          "mode": "derived",
+          "param": "version"
+        }
+      ],
+      "law": "read-observes-its-causal-past",
+      "machineries": [
+        "concurrent-callers",
+        "generated-sequences"
+      ],
+      "statement": "the versions that {callable} and {write} return keep the causal order of their calls across concurrent clients",
+      "probe": "versions-follow-the-causal-order",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        },
+        {
+          "name": "read",
+          "from": "callable"
+        },
+        {
+          "name": "write",
+          "from": "partner",
+          "partner": "write"
+        },
+        {
+          "name": "version",
+          "from": "param",
+          "param": "version"
+        }
+      ],
+      "defect": {
+        "form": "racy-causal-read",
+        "clause": "a {declaration} whose {callable} returns the version of another read that overlaps it",
+        "reason": "unobserved-write"
+      },
+      "since": "1.1.0",
+      "entails": [
+        "causal"
+      ]
+    },
+    {
       "id": "keeps-within-its-bounds",
       "generator": "suite",
       "licences": [

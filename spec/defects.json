@@ -715,6 +715,20 @@
       "min-steps": 2
     },
     {
+      "id": "racy-pin",
+      "changes": "callable",
+      "does": "The callable keeps the results of the subject in a field of the defect, yields, and returns the field, so a read that overlaps another read returns the value that the other read pinned.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-causal-read",
+      "changes": "callable",
+      "does": "The callable keeps the results of the subject in a field of the defect, yields, and returns the field, so a read that overlaps another read returns the version that the other read returned.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
       "id": "check-then-grant",
       "changes": "callable",
       "does": "Each call of the callable marks itself and yields. A call that finds another call marked returns the zero value of each result and no error without the subject. Any other call calls the subject.",
