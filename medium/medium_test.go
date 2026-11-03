@@ -348,6 +348,7 @@ func TestFile(t *testing.T) {
 
 				_, err = f.Read(p)
 				assert.ErrorIs(t, err, io.EOF, "the file reads io.EOF at its end")
+				assert.NoError(t, f.Close(), "the file closes")
 			})
 		})
 	})
@@ -376,6 +377,7 @@ func TestFile(t *testing.T) {
 				n, err = f.ReadAt(p, 9)
 				assert.ErrorIs(t, err, io.EOF, "a read beyond the end reads nothing")
 				assert.Equal(t, n, 0, "the file has no byte beyond its end")
+				assert.NoError(t, f.Close(), "the file closes")
 			})
 		})
 	})
@@ -456,6 +458,7 @@ func TestFile(t *testing.T) {
 				assert.Equal(t, read(t, fsys, "a"), "bo\x00", "the extension is zeros")
 				assert.NoError(t, f.Truncate(0), "the file cuts to nothing")
 				assert.Equal(t, read(t, fsys, "a"), "", "the file is empty")
+				assert.NoError(t, f.Close(), "the file closes")
 			})
 		})
 	})
@@ -475,6 +478,7 @@ func TestFile(t *testing.T) {
 
 				assert.NoError(t, err, "the file states its information")
 				assert.Equal(t, []any{info.Name(), info.Size()}, []any{"a", int64(4)}, "the file has 4 bytes")
+				assert.NoError(t, f.Close(), "the file closes")
 			})
 		})
 	})
@@ -491,6 +495,7 @@ func TestFile(t *testing.T) {
 				assert.NoError(t, err, "the file writes its body")
 
 				assert.NoError(t, f.Sync(), "the file syncs")
+				assert.NoError(t, f.Close(), "the file closes")
 			})
 		})
 	})
@@ -524,6 +529,7 @@ func TestFile(t *testing.T) {
 			_, err = f.Read(make([]byte, 1))
 
 			assert.HasError(t, err, "a file for writing alone refuses a read")
+			assert.NoError(t, f.Close(), "the file closes")
 		})
 	})
 
@@ -538,6 +544,7 @@ func TestFile(t *testing.T) {
 			_, err = f.Write([]byte("b"))
 
 			assert.HasError(t, err, "a file for reading alone refuses a write")
+			assert.NoError(t, f.Close(), "the file closes")
 		})
 	})
 }
