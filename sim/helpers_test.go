@@ -4,6 +4,8 @@
 package sim_test
 
 import (
+	"io"
+	"os"
 	"slices"
 	"testing"
 	"time"
@@ -11,9 +13,43 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/sim"
 	"go.dokimi.dev/spec"
 )
+
+// mediumWith returns a medium in memory whose durable file f contains data,
+// beside the empty durable file e. A new medium refuses none of the calls, so
+// their errors are nil.
+func mediumWith(data string) *medium.Memory {
+	m := medium.NewMemory()
+	f, _ := m.OpenFile("f", os.O_CREATE|os.O_WRONLY, 0o600)
+	_, _ = io.WriteString(f, data)
+	_ = f.Sync()
+	_, _ = m.OpenFile("e", os.O_CREATE|os.O_WRONLY, 0o600)
+	_ = m.SyncDir(".")
+	return m
+}
+
+// write writes data to the file f of m without a sync, and returns the
+// error of the write.
+func write(tb assert.TB, m *medium.Memory, data string) error {
+	tb.Helper()
+	f, err := m.OpenFile("f", os.O_WRONLY|os.O_TRUNC, 0)
+	assert.NoError(tb, err, "the medium opens the file")
+	_, err = io.WriteString(f, data)
+	return err
+}
+
+// contentOf returns the content of the file f of m.
+func contentOf(tb assert.TB, m *medium.Memory) string {
+	tb.Helper()
+	f, err := m.OpenFile("f", os.O_RDONLY, 0)
+	assert.NoError(tb, err, "the medium opens the file")
+	data, err := io.ReadAll(f)
+	assert.NoError(tb, err, "the medium reads the file")
+	return string(data)
+}
 
 // event is an event of the machine of the specs.
 type event interface{ event() }
@@ -428,7 +464,7 @@ func simulation() sim.Simulation[event, effect, int] {
 	return sim.Simulation[event, effect, int]{
 		Anatomy: anatomy,
 		System: func(w *sim.World[event, effect]) {
-			w.Spawn("a", newStore)
+			w.Spawn("a", newStore, mediumWith("data"))
 			w.Spawn("b", newStore)
 		},
 		Actions: []sim.Action[event, effect]{{

@@ -22,6 +22,7 @@ type Process[E, F any] struct {
 	epoch      uint64
 	state      state
 	paused     bool
+	full       bool
 }
 
 // queued is an event that waits for its process, with the epoch of the

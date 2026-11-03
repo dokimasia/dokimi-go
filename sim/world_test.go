@@ -556,6 +556,19 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
+		t.Run("crashes each medium among the dependencies of the process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("data")
+				w.Spawn("store", newStore, disk{}, m)
+				assert.NoError(c, write(c, m, "lost"), "the medium takes the write")
+				w.Crash("store")
+				expect.Equal(c, contentOf(c, m), "data", "the crash drops the write that no sync covered")
+			})
+		})
+
 		t.Run("fails the case for a process that does not run", func(t *testing.T) {
 			t.Parallel()
 

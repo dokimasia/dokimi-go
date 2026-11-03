@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -18,6 +19,7 @@ import (
 	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/sim"
 )
 
@@ -27,6 +29,10 @@ var every = map[sim.Fault]int{
 	sim.FaultDelay: 1, sim.FaultDuplicate: 1, sim.FaultLoseBefore: 1, sim.FaultLoseAfter: 1, sim.FaultOutage: 1,
 	sim.FaultSlow: 1, sim.FaultClockJump: 1, sim.FaultClockStrobe: 1,
 }
+
+// media are the faults of the media of a process, each in force once at
+// most.
+var media = map[sim.Fault]int{sim.FaultTornWrite: 1, sim.FaultCorruption: 1, sim.FaultFullDisk: 1}
 
 // rejecting is a spec that explains no call.
 var rejecting = history.Spec[int]{
@@ -301,13 +307,14 @@ func TestRun(t *testing.T) {
 			system := s.System
 			s.System = func(w *sim.World[event, effect]) {
 				system(w)
-				w.Spawn("c", newStore)
+				w.Spawn("c", newStore, mediumWith(""))
 			}
 			s.Actions = append(s.Actions, sim.Action[event, effect]{
 				Name: "tick c",
 				Run:  func(w *sim.World[event, effect], _ int, _ any) { w.Deliver("c", ticked{token: 1}) },
 			})
-			s.Tolerate = every
+			s.Tolerate = maps.Clone(every)
+			maps.Copy(s.Tolerate, media)
 			s.Invariants = []sim.Invariant[event, effect]{{
 				Statement: "the faults in force stay within tolerate",
 				Check: func(h *sim.Check, w *sim.World[event, effect]) {
@@ -324,6 +331,45 @@ func TestRun(t *testing.T) {
 			}}
 			prop.ForAll(t, "the faults stay within tolerate", func(c *prop.Case) { sim.Run(c, s) },
 				prop.Require(string(sim.FaultCrash), 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
+		})
+
+		t.Run("strikes each fault of the media of a process and restores full media", func(t *testing.T) {
+			t.Parallel()
+
+			// Two full disks within the bound and a crash leave the run with a
+			// process whose media are full, a process without a medium and a
+			// process that does not run, which no fault of the media takes.
+			s := simulation()
+			s.Tolerate = maps.Clone(media)
+			s.Tolerate[sim.FaultFullDisk], s.Tolerate[sim.FaultCrash] = 2, 1
+			labels := []string{"torn-write", "corruption", "full-disk", "restore-disk"}
+			opts := make([]prop.Option, 0, 3+len(labels))
+			opts = append(opts, prop.Hermetic(), prop.Seed(1), prop.Store(""))
+			for _, label := range labels {
+				opts = append(opts, prop.Require(label, 0.01))
+			}
+			prop.ForAll(t, "the stores keep the rules under the faults of media", func(c *prop.Case) { sim.Run(c, s) },
+				opts...)
+		})
+
+		t.Run("corrupts a file in a directory of the media of a process", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.System = func(w *sim.World[event, effect]) {
+				m := medium.NewMemory()
+				_ = m.MkdirAll("d", 0o700)
+				f, _ := m.OpenFile("d/f", os.O_CREATE|os.O_WRONLY, 0o600)
+				_, _ = f.Write([]byte("data"))
+				_ = f.Sync()
+				_ = m.SyncDir("d")
+				_ = m.SyncDir(".")
+				w.Spawn("a", newStore, m)
+				w.Spawn("b", newStore)
+			}
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			prop.ForAll(t, "the run corrupts the file in the directory", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Require(string(sim.FaultCorruption), 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
 		})
 
 		t.Run("runs a system without processes under every fault", func(t *testing.T) {

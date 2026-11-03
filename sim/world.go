@@ -405,10 +405,11 @@ func (w *World[E, F]) poll() {
 // its waits and the events that wait for it are gone. Its open calls end as
 // unknown with ErrCrashed, the sender of each message to it takes ErrCrashed,
 // and the receiver of each message that it sent takes the cancel of the
-// call. The dependencies keep what they applied. An event for the process
-// until its restart has the old epoch, so the restarted machine never takes
-// it. It fails the case for a name that no process has, and for a process
-// that does not run.
+// call. The dependencies keep what they applied, and each medium.Memory among
+// them crashes: it loses each write that a sync did not cover. An event for
+// the process until its restart has the old epoch, so the restarted machine
+// never takes it. It fails the case for a name that no process has, and for a
+// process that does not run.
 func (w *World[E, F]) Crash(name string) {
 	p := w.named(name)
 	if p.state != running {
@@ -418,6 +419,9 @@ func (w *World[E, F]) Crash(name string) {
 	p.state = crashed
 	p.paused = false
 	p.strobe = strobe{}
+	for _, m := range media(p) {
+		m.Crash()
+	}
 	w.forget(p, ErrCrashed)
 	w.strike(FaultCrash)
 }

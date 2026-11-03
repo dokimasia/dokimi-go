@@ -5,6 +5,7 @@ package sim_test
 
 import (
 	"context"
+	"syscall"
 	"testing"
 	"time"
 
@@ -524,8 +525,171 @@ func TestFault(t *testing.T) {
 		})
 	})
 
+	t.Run("Tear", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("keeps the first bytes of the next write of each medium of the process at a crash", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("")
+				w.Spawn("store", newStore, disk{}, m)
+				w.Tear("store", 2)
+				assert.NoError(c, write(c, m, "data"), "the medium takes the write")
+				w.Crash("store")
+				expect.Equal(c, contentOf(c, m), "da", "the crash keeps the first two bytes of the torn write")
+			})
+		})
+
+		t.Run("fails the case for a process that does not run", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				w.Spawn("store", newStore, mediumWith(""))
+				w.Crash("store")
+				w.Tear("store", 1)
+			})
+			expect.Equal(t, got.Contract, `sim: the process "store" does not run`, "the failure names the process")
+		})
+
+		t.Run("fails the case for a process without a medium", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) { single(c).Tear("store", 1) })
+			expect.Equal(t, got.Contract, `sim: the process "store" has no medium`, "the failure names the process")
+		})
+	})
+
+	t.Run("Corrupt", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("flips the lowest bit of the durable byte of the file of each medium of the process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("data")
+				w.Spawn("store", newStore, m)
+				w.Corrupt("store", "f", 1)
+				expect.Equal(c, contentOf(c, m), "d`ta", "the corruption flips the lowest bit of the second byte")
+			})
+		})
+
+		tests := []struct {
+			name       string
+			giveFile   string
+			giveOffset int64
+			want       string
+		}{
+			{
+				name: "fails the case for an offset past the end of the file", giveFile: "f", giveOffset: 4,
+				want: `sim: no medium of the process "store" has the byte 4 of the file "f"`,
+			},
+			{
+				name: "fails the case for a negative offset", giveFile: "f", giveOffset: -1,
+				want: `sim: no medium of the process "store" has the byte -1 of the file "f"`,
+			},
+			{
+				name: "fails the case for a file that the media lack", giveFile: "g", giveOffset: 0,
+				want: `sim: no medium of the process "store" has the byte 0 of the file "g"`,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				got := failure(t, func(c *prop.Case) {
+					w := sim.New(c, anatomy)
+					w.Spawn("store", newStore, mediumWith("data"))
+					w.Corrupt("store", tt.giveFile, tt.giveOffset)
+				})
+				expect.Equal(t, got.Contract, tt.want, "the failure names the process, the byte and the file")
+			})
+		}
+	})
+
+	t.Run("Fill", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("refuses each write of the media of the process after the bytes that they take", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("")
+				w.Spawn("store", newStore, m)
+				w.Fill("store", 2)
+				expect.ErrorIs(c, write(c, m, "data"), syscall.ENOSPC, "the medium refuses the bytes past the fill")
+				expect.Equal(c, contentOf(c, m), "da", "the medium takes the bytes before the fill")
+				expect.Equal(c, w.Faults(), []string{"full-disk:store"}, "the full media are in force")
+			})
+		})
+
+		t.Run("fails the case for a process without a medium", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) { single(c).Fill("store", 1) })
+			expect.Equal(t, got.Contract, `sim: the process "store" has no medium`, "the failure names the process")
+		})
+
+		t.Run("fails the case for a process whose media are full", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				w.Spawn("store", newStore, mediumWith(""))
+				w.Fill("store", 1)
+				w.Fill("store", 1)
+			})
+			expect.Equal(t, got.Contract, `sim: the media of the process "store" are full`,
+				"the failure names the process")
+		})
+	})
+
+	t.Run("RestoreDisk", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("lifts the fill of the media of the process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("")
+				w.Spawn("store", newStore, m)
+				w.Fill("store", 0)
+				w.RestoreDisk("store")
+				expect.NoError(c, write(c, m, "data"), "the medium takes each write after the restore")
+				expect.Empty(c, w.Faults(), "the full media are no longer in force")
+			})
+		})
+
+		t.Run("fails the case for a process whose media are not full", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) { single(c).RestoreDisk("store") })
+			expect.Equal(t, got.Contract, `sim: the media of the process "store" are not full`,
+				"the failure names the process")
+		})
+	})
+
 	t.Run("Recover", func(t *testing.T) {
 		t.Parallel()
+
+		t.Run("lifts the fill of the media of each process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("")
+				w.Spawn("store", newStore, m)
+				w.Fill("store", 0)
+				w.Recover()
+				expect.NoError(c, write(c, m, "data"), "the medium takes each write after the recovery")
+				expect.Empty(c, w.Faults(), "no fault is in force after the recovery")
+			})
+		})
 
 		t.Run("ends each fault in force and restarts each crashed process", func(t *testing.T) {
 			t.Parallel()
@@ -601,7 +765,8 @@ func TestFault(t *testing.T) {
 
 			kinds := []string{
 				"crash", "restart", "pause", "partition", "repair", "drop", "delay", "duplicate",
-				"lose-before", "lose-after", "outage", "slow", "clock-jump", "clock-strobe",
+				"lose-before", "lose-after", "outage", "slow", "clock-jump", "clock-strobe", "torn-write", "corruption",
+				"full-disk",
 			}
 			opts := make([]prop.Option, 0, 3+len(kinds))
 			opts = append(opts, prop.Cases(1), prop.Hermetic(), prop.Seed(1), prop.Store(""))
@@ -634,6 +799,10 @@ func TestFault(t *testing.T) {
 				stored(d, "j")(w)
 				w.Outage("disk")
 				w.Slow("disk")
+				w.Spawn("durable", newStore, mediumWith("data"))
+				w.Tear("durable", 1)
+				w.Corrupt("durable", "f", 0)
+				w.Fill("durable", 1)
 			}, opts...)
 		})
 	})

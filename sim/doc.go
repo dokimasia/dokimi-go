@@ -16,6 +16,12 @@
 // effect that starts a call or a wait. The world records each step of a
 // machine in its log, and each call of a client in the history of the case.
 //
+// A process persists through each medium.Memory among the dependencies that
+// [World.Spawn] gives it. A crash of the process crashes each such medium, so
+// the process loses each write that a sync did not cover. [World.Tear],
+// [World.Corrupt] and [World.Fill] strike the faults of the media of a
+// process: a torn write, a flipped bit at rest and a full disk.
+//
 // # Determinism
 //
 // The world hashes each entry of its log into a checksum, which a replay of
@@ -30,6 +36,7 @@
 //
 // # Dependency position
 //
-// The package imports the standard library, and the packages assert, history,
-// prop and stateful of go.dokimi.dev/assert and the spec of go.dokimi.dev/spec.
+// The package imports the standard library, the packages assert, history,
+// prop and stateful of go.dokimi.dev/assert, the medium of go.dokimi.dev/medium
+// and the spec of go.dokimi.dev/spec.
 package sim

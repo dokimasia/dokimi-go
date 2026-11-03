@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"go.dokimi.dev/assert/prop"
+
+	"go.dokimi.dev/medium"
 )
 
 // Fault is the kind of a fault of a world.
@@ -45,6 +47,12 @@ const (
 	FaultClockJump Fault = "clock-jump"
 	// FaultClockStrobe moves a clock between two offsets.
 	FaultClockStrobe Fault = "clock-strobe"
+	// FaultTornWrite tears the next write of the media of a process.
+	FaultTornWrite Fault = "torn-write"
+	// FaultCorruption flips a bit of a durable file of the media of a process.
+	FaultCorruption Fault = "corruption"
+	// FaultFullDisk fills the media of a process.
+	FaultFullDisk Fault = "full-disk"
 )
 
 // ErrLost is the error of an effect that a fault of its dependency loses,
@@ -254,11 +262,105 @@ func (w *World[E, F]) Strobe(name string, a, b time.Duration, steps int) {
 	w.strike(FaultClockStrobe)
 }
 
+// Tear makes each medium.Memory among the dependencies of the process named
+// name keep only the first n bytes of its next write, where a crash follows
+// the write before a sync of its file. It fails the case for a name that no
+// process has, for a process that does not run, and for a process without a
+// medium.
+func (w *World[E, F]) Tear(name string, n int) {
+	p := w.named(name)
+	if p.state != running {
+		w.c.Fatalf("sim: the process %q does not run", name)
+	}
+	for _, m := range w.mediaOf(p) {
+		m.Tear(n)
+	}
+	w.strike(FaultTornWrite)
+}
+
+// Corrupt flips the lowest bit of the durable byte at the offset of the file
+// of each medium.Memory among the dependencies of the process named name. It
+// fails the case for a name that no process has, for a process without a
+// medium, and for an offset outside each file of that name on its media.
+func (w *World[E, F]) Corrupt(name, file string, offset int64) {
+	hit := false
+	for _, m := range w.mediaOf(w.named(name)) {
+		if info, err := m.Stat(file); err == nil && 0 <= offset && offset < info.Size() {
+			hit = true
+		}
+		m.Corrupt(file, offset)
+	}
+	if !hit {
+		w.c.Fatalf("sim: no medium of the process %q has the byte %d of the file %q", name, offset, file)
+	}
+	w.strike(FaultCorruption)
+}
+
+// Fill makes each medium.Memory among the dependencies of the process named
+// name refuse every write after its next n bytes, until RestoreDisk. It fails
+// the case for a name that no process has, for a process without a medium,
+// and for a process whose media are full.
+func (w *World[E, F]) Fill(name string, n int64) {
+	p := w.named(name)
+	if p.full {
+		w.c.Fatalf("sim: the media of the process %q are full", name)
+	}
+	for _, m := range w.mediaOf(p) {
+		m.Fill(n)
+	}
+	p.full = true
+	w.strike(FaultFullDisk)
+}
+
+// mediaOf returns each medium.Memory among the dependencies of p, and fails
+// the case for a process without one.
+func (w *World[E, F]) mediaOf(p *Process[E, F]) []*medium.Memory {
+	out := media(p)
+	if len(out) == 0 {
+		w.c.Fatalf("sim: the process %q has no medium", p.name)
+	}
+	return out
+}
+
+// RestoreDisk lifts the fill of the media of the process named name. It fails
+// the case for a name that no process has, and for a process whose media are
+// not full.
+func (w *World[E, F]) RestoreDisk(name string) {
+	p := w.named(name)
+	if !p.full {
+		w.c.Fatalf("sim: the media of the process %q are not full", name)
+	}
+	unfill(p)
+}
+
+// unfill lifts the fill of the media of p.
+func unfill[E, F any](p *Process[E, F]) {
+	for _, m := range media(p) {
+		m.Fill(-1)
+	}
+	p.full = false
+}
+
+// media returns each medium.Memory among the dependencies of p, in the order
+// of the dependencies.
+func media[E, F any](p *Process[E, F]) []*medium.Memory {
+	var out []*medium.Memory
+	for _, d := range p.deps {
+		if m, isMemory := d.(*medium.Memory); isMemory {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // Recover ends each fault in force and restarts each crashed process.
 func (w *World[E, F]) Recover() {
 	for _, p := range w.procs {
 		p.paused = false
 		p.strobe = strobe{}
+		if p.full {
+			unfill(p)
+		}
 		if p.state == crashed {
 			w.start(p)
 		}
@@ -270,11 +372,12 @@ func (w *World[E, F]) Recover() {
 	}
 }
 
-// Faults returns the faults in force: the crash, the pause and the strobe of
-// each process in the order of their spawns, the partition, and the outage,
-// the slowness and the armed losses of each dependency in the order in which
-// the world first saw it. Each fault is its kind and its target, such as
-// pause:store, and the partition is its kind alone.
+// Faults returns the faults in force: the crash, the pause, the strobe and
+// the full media of each process in the order of their spawns, the
+// partition, and the outage, the slowness and the armed losses of each
+// dependency in the order in which the world first saw it. Each fault is its
+// kind and its target, such as pause:store, and the partition is its kind
+// alone.
 func (w *World[E, F]) Faults() []string {
 	var out []string
 	for _, p := range w.procs {
@@ -286,6 +389,9 @@ func (w *World[E, F]) Faults() []string {
 		}
 		if p.strobe.left > 0 {
 			out = append(out, string(FaultClockStrobe)+":"+p.name)
+		}
+		if p.full {
+			out = append(out, string(FaultFullDisk)+":"+p.name)
 		}
 	}
 	if w.sides != nil {

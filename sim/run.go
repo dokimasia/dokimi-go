@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"fmt"
 	"hash/fnv"
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -31,6 +32,10 @@ const (
 	maxJump = time.Hour
 	// maxStrobe is the most steps of a strobe.
 	maxStrobe = 16
+	// maxTear is the most bytes that a torn write keeps, and maxFill the most
+	// bytes that full media take before they refuse a write.
+	maxTear = 64
+	maxFill = 64
 )
 
 // kinds are the kinds of the faults that Tolerate and Require name, in the
@@ -38,6 +43,7 @@ const (
 var kinds = []Fault{
 	FaultCrash, FaultRestart, FaultPause, FaultPartition, FaultDrop, FaultDelay, FaultDuplicate,
 	FaultLoseBefore, FaultLoseAfter, FaultOutage, FaultSlow, FaultClockJump, FaultClockStrobe,
+	FaultTornWrite, FaultCorruption, FaultFullDisk,
 }
 
 // Simulation is a system of sans-IO machines with its oracles. S is the
@@ -627,6 +633,18 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 			fault(string(FaultClockStrobe), func() bool { return within(FaultClockStrobe) && spawned() }, r.strobe,
 				func(s strobing) { w.Strobe(s.name, s.a, s.b, s.steps) }),
 		},
+		FaultTornWrite: {
+			fault(string(FaultTornWrite), some(stored[E, F]), r.tear, func(t tearing) { w.Tear(t.name, t.n) }),
+		},
+		FaultCorruption: {
+			fault(string(FaultCorruption), some(filed[E, F]), r.corruption,
+				func(k corrupting) { w.Corrupt(k.name, k.file, k.offset) }),
+		},
+		FaultFullDisk: {
+			fault(string(FaultFullDisk), func() bool { return within(FaultFullDisk) && some(roomy[E, F])() }, r.fill,
+				func(f filling) { w.Fill(f.name, f.n) }),
+			act("restore-disk", some(full[E, F]), process(full[E, F]), w.RestoreDisk),
+		},
 	}
 	var actions []stateful.Action[struct{}]
 	for _, kind := range kinds {
@@ -635,6 +653,89 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 		}
 	}
 	return actions
+}
+
+// The processes that the faults of media strike: stored runs over media in
+// memory, filed has a file with a byte on its media, roomy has media that are
+// not full, and full has full media.
+func stored[E, F any](p *Process[E, F]) bool { return p.state == running && len(media(p)) > 0 }
+
+func filed[E, F any](p *Process[E, F]) bool { return len(filesOf(p)) > 0 }
+
+func roomy[E, F any](p *Process[E, F]) bool { return len(media(p)) > 0 && !p.full }
+
+func full[E, F any](p *Process[E, F]) bool { return p.full }
+
+// tearing is the input of a torn write: a process and the bytes that its
+// torn write keeps.
+type tearing struct {
+	name string
+	n    int
+}
+
+// tear returns the input of a torn write that the case chooses: a process
+// that runs over media in memory, and the bytes that the write keeps.
+func (r *run[E, F, S]) tear(c *prop.Case) tearing {
+	return tearing{name: choose(c, r.processes(stored[E, F]), "process"), n: c.Draw(prop.Integer(0, maxTear), "tear")}
+}
+
+// corrupting is the input of a corruption: a process, a file of its media and
+// the offset of the byte whose bit flips.
+type corrupting struct {
+	name, file string
+	offset     int64
+}
+
+// corruption returns the input of a corruption that the case chooses: a
+// process with a file on its media, the file, and an offset in it.
+func (r *run[E, F, S]) corruption(c *prop.Case) corrupting {
+	name := choose(c, r.processes(filed[E, F]), "process")
+	f := choose(c, filesOf(r.w.named(name)), "file")
+	return corrupting{name: name, file: f.name, offset: c.Draw(prop.Integer(0, f.size-1), "offset")}
+}
+
+// filling is the input of a fill: a process, and the bytes that its media
+// take before they refuse a write.
+type filling struct {
+	name string
+	n    int64
+}
+
+// fill returns the input of a fill that the case chooses: a process with
+// media that are not full, and the bytes that they take.
+func (r *run[E, F, S]) fill(c *prop.Case) filling {
+	return filling{
+		name: choose(c, r.processes(roomy[E, F]), "process"),
+		n:    c.Draw(prop.Integer[int64](0, maxFill), "fill"),
+	}
+}
+
+// file is a file of a medium with a byte: its name and its size.
+type file struct {
+	name string
+	size int64
+}
+
+// filesOf returns each file with a byte on the media of p, from the root of
+// each medium down and in the order of the names in each directory.
+func filesOf[E, F any](p *Process[E, F]) []file {
+	var out []file
+	for _, m := range media(p) {
+		for dirs := []string{"."}; len(dirs) > 0; dirs = dirs[1:] {
+			entries, _ := m.ReadDir(dirs[0])
+			for _, e := range entries {
+				name := path.Join(dirs[0], e.Name())
+				info, _ := e.Info()
+				switch {
+				case e.IsDir():
+					dirs = append(dirs, name)
+				case info.Size() > 0:
+					out = append(out, file{name: name, size: info.Size()})
+				}
+			}
+		}
+	}
+	return out
 }
 
 // jump is the input of a jump of a clock.
