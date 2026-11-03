@@ -1,5 +1,13 @@
 # go.dokimi.dev/spec
 
+## 0.3.0
+
+### Minor Changes
+
+- b9681ea: Add the claim `returns-on-error` with its law, probe, reason and defect form.
+- b9681ea: Add the claims `serializable` and `snapshot-isolation` with their laws, probes, reasons and defect forms.
+- b9681ea: Add the gates `stable-subject`, `unrefused`, `returns-no-field` and `transactions`, and the machinery `inputs-built-from-the-subject`.
+
 ## 0.2.0
 
 ### Minor Changes

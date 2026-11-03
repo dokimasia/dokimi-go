@@ -1,5 +1,18 @@
 # go.dokimi.dev/conform
 
+## 0.12.0
+
+### Minor Changes
+
+- 267fa2c: Add the probe `FieldBesideError` of the claim `returns-on-error`.
+- 267fa2c: Add the probes `SerializableHistory` and `SnapshotHistory` of the claims `serializable` and `snapshot-isolation`.
+- 267fa2c: Leave a check whose inputs a builder of the subject returns out of the isolation of the planted defect of another callable.
+
+### Patch Changes
+
+- Updated dependencies [b9681ea]
+  - go.dokimi.dev/spec@0.3.0
+
 ## 0.11.0
 
 ### Minor Changes
