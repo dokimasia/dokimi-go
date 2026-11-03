@@ -4,6 +4,7 @@
 package sim_test
 
 import (
+	"flag"
 	"fmt"
 	"hash/fnv"
 	"maps"
@@ -1144,7 +1145,10 @@ func FuzzRun(f *testing.F) {
 		runs.Add(1)
 		system(w)
 	}
-	f.Cleanup(func() { assert.True(f, runs.Load() > 0, "the fuzz target runs the simulation") })
+	// Under -fuzz the worker processes run every input. This process then counts no run.
+	if flag.Lookup("test.fuzz").Value.String() == "" {
+		f.Cleanup(func() { assert.True(f, runs.Load() > 0, "the fuzz target runs the simulation") })
+	}
 	f.Add([]byte{0})
 	sim.Fuzz(f, s)
 }
