@@ -90,21 +90,22 @@ func proves(
 	}.Run(t, good)
 }
 
-// vacuous applies a check of the probe p to a subject of source, inside
-// around where around is not nil, and fails t unless the check fails once for
-// the vacuous condition of p.
+// vacuous applies a check of the probe p to a subject of source with the
+// options opts, inside around where around is not nil, and fails t unless the
+// check fails once for the vacuous condition of p.
 func vacuous[S any](
 	t *testing.T,
 	p spec.ProbeID,
 	apply func(h *conform.Handle[S]),
 	source func(*conform.Handle[S]) S,
 	around func(t *testing.T, run func(*testing.T)),
+	opts ...conform.Option[S],
 ) {
 	t.Helper()
 	r := &onTest{Recorder: assert.NewRecorder(), t: t}
 	conform.Check[S]{
 		ID: "Subject.Call/claim", Statement: "the probe holds", Probe: p, Apply: apply, Around: around,
-	}.Run(r, source)
+	}.Run(r, source, opts...)
 	entry, _ := spec.ProbeOf(p)
 	condition := strings.ToLower(entry.Vacuous[:1]) + strings.TrimSuffix(entry.Vacuous[1:], ".")
 	assert.Equal(t, r.Messages(), []string{"Subject.Call/claim never engaged: " + condition + ". Pass a subject " +

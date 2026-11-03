@@ -12,6 +12,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/medium"
 )
 
 // fuzzMode is the variable of the environment that names the mode of
@@ -46,6 +47,12 @@ func TestFuzzProcess(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=counting")
 			expect.Contains(t, out, "--- PASS: FuzzChild/seed#2", "the target runs the third input")
 			expect.Contains(t, out, "the factory built 3 subjects", "the factory builds one subject for each input")
+		})
+
+		t.Run("opens the subject of each input through the option Durable", func(t *testing.T) {
+			out := childRun(t, "FuzzChild", fuzzMode+"=durable")
+			expect.Contains(t, out, "--- PASS: FuzzChild/seed#1", "the target runs the second input")
+			expect.Contains(t, out, "the door opened 2 subjects", "the door opens one subject for each input")
 		})
 
 		t.Run("passes the overrides of the suite to each input", func(t *testing.T) {
@@ -148,6 +155,20 @@ var fuzzModes = map[string]func(f *testing.F){
 			return newMemory()
 		})
 		f.Logf("the factory built %d subjects", built.Load())
+	},
+	// durable fuzzes keepsEvery from two seeds without a factory, on stores in
+	// memory that the door Open of the option Durable opens, and logs the
+	// number of subjects that the door opens.
+	"durable": func(f *testing.F) {
+		f.Helper()
+		f.Add([]byte{})
+		f.Add([]byte{1})
+		var opened atomic.Int32
+		conform.Fuzz(f, everySuite(), storeGet, nil, conform.Durable(func(*conform.Handle[Store], medium.FS) Store {
+			opened.Add(1)
+			return newMemory()
+		}))
+		f.Logf("the door opened %d subjects", opened.Load())
 	},
 	// using fuzzes the property check of declaredKinds from one seed. The check
 	// fails for a kind that the override of the suite does not declare.

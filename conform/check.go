@@ -147,6 +147,7 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 		assert.Fault(tb, fmt.Errorf("%w: %s", ErrConfig, invalid[0]))
 		return
 	}
+	newSubject = cfg.factory(newSubject)
 	cfg.fresh = newSubject
 	c.apply(tb, newSubject, cfg, cfg.checks, new(verdict), new(verdict))
 }
@@ -181,15 +182,17 @@ func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 // firsts is the state that the handles of one run of a check share: the
 // message of the first failure outside an assertion, the first failed
 // assertion with the reason that the probe set for it, the reason of the
-// first skip, the result of a property run, and whether a handle engaged the
-// claim of the check. The cases of a property check share it, so the check
-// engages when one of its cases engages.
+// first skip, the result of a property run, the points of the medium that the
+// check enumerated, and whether a handle engaged the claim of the check. The
+// cases of a property check share it, so the check engages when one of its
+// cases engages.
 type firsts struct {
 	message atomic.Pointer[string]
 	failure atomic.Pointer[assert.Failure]
 	reason  atomic.Pointer[spec.ReasonID]
 	skip    atomic.Pointer[string]
 	result  atomic.Pointer[prop.Result]
+	points  atomic.Int64
 	engaged atomic.Bool
 }
 

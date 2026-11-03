@@ -6,6 +6,7 @@ package probe_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -424,6 +425,19 @@ func failsAt(t *testing.T, r *assert.Recorder, assertion string) {
 		"the check fails at the assertion of the order")
 }
 
+// unproven runs the check that run returns under 40 identities that extend
+// id, and returns each identity whose check fails.
+func unproven(id string, run func(id conform.ID[*guarded]) *assert.Recorder) []conform.ID[*guarded] {
+	var out []conform.ID[*guarded]
+	for i := range 40 {
+		each := conform.ID[*guarded](fmt.Sprintf("%s~%d", id, i))
+		if run(each).Failed() {
+			out = append(out, each)
+		}
+	}
+	return out
+}
+
 // guardedReference applies an operation to the guarded store r by its name.
 func guardedReference(r *guarded) func(ctx context.Context, op string, args []any) conform.Output {
 	return func(_ context.Context, op string, args []any) conform.Output {
@@ -664,6 +678,24 @@ func TestConcurrent(t *testing.T) {
 			}.Run(t, newPinning)
 		})
 
+		t.Run("proves a racy pinning store under each of 40 identities of the check", func(t *testing.T) {
+			t.Parallel()
+
+			assert.Empty(t, unproven("Guarded.Get/pins-the-snapshot-under-writes",
+				func(id conform.ID[*guarded]) *assert.Recorder {
+					r := assert.NewRecorder()
+					conform.Check[*guarded]{
+						ID: id, Statement: "the probe passes", Claim: "claim",
+						Probe: spec.PinnedUnderConcurrentWrites, Reason: spec.UnpinnedRead,
+						Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+							probe.PinnedUnderConcurrentWrites(h, c, guardedActions, "Get", "Put", 2)
+						},
+						Defect: racyPinning,
+					}.Run(r, newPinning)
+					return r
+				}), "each identity proves the racy pinning store")
+		})
+
 		t.Run("fails a store whose reads of one key return the last write", func(t *testing.T) {
 			t.Parallel()
 
@@ -751,6 +783,23 @@ func TestConcurrent(t *testing.T) {
 				},
 				Defect: racyStamping,
 			}.Run(t, newStamping)
+		})
+
+		t.Run("proves a racy stamping store under each of 40 identities of the check", func(t *testing.T) {
+			t.Parallel()
+
+			assert.Empty(t, unproven("Guarded.Get/causal-history", func(id conform.ID[*guarded]) *assert.Recorder {
+				r := assert.NewRecorder()
+				conform.Check[*guarded]{
+					ID: id, Statement: "the probe passes", Claim: "claim",
+					Probe: spec.VersionsFollowTheCausalOrder, Reason: spec.UnobservedWrite,
+					Property: func(h *conform.Handle[*guarded], c *prop.Case) {
+						probe.VersionsFollowTheCausalOrder(h, c, guardedActions, "Get", "Put", revision, 2)
+					},
+					Defect: racyStamping,
+				}.Run(r, newStamping)
+				return r
+			}), "each identity proves the racy stamping store")
 		})
 
 		t.Run("fails a store whose reads return the first version of each key", func(t *testing.T) {

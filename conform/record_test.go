@@ -374,6 +374,25 @@ func TestRecord(t *testing.T) {
 			assert.Empty(t, judged.Checks[0].Counterexample, "a property check that passes has no counterexample")
 		})
 
+		t.Run("records the points of the medium that a check enumerated", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					h.AddPoints(3)
+					h.AddPoints(4)
+					apply(h)
+				}
+				conform.Run(t, suiteOf(c), newStore)
+				return
+			}
+			judged := recordsOf(t, childOutput(t))[1]
+
+			assert.Equal(t, judged.Checks[0].Points, 7, "the record has the sum of the points of the check")
+		})
+
 		t.Run("records the counterexample and the failure of the smallest failing case", func(t *testing.T) {
 			t.Parallel()
 

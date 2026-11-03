@@ -18,6 +18,7 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
 
@@ -217,13 +218,36 @@ func Second[S any](newSecond func(h *Handle[S]) S) Option[S] {
 // Restartable supplies the restart of the subjects of an application.
 // [Handle.Restart] returns the subject that restart returns.
 func Restartable[S any](restart func(h *Handle[S], s S) S) Option[S] {
-	return Option[S]{set: func(c *config[S]) { c.doors.Restart = restart }}
+	return Option[S]{set: func(c *config[S]) { c.doors.Restart, c.restartable = restart, true }}
 }
 
 // Crashable supplies the crash of the subjects of an application.
 // [Handle.Crash] returns the subject that crash returns.
 func Crashable[S any](crash func(h *Handle[S], s S, call func()) S) Option[S] {
-	return Option[S]{set: func(c *config[S]) { c.doors.Crash = crash }}
+	return Option[S]{set: func(c *config[S]) { c.doors.Crash, c.crashable = crash, true }}
+}
+
+// Durable sets the door Open of an application to open, which opens a subject
+// over a medium and recovers a subject from a medium after a crash.
+// [Handle.Open] returns the subject that open returns. The handles of the
+// application open each subject over a new medium.Memory, and keep the medium
+// of each subject that they open over a medium in memory. [Handle.Restart]
+// opens a subject again over its medium. [Handle.Crash] runs its call,
+// crashes the medium of the subject, and opens the subject again over what
+// survived. Durable sets the doors Restart and Crash this way, so an
+// application with Durable and with Restartable or Crashable has an invalid
+// setting.
+func Durable[S any](open func(h *Handle[S], m medium.FS) S) Option[S] {
+	return Option[S]{set: func(c *config[S]) {
+		c.doors.Open, c.open = open, open
+		c.doors.Restart = func(h *Handle[S], s S) S { return h.Open(h.mediumOf(s)) }
+		c.doors.Crash = func(h *Handle[S], s S, call func()) S {
+			call()
+			m := h.mediumOf(s)
+			m.Crash()
+			return h.Open(m)
+		}
+	}}
 }
 
 // Faultable supplies the subjects of an application whose dependencies fail
@@ -283,6 +307,10 @@ type config[S any] struct {
 	// [Handle.Fresh] returns, and nil outside an application.
 	fresh func(h *Handle[S]) S
 
+	// open is the door Open of the option Durable, which [Handle.FreshOpen]
+	// calls also on a planted defect, and nil without the option.
+	open func(h *Handle[S], m medium.FS) S
+
 	// cases is the number of valid cases of the option Cases, and nil
 	// without the option.
 	cases *int
@@ -315,6 +343,10 @@ type config[S any] struct {
 	// defect reports that the handles of the configuration build on a planted
 	// defect, whose doors come from its check first.
 	defect bool
+
+	// restartable and crashable report that the options Restartable and
+	// Crashable set the doors Restart and Crash.
+	restartable, crashable bool
 
 	// isolate reports the option Isolate.
 	isolate bool
@@ -398,7 +430,25 @@ func (c *config[S]) invalid() []string {
 		found = append(found, fmt.Sprintf("the option Cases asks for %d cases, and a property run needs at least 1",
 			*c.cases))
 	}
+	if c.open != nil && c.restartable {
+		found = append(found, "the application passes conform.Durable and conform.Restartable, and Durable "+
+			"restarts each subject over its medium")
+	}
+	if c.open != nil && c.crashable {
+		found = append(found, "the application passes conform.Durable and conform.Crashable, and Durable "+
+			"crashes each subject over its medium")
+	}
 	return found
+}
+
+// factory returns the factory of the subjects of an application: newSubject,
+// or under the option Durable a factory that opens each subject over a new
+// medium.Memory through the door Open of the option.
+func (c *config[S]) factory(newSubject func(h *Handle[S]) S) func(h *Handle[S]) S {
+	if c.open == nil {
+		return newSubject
+	}
+	return func(h *Handle[S]) S { return h.FreshOpen(medium.NewMemory()) }
 }
 
 // runOptions returns the options of a property run of an application: the

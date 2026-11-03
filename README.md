@@ -19,6 +19,7 @@ calls through stub.
 | [`go.dokimi.dev/stub`](https://pkg.go.dev/go.dokimi.dev/stub) | The runtime of the doubles: the record of each call, the order of results, faults, latency, strict mode and the expected counts of calls |
 | [`go.dokimi.dev/fault`](https://pkg.go.dev/go.dokimi.dev/fault) | The strategies that select the calls of a double that fail |
 | [`go.dokimi.dev/sim`](https://pkg.go.dev/go.dokimi.dev/sim) | The runtime of the deterministic simulations: the world of a system of sans-IO machines, its faults, the scheduling strategies, the rules of a runtime and the run of a simulation |
+| [`go.dokimi.dev/medium`](https://pkg.go.dev/go.dokimi.dev/medium) | The storage of a durable subject: a filesystem with an explicit sync over the operating system, and in memory with crashes, torn writes, flipped bits and a full disk |
 
 The tags of the releases of each module start with the directory of the module, such as
 `conform/v0.7.0`.
@@ -54,6 +55,7 @@ The options of an application change what it runs:
 | `conform.Cases(n)` | Sets the number of cases of each property run |
 | `conform.Using[S](g)` | Adds the generator of a type, such as a value that only a registry builds |
 | `conform.Reference`, `conform.Second`, `conform.Restartable` and `conform.Crashable` | Supply the reference implementation, the second subject, the restart and the crash that a check needs and that only you can build |
+| `conform.Durable(open)` | Opens each subject over a new `medium.Memory`, so the checks of the mixin `durable` crash, tear, corrupt and fill its medium |
 
 A check fails the test of its suite when it passes on its planted defect. It has to fail there at
 the assertion whose message is its statement.

@@ -66,7 +66,7 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 	cfg := configure(suite.overrides(t), opts)
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, onSubject)
-	newSubject = app.factory(newSubject)
+	newSubject = app.factory(cfg.factory(newSubject))
 	app.begin(t, append(validate(name, suite, cfg), faults...))
 	ceilings := allocationCeilings(suite.Calls, cfg.ceilings)
 	for i, c := range ceilings {

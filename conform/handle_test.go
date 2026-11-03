@@ -23,6 +23,7 @@ import (
 	"go.dokimi.dev/assert/stateful"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
 
@@ -219,6 +220,25 @@ func TestHandle(t *testing.T) {
 				"func(h *conform.Handle[conform_test.Store], s conform_test.Store, call func()) " +
 				"conform_test.Store { … }}",
 		},
+		{
+			name:     "Open",
+			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Open(medium.NewMemory()), nil },
+			giveDoor: func(door Store) conform.Doors[Store] {
+				return conform.Doors[Store]{Open: func(*conform.Handle[Store], medium.FS) Store { return door }}
+			},
+			giveOption: func(door Store) conform.Option[Store] {
+				return conform.Durable(func(*conform.Handle[Store], medium.FS) Store { return door })
+			},
+			wantMessage: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Open without the option conform.Durable. " +
+				"Pass the option to the application:\n" +
+				"\tconform.Durable(func(h *conform.Handle[conform_test.Store], m medium.FS) conform_test.Store { … })",
+			wantDefect: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Open on its planted defect, and the check has no door " +
+				"Open. Give the check the door:\n" +
+				"\tconform.Doors[conform_test.Store]{Open: " +
+				"func(h *conform.Handle[conform_test.Store], m medium.FS) conform_test.Store { … }}",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -315,6 +335,42 @@ func TestHandle(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("FreshOpen", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("opens a subject through the door of the application on a planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			apply := c.Apply
+			c.Doors = conform.Doors[Store]{Open: func(*conform.Handle[Store], medium.FS) Store { return forgetful{} }}
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isDisk := h.FreshOpen(medium.NewMemory()).(*disk)
+				assert.True(h, isDisk, "the defect opens the subject of the application")
+				apply(h)
+			}
+			c.Falsify(t, conform.Durable(openDisk))
+		})
+
+		t.Run("ends the check with a fault without the option Durable", func(t *testing.T) {
+			t.Parallel()
+
+			var continued atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.FreshOpen(medium.NewMemory())
+				continued.Store(true)
+			}
+			faults := recorded(func(tb assert.TB) { c.Falsify(tb) }).Faults()
+			assert.Length(t, faults, 1, "FreshOpen ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door")
+			expect.Equal(t, faults[0].Error(), "conform: the handle lacks the door: Store.Get/keeps-the-value "+
+				"calls FreshOpen without the option conform.Durable. A planted defect over a subject of a medium "+
+				"proves its check in an application, which has the option", "the fault names the option")
+			expect.False(t, continued.Load(), "the check ends at FreshOpen")
+		})
+	})
 
 	t.Run("Clock", func(t *testing.T) {
 		t.Parallel()

@@ -77,6 +77,10 @@ type verdict struct {
 	// property run, and cases is the number of valid cases of the run.
 	counterexample []prop.Entry
 	cases          int
+
+	// points is the number of the points of the medium that the check
+	// enumerated.
+	points int
 }
 
 // set sets the result of v, and what the run of kept kept, as [verdict.keep]
@@ -86,12 +90,13 @@ func (v *verdict) set(result string, kept *firsts) {
 	v.keep(kept)
 }
 
-// keep sets in v the first failure of the run of kept and the reason that the
-// probe set for it. For a property run it sets the number of cases, the
+// keep sets in v the first failure of the run of kept, the reason that the
+// probe set for it, and the points of the medium that the check enumerated.
+// For a property run it sets the number of cases, the
 // counterexample, and the failure of the smallest failing case in place of
 // the first failure.
 func (v *verdict) keep(kept *firsts) {
-	v.failure = kept.failure.Load()
+	v.failure, v.points = kept.failure.Load(), int(kept.points.Load())
 	if r := kept.reason.Load(); r != nil {
 		v.reason = *r
 	}
@@ -173,6 +178,7 @@ type checkRecord struct {
 	Machineries    []spec.MachineryID `json:"machineries,omitempty"`
 	Counterexample []prop.Entry       `json:"counterexample,omitempty"`
 	Cases          int                `json:"cases,omitempty"`
+	Points         int                `json:"points,omitempty"`
 	Shallow        bool               `json:"shallow,omitempty"`
 	Authored       bool               `json:"authored,omitempty"`
 }
@@ -314,7 +320,7 @@ func (a *application[S]) add(i int, kind string, c *Check[S], v *verdict, seed u
 		Identity: string(c.ID), Key: spec.Key(string(c.ID)), Claim: c.Claim, Law: c.Law,
 		Machineries: c.Machineries, Shallow: c.Shallow, Authored: c.Claim == "" && !c.ceiling,
 		Result: v.result, Other: v.other, Why: v.why, Reason: v.reason, Failure: v.failure,
-		Cases: v.cases, Counterexample: v.counterexample,
+		Cases: v.cases, Points: v.points, Counterexample: v.counterexample,
 	}
 	if c.Property != nil {
 		r.Seed = hex(seed)

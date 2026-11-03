@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -23,6 +24,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
 
@@ -507,6 +509,41 @@ func detailOf(t *testing.T, r *assert.Recorder, field string) any {
 // newStore is the factory of the subjects of the specs.
 func newStore(*conform.Handle[Store]) Store { return newMemory() }
 
+// disk is a Store over a medium. Put writes the value to the file of the key,
+// and syncs the file and the root where sync is true.
+type disk struct {
+	m    medium.FS
+	sync bool
+}
+
+// openDisk opens a disk that syncs over the medium m.
+func openDisk(_ *conform.Handle[Store], m medium.FS) Store { return &disk{m: m, sync: true} }
+
+// Put writes the value to the file of the key.
+func (d *disk) Put(key, value string) {
+	f, err := d.m.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return
+	}
+	_, _ = io.WriteString(f, value)
+	if d.sync {
+		_ = f.Sync()
+		_ = d.m.SyncDir(".")
+	}
+	_ = f.Close()
+}
+
+// Get reads the file of the key, and reports whether the medium has it.
+func (d *disk) Get(key string) (string, bool) {
+	f, err := d.m.OpenFile(key, os.O_RDONLY, 0)
+	if err != nil {
+		return "", false
+	}
+	value, err := io.ReadAll(f)
+	_ = f.Close()
+	return string(value), err == nil
+}
+
 // broken returns a suite of Store with the check of keeps after change.
 func broken(change func(c *conform.Check[Store])) conform.Suite[Store] {
 	c := keeps()
@@ -624,6 +661,7 @@ type record struct {
 		Reason         string           `json:"reason"`
 		Counterexample []map[string]any `json:"counterexample"`
 		Cases          int              `json:"cases"`
+		Points         int              `json:"points"`
 		Shallow        bool             `json:"shallow"`
 		Authored       bool             `json:"authored"`
 	} `json:"checks"`

@@ -199,7 +199,7 @@ func measure[S any](
 		warmup = *budget.Warmup
 	}
 	contract.Warmup(warmup)
-	h := newHandle(b, &Check[S]{ID: call.Callable.Check(benchSegment)}, newSubject, cfg, new(firsts))
+	h := newHandle(b, &Check[S]{ID: call.Callable.Check(benchSegment)}, cfg.factory(newSubject), cfg, new(firsts))
 	return h, draw, contract
 }
 

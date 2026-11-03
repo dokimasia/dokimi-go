@@ -13,8 +13,19 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
+
+// striped is a Store over a slice of disks, so its values do not compare. Put
+// and Get go to the first disk.
+type striped struct{ disks []*disk }
+
+// Put writes the value to the first disk.
+func (s striped) Put(key, value string) { s.disks[0].Put(key, value) }
+
+// Get reads the value from the first disk.
+func (s striped) Get(key string) (string, bool) { return s.disks[0].Get(key) }
 
 // The options of an application add checks, excuse checks, and supply the
 // doors of the handle that only the consumer can build.
@@ -305,6 +316,150 @@ func TestSuite(t *testing.T) {
 			}
 			c.Run(t, newStore, conform.Crashable(crash))
 		})
+	})
+
+	t.Run("Durable", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("opens the subject of a check over a new medium in memory", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				d, isDisk := h.Subject().(*disk)
+				assert.True(h, isDisk, "the subject is the subject of the door Open")
+				_, isMemory := d.m.(*medium.Memory)
+				assert.True(h, isMemory, "the medium of the subject is a medium in memory")
+				assert.True(h, h.New().(*disk).m != d.m, "each subject has a medium of its own")
+			}
+			c.Run(t, newStore, conform.Durable(openDisk))
+		})
+
+		t.Run("restarts a subject over its medium", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				s := h.Subject()
+				s.Put("k", "v")
+				restarted := h.Restart(s)
+				got, _ := restarted.Get("k")
+				assert.Equal(h, got, "v", "the restarted subject reads the medium of the subject")
+				assert.True(h, restarted != s, "a restart opens a new subject")
+			}
+			c.Run(t, newStore, conform.Durable(openDisk))
+		})
+
+		{
+			tests := []struct {
+				name     string
+				giveSync bool
+				want     string
+			}{
+				{name: "crashes the medium of a subject after its call", giveSync: true, want: "v"},
+				{name: "loses each write that a sync did not cover at a crash", giveSync: false, want: ""},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					t.Parallel()
+
+					c := keeps()
+					c.Apply = func(h *conform.Handle[Store]) {
+						h.Engage()
+						s := h.Subject()
+						got, _ := h.Crash(s, func() { s.Put("k", "v") }).Get("k")
+						assert.Equal(h, got, tt.want, "the crashed subject reads what survived")
+					}
+					open := func(_ *conform.Handle[Store], m medium.FS) Store { return &disk{m: m, sync: tt.giveSync} }
+					c.Run(t, newStore, conform.Durable(open))
+				})
+			}
+		}
+
+		t.Run("restarts each of two subjects over its own medium", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				first, second := h.Subject(), h.New()
+				first.Put("k", "first")
+				second.Put("k", "second")
+				got, _ := h.Restart(first).Get("k")
+				assert.Equal(h, got, "first", "the restart of the first subject reads the medium of the first subject")
+			}
+			c.Run(t, newStore, conform.Durable(openDisk))
+		})
+
+		t.Run("restarts a subject that the handle did not open over a new medium", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				foreign := newMemory()
+				foreign.Put("k", "v")
+				_, found := h.Restart(foreign).Get("k")
+				assert.False(h, found, "the subject opens over an empty medium")
+			}
+			c.Run(t, newStore, conform.Durable(openDisk))
+		})
+
+		t.Run("restarts a subject of a type that does not compare over a new medium", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				s := h.Subject()
+				s.Put("k", "v")
+				_, found := h.Restart(s).Get("k")
+				assert.False(h, found, "the subject opens over an empty medium")
+			}
+			open := func(_ *conform.Handle[Store], m medium.FS) Store {
+				return striped{disks: []*disk{{m: m, sync: true}}}
+			}
+			c.Run(t, newStore, conform.Durable(open))
+		})
+
+		{
+			tests := []struct {
+				name       string
+				giveOption conform.Option[Store]
+				want       string
+			}{
+				{
+					name:       "refuses an application with Restartable",
+					giveOption: conform.Restartable(func(_ *conform.Handle[Store], s Store) Store { return s }),
+					want: "conform: the application has an invalid setting: the application passes " +
+						"conform.Durable and conform.Restartable, and Durable restarts each subject over its medium",
+				},
+				{
+					name: "refuses an application with Crashable",
+					giveOption: conform.Crashable(func(_ *conform.Handle[Store], s Store, call func()) Store {
+						call()
+						return s
+					}),
+					want: "conform: the application has an invalid setting: the application passes " +
+						"conform.Durable and conform.Crashable, and Durable crashes each subject over its medium",
+				},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					t.Parallel()
+
+					faults := recorded(func(tb assert.TB) {
+						keeps().Run(tb, newStore, conform.Durable(openDisk), tt.giveOption)
+					}).Faults()
+
+					assert.Length(t, faults, 1, "the application ends with one fault")
+					expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a configuration")
+					expect.Equal(t, faults[0].Error(), tt.want, "the fault names both options")
+				})
+			}
+		}
 	})
 
 	t.Run("Isolate", func(t *testing.T) {

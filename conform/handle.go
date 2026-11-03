@@ -20,6 +20,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
 
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
 
@@ -80,6 +81,9 @@ type Doors[S any] struct {
 	// the machinery call-that-fails-on-demand.
 	Faults func(h *Handle[S], inj *Injector) S
 
+	// Open returns a subject over the medium m, which [Handle.Open] returns.
+	Open func(h *Handle[S], m medium.FS) S
+
 	// Values are the doors of values, one for each type, each from [Supply].
 	// [Open] returns the value of the door of its type.
 	Values []Supplied[S]
@@ -109,6 +113,9 @@ func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
 	}
 	if d.Faults == nil {
 		d.Faults = fallback.Faults
+	}
+	if d.Open == nil {
+		d.Open = fallback.Open
 	}
 	return d
 }
@@ -141,10 +148,13 @@ type Handle[S any] struct {
 	// before the first call of Schedule on a handle on a planted defect.
 	scheduler atomic.Pointer[stateful.Scheduler]
 
-	// subject is the subject of the check once built is true. mu guards
-	// both.
+	// subject is the subject of the check once built is true. media are the
+	// media in memory of the subjects that the handle opened, in the order of
+	// their opens. mu guards subject and built, and mediaMu guards media.
 	subject S
+	media   []mediumOfSubject
 	mu      sync.Mutex
+	mediaMu sync.Mutex
 	built   bool
 
 	building  atomic.Int32
@@ -315,6 +325,78 @@ func (h *Handle[S]) Crash(s S, call func()) S {
 		return s
 	}
 	return h.build(func(h *Handle[S]) S { return h.config.doors.Crash(h, s, call) })
+}
+
+// Open returns a subject over the medium m through the option [Durable] or the
+// door Open of a planted defect. The handle keeps the medium of the subject
+// where m is a medium.Memory, so [Handle.Restart] and [Handle.Crash] open the
+// subject again over it. Without the door it ends the check with a fault that
+// wraps [ErrOption], and it returns the zero value to a seat that takes the
+// fault and goes on.
+func (h *Handle[S]) Open(m medium.FS) S {
+	h.Helper()
+	if h.config.doors.Open == nil {
+		h.lacks("calls Open", "Open", "conform.Durable", "func(h *conform.Handle[%[1]v], m medium.FS) %[1]v { … }")
+		var zero S
+		return zero
+	}
+	return h.withMedium(m, h.build(func(h *Handle[S]) S { return h.config.doors.Open(h, m) }))
+}
+
+// FreshOpen returns a subject over the medium m through the door Open of the
+// option [Durable], also on a planted defect, as [Handle.Fresh] returns a
+// fresh subject of the application. A planted defect over a subject of a
+// medium wraps it. Without the option it ends the check with a fault that
+// wraps [ErrOption], and it returns the zero value to a seat that takes the
+// fault and goes on.
+func (h *Handle[S]) FreshOpen(m medium.FS) S {
+	h.Helper()
+	if h.config.open == nil {
+		assert.Fault(h, fmt.Errorf("%w: %s calls FreshOpen without the option conform.Durable. A planted defect "+
+			"over a subject of a medium proves its check in an application, which has the option", ErrOption,
+			h.check.ID))
+		var zero S
+		return zero
+	}
+	return h.withMedium(m, h.build(func(h *Handle[S]) S { return h.config.open(h, m) }))
+}
+
+// AddPoints adds n to the points of the medium that the check enumerated: the
+// crash points of a crash, and the flipped bits of a corruption. The record of
+// the check states their sum.
+func (h *Handle[S]) AddPoints(n int) { h.kept.points.Add(int64(n)) }
+
+// withMedium keeps the medium m of the subject s where m is a medium.Memory,
+// and returns s.
+func (h *Handle[S]) withMedium(m medium.FS, s S) S {
+	if mem, isMemory := m.(*medium.Memory); isMemory {
+		h.mediaMu.Lock()
+		defer h.mediaMu.Unlock()
+		h.media = append(h.media, mediumOfSubject{subject: s, medium: mem})
+	}
+	return s
+}
+
+// mediumOf returns the medium of the last subject that the handle opened and
+// that is s, and a new medium.Memory for a subject that the handle did not
+// open over a medium in memory. A subject of a type that does not compare is
+// none of the subjects that the handle opened.
+func (h *Handle[S]) mediumOf(s S) *medium.Memory {
+	h.mediaMu.Lock()
+	defer h.mediaMu.Unlock()
+	for _, o := range slices.Backward(h.media) {
+		if reflect.ValueOf(o.subject).Comparable() && o.subject == any(s) {
+			return o.medium
+		}
+	}
+	return medium.NewMemory()
+}
+
+// mediumOfSubject is a subject that a handle opened over a medium in memory,
+// and that medium.
+type mediumOfSubject struct {
+	subject any
+	medium  *medium.Memory
 }
 
 // lacks ends the check with the fault of the door that the handle lacks for

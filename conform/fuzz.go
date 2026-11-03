@@ -36,6 +36,7 @@ func Fuzz[S any](
 	f.Helper()
 	cfg := configure(suite.overrides(f), opts)
 	stopAt(f, validate("Fuzz"+suite.Declaration+"Suite", suite, cfg))
+	newSubject = cfg.factory(newSubject)
 	var ids []ID[S]
 	checks := make(map[ID[S]]*Check[S])
 	for _, c := range append(slices.Clip(suite.Checks), cfg.checks...) {

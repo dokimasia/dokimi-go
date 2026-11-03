@@ -27,12 +27,14 @@
 // The options of an application also excuse a check through [Excuse], set the
 // number of cases of each property run through [Cases], state the generator of
 // a type through [Using], and supply the machinery that only the consumer can
-// build through [Reference], [Second], [Restartable], [Crashable],
+// build through [Reference], [Second], [Restartable], [Crashable], [Durable],
 // [Faultable] and [Supplies]. A subject of [Faultable] asks an [Injector] at
 // each call of a dependency, through [FaultOf] for a double, so a probe can
 // fail the calls of the dependencies and read the calls that the subject
-// made. [Open] returns the value of a door of [Supplies], such as the client
-// of the backend of a store, for a subject. An
+// made. A subject of [Durable] writes through a medium.FS, and
+// [Handle.Open] opens it over a medium.Memory that a probe crashes, tears,
+// corrupts and fills. [Open] returns the value of a door of [Supplies], such
+// as the client of the backend of a store, for a subject. An
 // application falsifies each check that [With] adds before it applies the
 // check to the subject. The check must fail on its planted defect at the
 // assertion whose message is its statement. The field Doors of a [Check]
@@ -64,7 +66,9 @@
 // contains the suite, the seed of the application, the result of each check,
 // and the refusals and the unclaimed classifications of the suite. The record
 // of a property check also contains the number of its valid cases, and the
-// counterexample and the failure of its smallest failing case. The records of
+// counterexample and the failure of its smallest failing case. The record of a
+// check that enumerates the points of a medium, such as its crash points,
+// contains their number. The records of
 // an application that problems stop have no check, and their field ended
 // lists the problems.
 //
@@ -85,5 +89,6 @@
 //
 // The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,
 // go.dokimi.dev/assert/history, go.dokimi.dev/assert/prop,
-// go.dokimi.dev/fault and the Go stdlib, testing among it.
+// go.dokimi.dev/fault, go.dokimi.dev/medium and the Go stdlib, testing among
+// it.
 package conform

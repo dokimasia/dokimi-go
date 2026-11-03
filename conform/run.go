@@ -55,7 +55,7 @@ func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Op
 	cfg := configure(suite.overrides(t), opts)
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification, onSubject)
-	newSubject = app.factory(newSubject)
+	newSubject = app.factory(cfg.factory(newSubject))
 	cfg.fresh = newSubject
 	app.begin(t, append(validate(name, suite, cfg), faults...))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)

@@ -24,6 +24,12 @@ import (
 // that states how the check ended, as a history.Verdict.
 const outcomeField = "outcome"
 
+// sectionMean is the mean number of steps of a concurrent section of
+// [PinnedUnderConcurrentWrites] and [VersionsFollowTheCausalOrder]. A racy
+// read shows in those probes only where reads of two keys overlap, and the
+// default mean of 5 steps lets few reads overlap.
+const sectionMean = 16
+
 // LinearizableHistory runs generated sequences of the actions on the subject
 // of h, with a concurrent section on the clients 0 to clients that the
 // schedule of h runs. Each case keeps every action, so each case can show a
@@ -94,11 +100,12 @@ func ConcurrentReadsAgree[S any](
 
 // PinnedUnderConcurrentWrites runs generated sequences of the actions on the
 // subject of h, with a concurrent section of the actions read and write on
-// the clients 0 to clients, which the schedule of h runs. Each other action
-// runs on client 0 alone. After the last step it compares each read that
-// succeeds with the first read that succeeded with the same arguments, and
-// fails when the outputs differ. A case without a read that succeeds after
-// another read with the same arguments does not engage h.
+// the clients 0 to clients, which the schedule of h runs. The section
+// averages 16 steps. Each other action runs on client 0 alone. After the last
+// step it compares each read that succeeds with the first read that succeeded
+// with the same arguments, and fails when the outputs differ. A case without a
+// read that succeeds after another read with the same arguments does not
+// engage h.
 func PinnedUnderConcurrentWrites[S any](
 	h *conform.Handle[S], c *prop.Case, actions Actions[S], read, write string, clients int,
 ) {
@@ -106,7 +113,7 @@ func PinnedUnderConcurrentWrites[S any](
 	steps := actions(c, h.Subject)
 	alone(steps, read, write)
 	stateful.Steps(c, stateful.Machine[struct{}]{Actions: steps}, stateful.Clients(clients), h.Schedule(c),
-		stateful.Swarm(false))
+		stateful.Swarm(false), stateful.ConcurrentMean(sectionMean))
 	events := c.History().Events()
 	var pins []*history.Event
 	for i := range events {
@@ -131,18 +138,18 @@ func PinnedUnderConcurrentWrites[S any](
 
 // VersionsFollowTheCausalOrder runs generated sequences of the actions on the
 // subject of h, with a concurrent section of the actions read and write on
-// the clients 0 to clients, which the schedule of h runs. Each other action
-// runs on client 0 alone. After the last step it orders the calls of read and
-// write that succeed. A call follows each call of its client before it. A
-// read follows the write with the same keys and the version that the read
-// returns, where that write started before the read returned and no other
-// write with the same keys has that version. The probe fails when a write
-// returns a version that is not above the version of a call with the same
-// keys that it follows, and when a read returns a version below it. It also
-// fails when a read that follows a write with the same keys returns a version
-// that no write with those keys returned. Each call of write returns the value
-// that it wrote. A case without a call that follows a call with the same keys
-// does not engage h.
+// the clients 0 to clients, which the schedule of h runs. The section
+// averages 16 steps. Each other action runs on client 0 alone. After the last
+// step it orders the calls of read and write that succeed. A call follows each
+// call of its client before it. A read follows the write with the same keys
+// and the version that the read returns, where that write started before the
+// read returned and no other write with the same keys has that version. The
+// probe fails when a write returns a version that is not above the version of
+// a call with the same keys that it follows, and when a read returns a version
+// below it. It also fails when a read that follows a write with the same keys
+// returns a version that no write with those keys returned. Each call of write
+// returns the value that it wrote. A case without a call that follows a call
+// with the same keys does not engage h.
 func VersionsFollowTheCausalOrder[S, V any, O cmp.Ordered](
 	h *conform.Handle[S], c *prop.Case, actions Actions[S], read, write string, version func(v V) O, clients int,
 ) {
@@ -150,7 +157,7 @@ func VersionsFollowTheCausalOrder[S, V any, O cmp.Ordered](
 	steps := actions(c, h.Subject)
 	alone(steps, read, write)
 	stateful.Steps(c, stateful.Machine[struct{}]{Actions: steps}, stateful.Clients(clients), h.Schedule(c),
-		stateful.Swarm(false))
+		stateful.Swarm(false), stateful.ConcurrentMean(sectionMean))
 	events := c.History().Events()
 	versions := map[int]O{}
 	for i := range events {
