@@ -1,17 +1,17 @@
 {
-    "commit": "7573b1a653ba5e4f379b46b88f59bb2e0fccd1af",
-    "digest": "sha256:2c819cfa01d8935dbdce30785ff7acc2d9c7a0331c90af171903dff9b1bfc345",
+    "commit": "85a86baa1dd769b6299fc9ab246680bd69097015",
+    "digest": "sha256:a290c714658ba09008a30b12381fd5e1986effa471cdaa2a61a902217029a258",
     "files": {
-        "VERSION": "sha256:1575e1af4a95f12f70b4ee6a6adce8160953d93ea17dc2611b90883ccc3ad3b8",
-        "claims.json": "sha256:96a10a25eafb5cac51616163da6057b0e801e55248c38b277918fd01f6c9db4c",
-        "defects.json": "sha256:f6f5208a59c56532abccc6364f9f50c2ebc254ee4a13b824465d78e6f20077a0",
-        "gates.json": "sha256:89d17d94962b5a71041775594752756ccfeff137b8544b003409e041f30efed4",
+        "VERSION": "sha256:1e5b51cde515396a9fa762909cf8ca6584ccc564b325d2eebeea76175fe95c4d",
+        "claims.json": "sha256:6bdd673564052ad9ecacb33b4a0bb7df222ea50cb267b2d4c58d49fff5eee40b",
+        "defects.json": "sha256:e6848f7630549077b1d2bdf690228c43dce3dc6e7c881999b0dba1596bd020cd",
+        "gates.json": "sha256:35bebd71be9605ee6700dc981ef5657f59835a173fd4474fb9571c695950a138",
         "keys.json": "sha256:2c2ab03ef33fc665eab35d873b0d35dff7ccc73ed8fca50683ff1c1a5fd5b33d",
-        "laws.json": "sha256:c91740ffd77991fed0f9138305ffef1b41ede08bf32568d899ec7da6c9fc8623",
-        "machineries.json": "sha256:bbd760a3d22998580fd73241c31ff39b681df9b735aca4a93299e2ca76e53828",
-        "naming.json": "sha256:c12f977a83d58ce0cc4297eedd889201f02a6f0eeb9949b446e9cfc74476d331",
-        "probes.json": "sha256:1da505d6dc0bf6bd465896bc448ce3055e6b14546080199a4c82b43486731f11",
-        "reasons.json": "sha256:f8567ea503d3dd1aed7c7b86dc9433ceed1f3910161d74e0c2df7bf81e345126",
+        "laws.json": "sha256:38d58e3adaa335c885d6fcee2c86db81bdef10069debf3fc351d3c7c3ad57a10",
+        "machineries.json": "sha256:1ec63de71c555a765d900f5306c2b999f4139fa238408b8bdede7ecc62649c2a",
+        "naming.json": "sha256:9e9e54c3c3d4679917f4a790b9102b631a24c23ad2a8d8c392af946d2186cc0c",
+        "probes.json": "sha256:3b082f0b550c594abc9dd1c2eb049c0a900c12b0c81e1ce5e1d38a0fb7880402",
+        "reasons.json": "sha256:abf0c667a1eec9f55dedc1885c914a0262c23efdf27cdd067bf1809b91a35145",
         "references.json": "sha256:3e16012b6b342f82a8285f73cac206057c3fdd1320444afb3012ef2cb186d63c",
         "schemas/claims.schema.json": "sha256:d9062f848f41e198a559464d239a23937f8ba4688a17530ff0ec8e760d71a9bd",
         "schemas/defects.schema.json": "sha256:bf74ca4141dac35d01cb69eee5600f9f1953335b9478579bbd49635fbf14e404",
@@ -24,11 +24,11 @@
         "schemas/references.schema.json": "sha256:9bcece108414496aad5dc01b0eb773b77661a0fb45e8376a0512d93cd9b2e6ef",
         "schemas/stances.schema.json": "sha256:c6b386abdd6c4d1b0c44e4b83ee2c0edcbff0b64b55efe7341d65a21a45f1f62",
         "schemas/suite.schema.json": "sha256:abef6a4abdab522b248c8c5bee1f0c1721e2213ff9af140d7e28c77a2c2d60d5",
-        "stances.json": "sha256:d0970a5ce7f8623b6b59c5f206151ddf6c4a7afa5f7c8f27502cdd49c323159a"
+        "stances.json": "sha256:105955d8bfb8da5c6df56a3c86e1c7bca4c70edf437530caa8e5978d90ed6f88"
     },
     "languages": {
         "go": []
     },
-    "repo": "dokimasia/dokimi",
-    "version": "1.1.0"
+    "repo": "dokimasia/dokimi-spec",
+    "version": "1.2.0"
 }

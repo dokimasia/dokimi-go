@@ -2643,6 +2643,59 @@
       "reasons": [
         "half-written-on-full"
       ]
+    },
+    {
+      "id": "field-beside-error",
+      "summary": "A call that fails returns the value that the field of its request had before the call.",
+      "vacuous": "No call fails, with the sample inputs or with a cancelled context.",
+      "since": "1.2.0",
+      "inputs": [
+        {
+          "name": "call",
+          "kind": "call"
+        },
+        {
+          "name": "field",
+          "kind": "projection"
+        },
+        {
+          "name": "want",
+          "kind": "value"
+        }
+      ],
+      "reasons": [
+        "field-lost-on-error"
+      ]
+    },
+    {
+      "id": "serializable-history",
+      "summary": "The transactions of generated sequences on concurrent clients have a serial order of the committed transactions in which each read returns the same result.",
+      "vacuous": "No transaction of a run commits.",
+      "since": "1.2.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        }
+      ],
+      "reasons": [
+        "not-serializable"
+      ]
+    },
+    {
+      "id": "snapshot-history",
+      "summary": "The transactions of generated sequences on concurrent clients have no anomaly that snapshot isolation excludes.",
+      "vacuous": "No transaction of a run commits.",
+      "since": "1.2.0",
+      "inputs": [
+        {
+          "name": "actions",
+          "kind": "actions"
+        }
+      ],
+      "reasons": [
+        "not-snapshot-isolated"
+      ]
     }
   ]
 }

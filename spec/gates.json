@@ -349,6 +349,34 @@
       "why": "{callable} has no role of a contract with a reference form",
       "remedy": "give {callable} a role of a contract with a reference form, or leave {declaration} without the directive fake",
       "since": "1.1.0"
+    },
+    {
+      "id": "stable-subject",
+      "passes": "The callable has no mixin time-aware and no mixin side-effect, so a repeat on an unchanged subject reads the state of the first call.",
+      "why": "{callable} reads the clock or changes its subject, so a repeat can return another value",
+      "remedy": "remove the mixin time-aware or side-effect where a repeat of {callable} returns the same value",
+      "since": "1.2.0"
+    },
+    {
+      "id": "unrefused",
+      "passes": "No directive refuse of the callable names the claim.",
+      "why": "{reason}",
+      "remedy": "remove the directive refuse of the claim where {callable} makes it",
+      "since": "1.2.0"
+    },
+    {
+      "id": "returns-no-field",
+      "passes": "The callable has no mixin returns-on-error, so a failed call returns no field of its request.",
+      "why": "{callable} returns a field of its request beside an error, as its mixin returns-on-error states",
+      "remedy": "remove the mixin returns-on-error where {callable} returns the zero value beside an error",
+      "since": "1.2.0"
+    },
+    {
+      "id": "transactions",
+      "passes": "The roles begin, commit and rollback of one instance of the contract tx are in the package of the declaration, the write takes the handle that begin returns or is a method of it, the write takes a key and a value of an integer or a string type, and the read takes the handle or is a method of it and takes the key.",
+      "why": "{callable} and the read of its mixin do not run in the scope of a transaction of {declaration}",
+      "remedy": "give {callable} and its read the handle that begin returns, or declare them on an interface of the package that the handle implements, with a key and a value of an integer or a string type",
+      "since": "1.2.0"
     }
   ]
 }

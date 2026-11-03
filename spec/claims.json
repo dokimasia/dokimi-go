@@ -122,7 +122,8 @@
         "value-samples",
         "returns-unaided",
         "context-or-input",
-        "returns-before-cancel"
+        "returns-before-cancel",
+        "returns-no-field"
       ],
       "law": "no-value-beside-an-error",
       "machineries": [
@@ -146,6 +147,53 @@
         "reason": "value-beside-error"
       },
       "since": "1.0.0"
+    },
+    {
+      "id": "returns-on-error",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "returns-on-error"
+        }
+      ],
+      "gates": [
+        "failure",
+        "returns-beside-error",
+        "one-value",
+        "value-samples",
+        "returns-unaided",
+        "context-or-input",
+        "returns-before-cancel"
+      ],
+      "law": "failure-returns-the-request-field",
+      "machineries": [
+        "nothing-beyond-a-caller"
+      ],
+      "statement": "{callable} returns the field of its request beside an error",
+      "probe": "field-beside-error",
+      "inputs": [
+        {
+          "name": "call",
+          "from": "callable"
+        },
+        {
+          "name": "field",
+          "from": "param",
+          "param": "result",
+          "default": "."
+        },
+        {
+          "name": "want",
+          "from": "param",
+          "param": "field"
+        }
+      ],
+      "defect": {
+        "form": "drops-the-field",
+        "clause": "a {declaration} whose {callable} returns the zero value of its result in place of the field of its request",
+        "reason": "field-lost-on-error"
+      },
+      "since": "1.2.0"
     },
     {
       "id": "zeroes-on-error",
@@ -348,7 +396,8 @@
         "one-value",
         "value-samples",
         "returns-unaided",
-        "returns-before-cancel"
+        "returns-before-cancel",
+        "stable-subject"
       ],
       "law": "repeat-returns-alike",
       "machineries": [
@@ -383,7 +432,8 @@
       "gates": [
         "one-value",
         "returns-unaided",
-        "returns-before-cancel"
+        "returns-before-cancel",
+        "stable-subject"
       ],
       "law": "repeat-returns-alike",
       "machineries": [
@@ -4685,6 +4735,72 @@
         "reason": "not-linearizable"
       },
       "since": "1.1.0"
+    },
+    {
+      "id": "serializable",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "serializable",
+          "needs-param": "read"
+        }
+      ],
+      "scope": "declaration",
+      "gates": [
+        "transactions"
+      ],
+      "law": "concurrent-transactions-are-serializable",
+      "machineries": [
+        "concurrent-callers",
+        "generated-sequences"
+      ],
+      "statement": "every concurrent history of the transactions of {declaration} has a serial order in which each read returns the same result",
+      "probe": "serializable-history",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        }
+      ],
+      "defect": {
+        "form": "reads-uncommitted",
+        "clause": "a {declaration} whose read returns the write of a transaction that has not committed",
+        "reason": "not-serializable"
+      },
+      "since": "1.2.0"
+    },
+    {
+      "id": "snapshot-isolation",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "snapshot-isolation",
+          "needs-param": "read"
+        }
+      ],
+      "scope": "declaration",
+      "gates": [
+        "transactions"
+      ],
+      "law": "concurrent-transactions-are-snapshot-isolated",
+      "machineries": [
+        "concurrent-callers",
+        "generated-sequences"
+      ],
+      "statement": "every concurrent history of the transactions of {declaration} has no anomaly that snapshot isolation excludes",
+      "probe": "snapshot-history",
+      "inputs": [
+        {
+          "name": "actions",
+          "from": "declaration"
+        }
+      ],
+      "defect": {
+        "form": "writes-without-a-snapshot",
+        "clause": "a {declaration} whose commit applies the writes of its transaction without the snapshot of the transaction",
+        "reason": "not-snapshot-isolated"
+      },
+      "since": "1.2.0"
     },
     {
       "id": "reads-agree-under-concurrency",

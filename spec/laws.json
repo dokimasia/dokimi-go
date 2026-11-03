@@ -835,6 +835,37 @@
       "depth": "killable-process-or-breakable-medium",
       "since": "1.1.0",
       "distinct-from": []
+    },
+    {
+      "id": "failure-returns-the-request-field",
+      "statement": "A call that fails returns the value that the field of its request had before the call.",
+      "depth": "nothing-beyond-a-caller",
+      "since": "1.2.0",
+      "distinct-from": [
+        {
+          "law": "no-value-beside-an-error",
+          "case": "A read that returns the zero value beside an error for a request whose field is not the zero value."
+        }
+      ]
+    },
+    {
+      "id": "concurrent-transactions-are-serializable",
+      "statement": "Every history of concurrent transactions has a serial order of its committed transactions in which each read returns the same result.",
+      "depth": "concurrent-callers",
+      "since": "1.2.0",
+      "distinct-from": []
+    },
+    {
+      "id": "concurrent-transactions-are-snapshot-isolated",
+      "statement": "Every history of concurrent transactions has no anomaly that snapshot isolation excludes, such as a dirty read or a lost update.",
+      "depth": "concurrent-callers",
+      "since": "1.2.0",
+      "distinct-from": [
+        {
+          "law": "concurrent-transactions-are-serializable",
+          "case": "Two transactions that each read the key that the other writes and both commit, a write skew that snapshot isolation permits."
+        }
+      ]
     }
   ]
 }

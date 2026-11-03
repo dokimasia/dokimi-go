@@ -762,6 +762,27 @@
       "does": "The defect opens the subject over a medium whose writes report every byte as written where the medium is full, so a write that the medium cannot hold succeeds.",
       "since": "1.1.0",
       "min-steps": 1
+    },
+    {
+      "id": "drops-the-field",
+      "changes": "callable",
+      "does": "A failed call returns the zero value of its result in place of the field of its request.",
+      "since": "1.2.0",
+      "min-steps": 1
+    },
+    {
+      "id": "reads-uncommitted",
+      "changes": "declaration",
+      "does": "The write keeps its value in a field of the defect until its transaction commits or rolls back. A read returns the value that the latest open transaction kept for the key, also when another transaction kept it. The defect yields after each call of a transaction.",
+      "since": "1.2.0",
+      "min-steps": 2
+    },
+    {
+      "id": "writes-without-a-snapshot",
+      "changes": "declaration",
+      "does": "The write keeps its value in a field of the defect, and a read returns the value that its own transaction kept for the key. The commit applies the kept writes in a transaction of its own, which begins at the commit, so two transactions that write one key both commit. The defect yields after each call of a transaction.",
+      "since": "1.2.0",
+      "min-steps": 2
     }
   ]
 }

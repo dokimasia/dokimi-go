@@ -5,8 +5,7 @@
 # package spec of the module spec embeds the copy, and its generator declares the constants with the
 # Go spellings of naming.json. Every module of the runtime reads the copy through that package.
 implements:
-  - definition: dokimasia/dokimi
-    track: release
+  - definition: dokimasia/dokimi-spec
     path: spec
     languages: [go]
     test: [make, test-go]

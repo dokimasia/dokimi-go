@@ -437,6 +437,10 @@
         "go": "RetrySucceedsUnderFaults",
         "typescript": "retrySucceedsUnderFaults"
       },
+      "returns-on-error": {
+        "go": "ReturnsOnError",
+        "typescript": "returnsOnError"
+      },
       "saga": {
         "go": "Saga",
         "typescript": "saga"
@@ -444,6 +448,10 @@
       "scheduled": {
         "go": "Scheduled",
         "typescript": "scheduled"
+      },
+      "serializable": {
+        "go": "Serializable",
+        "typescript": "serializable"
       },
       "settles": {
         "go": "Settles",
@@ -456,6 +464,10 @@
       "smoke": {
         "go": "Smoke",
         "typescript": "smoke"
+      },
+      "snapshot-isolation": {
+        "go": "SnapshotIsolation",
+        "typescript": "snapshotIsolation"
       },
       "stable-order": {
         "go": "StableOrder",
@@ -671,6 +683,10 @@
         "go": "DropsAppendsAfterThree",
         "typescript": "dropsAppendsAfterThree"
       },
+      "drops-the-field": {
+        "go": "DropsTheField",
+        "typescript": "dropsTheField"
+      },
       "drops-the-last-key": {
         "go": "DropsTheLastKey",
         "typescript": "dropsTheLastKey"
@@ -859,6 +875,10 @@
         "go": "ReadsThePastAfterThree",
         "typescript": "readsThePastAfterThree"
       },
+      "reads-uncommitted": {
+        "go": "ReadsUncommitted",
+        "typescript": "readsUncommitted"
+      },
       "refuses-repeat": {
         "go": "RefusesRepeat",
         "typescript": "refusesRepeat"
@@ -1010,6 +1030,10 @@
       "writes-after-stop": {
         "go": "WritesAfterStop",
         "typescript": "writesAfterStop"
+      },
+      "writes-without-a-snapshot": {
+        "go": "WritesWithoutASnapshot",
+        "typescript": "writesWithoutASnapshot"
       }
     },
     "gates": {
@@ -1153,6 +1177,10 @@
         "go": "ReturnsBesideError",
         "typescript": "returnsBesideError"
       },
+      "returns-no-field": {
+        "go": "ReturnsNoField",
+        "typescript": "returnsNoField"
+      },
       "returns-unaided": {
         "go": "ReturnsUnaided",
         "typescript": "returnsUnaided"
@@ -1164,6 +1192,10 @@
       "self-comparing-type": {
         "go": "SelfComparingType",
         "typescript": "selfComparingType"
+      },
+      "stable-subject": {
+        "go": "StableSubject",
+        "typescript": "stableSubject"
       },
       "stream-mutations": {
         "go": "StreamMutations",
@@ -1180,6 +1212,10 @@
       "text-encoding": {
         "go": "TextEncoding",
         "typescript": "textEncoding"
+      },
+      "transactions": {
+        "go": "Transactions",
+        "typescript": "transactions"
       },
       "two-error-types": {
         "go": "TwoErrorTypes",
@@ -1200,6 +1236,10 @@
       "two-values": {
         "go": "TwoValues",
         "typescript": "twoValues"
+      },
+      "unrefused": {
+        "go": "Unrefused",
+        "typescript": "unrefused"
       },
       "valid-function": {
         "go": "ValidFunction",
@@ -1299,6 +1339,14 @@
         "go": "ConcurrentHistoryIsLinearizable",
         "typescript": "concurrentHistoryIsLinearizable"
       },
+      "concurrent-transactions-are-serializable": {
+        "go": "ConcurrentTransactionsAreSerializable",
+        "typescript": "concurrentTransactionsAreSerializable"
+      },
+      "concurrent-transactions-are-snapshot-isolated": {
+        "go": "ConcurrentTransactionsAreSnapshotIsolated",
+        "typescript": "concurrentTransactionsAreSnapshotIsolated"
+      },
       "corrupted-read-is-reported": {
         "go": "CorruptedReadIsReported",
         "typescript": "corruptedReadIsReported"
@@ -1390,6 +1438,10 @@
       "failure-path-releases": {
         "go": "FailurePathReleases",
         "typescript": "failurePathReleases"
+      },
+      "failure-returns-the-request-field": {
+        "go": "FailureReturnsTheRequestField",
+        "typescript": "failureReturnsTheRequestField"
       },
       "fresh-receiver-is-healthy": {
         "go": "FreshReceiverIsHealthy",
@@ -1693,6 +1745,10 @@
         "go": "GeneratedSequences",
         "typescript": "generatedSequences"
       },
+      "inputs-built-from-the-subject": {
+        "go": "InputsBuiltFromTheSubject",
+        "typescript": "inputsBuiltFromTheSubject"
+      },
       "killable-process-or-breakable-medium": {
         "go": "KillableProcessOrBreakableMedium",
         "typescript": "killableProcessOrBreakableMedium"
@@ -1834,6 +1890,10 @@
       "fails-without-effect": {
         "go": "FailsWithoutEffect",
         "typescript": "failsWithoutEffect"
+      },
+      "field-beside-error": {
+        "go": "FieldBesideError",
+        "typescript": "fieldBesideError"
       },
       "gains-what-went-in": {
         "go": "GainsWhatWentIn",
@@ -2103,6 +2163,10 @@
         "go": "SequencesAgreeWithTheReference",
         "typescript": "sequencesAgreeWithTheReference"
       },
+      "serializable-history": {
+        "go": "SerializableHistory",
+        "typescript": "serializableHistory"
+      },
       "settles-then-observes": {
         "go": "SettlesThenObserves",
         "typescript": "settlesThenObserves"
@@ -2110,6 +2174,10 @@
       "shares-one-computation": {
         "go": "SharesOneComputation",
         "typescript": "sharesOneComputation"
+      },
+      "snapshot-history": {
+        "go": "SnapshotHistory",
+        "typescript": "snapshotHistory"
       },
       "states-move-along-the-graph": {
         "go": "StatesMoveAlongTheGraph",
@@ -2285,6 +2353,10 @@
         "go": "FalseTamper",
         "typescript": "falseTamper"
       },
+      "field-lost-on-error": {
+        "go": "FieldLostOnError",
+        "typescript": "fieldLostOnError"
+      },
       "forbidden-transition": {
         "go": "ForbiddenTransition",
         "typescript": "forbiddenTransition"
@@ -2408,6 +2480,14 @@
       "not-rolled-back": {
         "go": "NotRolledBack",
         "typescript": "notRolledBack"
+      },
+      "not-serializable": {
+        "go": "NotSerializable",
+        "typescript": "notSerializable"
+      },
+      "not-snapshot-isolated": {
+        "go": "NotSnapshotIsolated",
+        "typescript": "notSnapshotIsolated"
       },
       "off-schedule": {
         "go": "OffSchedule",
