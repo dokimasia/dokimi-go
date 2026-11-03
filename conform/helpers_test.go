@@ -554,6 +554,15 @@ func broken(change func(c *conform.Check[Store])) conform.Suite[Store] {
 // forget is a factory of forgetful subjects, on which keeps fails.
 func forget(*conform.Handle[Store]) Store { return forgetful{} }
 
+// nilDereference is the message of the panic of crash.
+const nilDereference = "runtime error: invalid memory address or nil pointer dereference"
+
+// crash panics with a dereference of a nil pointer: a Put on a nil memory.
+func crash() {
+	var gone *memory
+	gone.Put("k", "v")
+}
+
 // recorded runs fn on a recorder that ends fn at its first fatal failure,
 // and returns the recorder once fn has ended.
 func recorded(fn func(tb assert.TB)) *assert.Recorder {

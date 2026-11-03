@@ -118,6 +118,28 @@ func TestRun(t *testing.T) {
 				"the test of the check fails")
 		})
 
+		t.Run("fails the test of a check that panics on the subject and runs the other checks", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				panicking := keeps()
+				panicking.Apply = func(*conform.Handle[Store]) { crash() }
+				conform.Run(t, conform.Suite[Store]{
+					Declaration: "Store", Checks: []conform.Check[Store]{panicking, misses()},
+				}, newStore)
+				return
+			}
+			out := childOutput(t)
+			assert.Contains(t, out, "Store.Get/keeps-the-value panics with "+nilDereference,
+				"the test of the check states the value of the panic")
+			assert.Contains(t, out, "--- FAIL: "+t.Name()+"/Get/keeps-the-value", "the test of the check fails")
+			assert.Contains(t, out, "--- PASS: "+t.Name()+"/Get/misses-unknown-keys",
+				"the other check of the application runs")
+			records := recordsOf(t, out)
+			assert.Length(t, records, 2, "the application writes its records")
+			assert.Equal(t, records[1].Checks[0].Result, "fail", "the record of the subject fails the check")
+		})
+
 		t.Run("passes the overrides of the suite to each property run", func(t *testing.T) {
 			t.Parallel()
 

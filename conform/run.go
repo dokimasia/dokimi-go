@@ -36,8 +36,10 @@ type T interface {
 // over a fresh subject of newSubject, and under [Isolate] also against every
 // other check of the application, as [Check.Run] states. The test of a check
 // that passes without engaging its claim fails as vacuous, as [Check.Run]
-// states. Run leaves out each check that counts allocations, which
-// [RunBudgets] runs.
+// states. The test of a check that panics on the subject or on its planted
+// defect fails with the value and the stack of the panic, and the other tests
+// of the application go on.
+// Run leaves out each check that counts allocations, which [RunBudgets] runs.
 //
 // Run takes one seed for the property runs of the application: the seed of
 // DOKIMI_SEED, and otherwise the seed that prop.RunSeed returns for the name of

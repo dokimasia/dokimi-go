@@ -103,6 +103,46 @@ func TestCheck(t *testing.T) {
 			assert.Equal(t, failures[0].Contract, keepsTheValue, "the check fails at the assertion of its statement")
 		})
 
+		t.Run("fails the seat with the value and the stack of a panic of the check", func(t *testing.T) {
+			t.Parallel()
+			c := keeps()
+			c.Apply = func(*conform.Handle[Store]) { crash() }
+
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+
+			assert.True(t, r.Failed(), "the panic fails the seat")
+			expect.Contains(t, r.Message(), string(c.ID)+" panics with "+nilDereference+"\ngoroutine ",
+				"the failure states the value of the panic and the stack after it")
+			expect.Contains(t, r.Message(), "check_test.go", "the stack names the frame of the panic")
+		})
+
+		t.Run("fails the seat with the smallest case of a property check that panics", func(t *testing.T) {
+			t.Parallel()
+			c := keepsEvery()
+			c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+				h.Engage()
+				if pc.Draw(prop.Integer(0, 1000), "n") >= 7 {
+					crash()
+				}
+			}
+
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+
+			failures := r.Failures()
+			assert.Length(t, failures, 1, "the property fails once")
+			inner, isCase := failures[0].CaseFailure()
+			assert.True(t, isCase, "the record contains the failure of the smallest case")
+			expect.Contains(t, inner.Contract, string(c.ID)+" panics with "+nilDereference,
+				"the smallest case fails with the value of the panic")
+			counterexample, listed := detailOf(t, r, "counterexample").([]any)
+			assert.True(t, listed, "the record of the run has the counterexample")
+			assert.Length(t, counterexample, 1, "the smallest case draws one value")
+			entry, _ := counterexample[0].(map[string]any)
+			value, _ := entry["value"].(map[string]any)
+			expect.Equal(t, []any{entry["label"], value["value"]}, []any{"n", float64(7)},
+				"the property shrinks the panic to its smallest input")
+		})
+
 		t.Run("applies a property check to a fresh subject of the factory in each case", func(t *testing.T) {
 			t.Parallel()
 
@@ -573,6 +613,18 @@ func TestCheck(t *testing.T) {
 			t.Parallel()
 
 			keeps().Falsify(t)
+		})
+
+		t.Run("fails the seat with the value of a panic of the check on its planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(*conform.Handle[Store]) { crash() }
+			r := recorded(func(tb assert.TB) { c.Falsify(tb) })
+
+			assert.True(t, r.Failed(), "the panic fails the falsification")
+			expect.Contains(t, r.Message(), "The check failed with this message:\n"+string(c.ID)+" panics with "+
+				nilDereference, "the failure states the value of the panic as a failure before an assertion")
 		})
 
 		t.Run("names the vacuous condition when the defect never engages the check", func(t *testing.T) {

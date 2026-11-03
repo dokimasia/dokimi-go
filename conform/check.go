@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -134,7 +135,9 @@ type Check[S any] struct {
 // whose [Handle.Fresh] returns a subject of newSubject, and Run applies it to
 // the subject once the defect fails it with the reason of its claim. Run fails
 // tb for a check that passes without engaging its claim, as [Handle.Engage]
-// states, and names the vacuous condition of the check. Under
+// states, and names the vacuous condition of the check. A run on the subject
+// that panics fails tb with the value and the stack of the panic, and a
+// property run first shrinks the case that panics. Under
 // [Isolate] the checks that [With] adds are the other checks of the isolation
 // and the edges of a derived check. Run ignores them otherwise, and ignores the
 // excusals that the options add. Run ends tb with a fault that wraps
@@ -167,8 +170,10 @@ func (c Check[S]) apply(
 
 // Falsify applies the check on tb to its planted defect. It fails tb unless
 // the first failure of the check is a failure of the assertion whose message
-// is the statement of the check. A check that skips before it fails skips tb.
-// It also applies each check that [With] adds to the defect, and fails tb when
+// is the statement of the check. Falsify fails tb with the value and the stack
+// of a panic of the check on the defect. A check that skips before it fails
+// skips tb. It also applies each check that [With] adds to the defect, and
+// fails tb when
 // the defect fails one of them, as [Falsify] applies the other checks of a
 // suite. The doors of the handle read the options in opts. Falsify ends tb
 // with a fault that wraps [ErrConfig] for a check with Around on a seat without
@@ -230,10 +235,10 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S],
 		v.why = skipReason(kept)
 	}()
 	if env == nil || c.Property != nil {
-		c.exercise(tb, source, cfg, opts, kept)
+		c.exercise(tb, source, cfg, opts, kept, c.survive)
 	} else if misuse := env.inside(func(t *testing.T) {
 		t.Helper()
-		c.exercise(t, source, cfg, opts, kept)
+		c.exercise(t, source, cfg, opts, kept, c.survive)
 	}); misuse != "" {
 		assert.Fault(tb, c.misused(misuse))
 		return
@@ -278,20 +283,43 @@ func (c *Check[S]) vacuity() string {
 // Apply runs once on one handle, which registers its cleanups with seat. A
 // check with Property runs the property engine on seat with opts, and each
 // case has a handle of its own, which registers its cleanups with the case.
-// Each handle keeps the message of the first failure outside an assertion in
-// kept, and the run keeps its result there.
+// guard runs the body of the check and of each case. Each handle keeps the
+// message of the first failure outside an assertion in kept, and the run
+// keeps its result there.
 func (c *Check[S]) exercise(
 	seat assert.TB, source func(h *Handle[S]) S, cfg *config[S], opts []prop.Option, kept *firsts,
+	guard func(tb assert.TB, kept *firsts, body func()),
 ) {
 	seat.Helper()
 	if c.Property == nil {
-		c.Apply(newHandle(seat, c, source, cfg, kept))
+		guard(seat, kept, func() { c.Apply(newHandle(seat, c, source, cfg, kept)) })
 		return
 	}
 	prop.ForAll(seat, c.Statement, func(pc *prop.Case) {
-		c.Property(newHandle(pc, c, source, cfg, kept), pc)
+		guard(pc, kept, func() { c.Property(newHandle(pc, c, source, cfg, kept), pc) })
 	}, append(slices.Clip(opts), prop.OnResult(func(r prop.Result) { kept.result.Store(&r) }))...)
 }
+
+// survive runs body, and fails tb with the value and the stack of a panic of
+// body, which it keeps in kept as a failure outside an assertion. A panic of a
+// check on a subject or on its own planted defect then fails the check alone:
+// the test binary and the other checks of the application go on, and a
+// property run shrinks the case that panics.
+func (c *Check[S]) survive(tb assert.TB, kept *firsts, body func()) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			message := fmt.Sprintf("%s panics with %v\n%s", c.ID, r, debug.Stack())
+			kept.message.CompareAndSwap(nil, &message)
+			tb.Errorf("%s", message)
+		}
+	}()
+	body()
+}
+
+// unguarded runs body. A run against the planted defect of another check keeps
+// a panic of the check for its verdict, so unguarded does not recover it.
+func unguarded(_ assert.TB, _ *firsts, body func()) { body() }
 
 // falsify applies the check on tb to its planted defect, and reports whether
 // the defect proves the check. A property check runs hermetically, as
@@ -332,7 +360,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 	rejects := func(seat assert.TB) []assert.Failure {
 		seat.Helper()
 		return assert.Rejects(seat, contract, func(defect assert.TB) {
-			c.exercise(defect, c.Defect, cfg, opts, kept)
+			c.exercise(defect, c.Defect, cfg, opts, kept, c.survive)
 			switch {
 			case kept.failed(defect):
 			case kept.engaged.Load():
@@ -594,7 +622,7 @@ func (c *Check[S]) against(defect func(h *Handle[S]) S, cfg *config[S], env *env
 			defer close(done)
 			defer func() { panicked = recover() }()
 			defer seat.RunCleanups()
-			c.exercise(seat, defect, cfg, opts, new(firsts))
+			c.exercise(seat, defect, cfg, opts, new(firsts), unguarded)
 		}()
 		<-done
 	}
