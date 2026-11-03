@@ -474,6 +474,26 @@
       "id": "repeated-computation",
       "meaning": "Calls with one key that ran at once computed their result more than once.",
       "since": "1.1.0"
+    },
+    {
+      "id": "lost-acknowledged-write",
+      "meaning": "A read after a crash did not return a write that returned success before the crash.",
+      "since": "1.1.0"
+    },
+    {
+      "id": "torn-record",
+      "meaning": "A read after a crash during a write returned a value that no write wrote whole.",
+      "since": "1.1.0"
+    },
+    {
+      "id": "unreported-corruption",
+      "meaning": "A read of a corrupted record returned another value than the write, or an error other than the declared one.",
+      "since": "1.1.0"
+    },
+    {
+      "id": "half-written-on-full",
+      "meaning": "A write that the full medium could not hold returned success, or changed the state.",
+      "since": "1.1.0"
     }
   ]
 }

@@ -85,6 +85,10 @@
         "go": "ConservesTheQuantity",
         "typescript": "conservesTheQuantity"
       },
+      "corruption-is-reported": {
+        "go": "CorruptionIsReported",
+        "typescript": "corruptionIsReported"
+      },
       "counts-each-loan": {
         "go": "CountsEachLoan",
         "typescript": "countsEachLoan"
@@ -172,6 +176,10 @@
       "fresh-tokens": {
         "go": "FreshTokens",
         "typescript": "freshTokens"
+      },
+      "full-medium-is-reported": {
+        "go": "FullMediumIsReported",
+        "typescript": "fullMediumIsReported"
       },
       "hooks": {
         "go": "Hooks",
@@ -272,6 +280,10 @@
       "no-partial-write": {
         "go": "NoPartialWrite",
         "typescript": "noPartialWrite"
+      },
+      "no-torn-record": {
+        "go": "NoTornRecord",
+        "typescript": "noTornRecord"
       },
       "no-trace-of-a-failed-call": {
         "go": "NoTraceOfAFailedCall",
@@ -457,6 +469,10 @@
         "go": "StreamsWhatWasStored",
         "typescript": "streamsWhatWasStored"
       },
+      "synced-writes-survive": {
+        "go": "SyncedWritesSurvive",
+        "typescript": "syncedWritesSurvive"
+      },
       "tamper-evident": {
         "go": "TamperEvident",
         "typescript": "tamperEvident"
@@ -562,6 +578,10 @@
       "accepts-the-invalid": {
         "go": "AcceptsTheInvalid",
         "typescript": "acceptsTheInvalid"
+      },
+      "acknowledges-before-sync": {
+        "go": "AcknowledgesBeforeSync",
+        "typescript": "acknowledgesBeforeSync"
       },
       "admits-any-transition-after-three": {
         "go": "AdmitsAnyTransitionAfterThree",
@@ -703,9 +723,17 @@
         "go": "HalfAppliedAfterThree",
         "typescript": "halfAppliedAfterThree"
       },
+      "hides-a-full-medium": {
+        "go": "HidesAFullMedium",
+        "typescript": "hidesAFullMedium"
+      },
       "ignores-cancel": {
         "go": "IgnoresCancel",
         "typescript": "ignoresCancel"
+      },
+      "ignores-checksum": {
+        "go": "IgnoresChecksum",
+        "typescript": "ignoresChecksum"
       },
       "ignores-the-other-replica": {
         "go": "IgnoresTheOtherReplica",
@@ -951,6 +979,10 @@
         "go": "SwallowsHooks",
         "typescript": "swallowsHooks"
       },
+      "trusts-a-partial-record": {
+        "go": "TrustsAPartialRecord",
+        "typescript": "trustsAPartialRecord"
+      },
       "value-beside": {
         "go": "ValueBeside",
         "typescript": "valueBeside"
@@ -1101,6 +1133,10 @@
         "go": "PresenceFlag",
         "typescript": "presenceFlag"
       },
+      "reference-role": {
+        "go": "ReferenceRole",
+        "typescript": "referenceRole"
+      },
       "result-of-the-input-type": {
         "go": "ResultOfTheInputType",
         "typescript": "resultOfTheInputType"
@@ -1179,6 +1215,10 @@
       }
     },
     "laws": {
+      "acknowledged-write-survives-a-crash": {
+        "go": "AcknowledgedWriteSurvivesACrash",
+        "typescript": "acknowledgedWriteSurvivesACrash"
+      },
       "admitted-entry-grows-the-replay": {
         "go": "AdmittedEntryGrowsTheReplay",
         "typescript": "admittedEntryGrowsTheReplay"
@@ -1258,6 +1298,10 @@
       "concurrent-history-is-linearizable": {
         "go": "ConcurrentHistoryIsLinearizable",
         "typescript": "concurrentHistoryIsLinearizable"
+      },
+      "corrupted-read-is-reported": {
+        "go": "CorruptedReadIsReported",
+        "typescript": "corruptedReadIsReported"
       },
       "count-covers-a-bounded-window": {
         "go": "CountCoversABoundedWindow",
@@ -1463,6 +1507,10 @@
         "go": "ReadsNeverGoBackwards",
         "typescript": "readsNeverGoBackwards"
       },
+      "recovery-returns-whole-records": {
+        "go": "RecoveryReturnsWholeRecords",
+        "typescript": "recoveryReturnsWholeRecords"
+      },
       "redelivery-delivers-again": {
         "go": "RedeliveryDeliversAgain",
         "typescript": "redeliveryDeliversAgain"
@@ -1470,6 +1518,10 @@
       "refused-write-leaves-nothing": {
         "go": "RefusedWriteLeavesNothing",
         "typescript": "refusedWriteLeavesNothing"
+      },
+      "refused-write-leaves-the-state": {
+        "go": "RefusedWriteLeavesTheState",
+        "typescript": "refusedWriteLeavesTheState"
       },
       "registered-hook-runs": {
         "go": "RegisteredHookRuns",
@@ -1915,6 +1967,10 @@
         "go": "RefusesEarly",
         "typescript": "refusesEarly"
       },
+      "refuses-on-a-full-medium": {
+        "go": "RefusesOnAFullMedium",
+        "typescript": "refusesOnAFullMedium"
+      },
       "refuses-past-the-burst": {
         "go": "RefusesPastTheBurst",
         "typescript": "refusesPastTheBurst"
@@ -1982,6 +2038,10 @@
       "reports-a-failed-dependency": {
         "go": "ReportsAFailedDependency",
         "typescript": "reportsAFailedDependency"
+      },
+      "reports-each-flipped-bit": {
+        "go": "ReportsEachFlippedBit",
+        "typescript": "reportsEachFlippedBit"
       },
       "reports-no-error": {
         "go": "ReportsNoError",
@@ -2071,6 +2131,10 @@
         "go": "Survives",
         "typescript": "survives"
       },
+      "survives-every-crash-point": {
+        "go": "SurvivesEveryCrashPoint",
+        "typescript": "survivesEveryCrashPoint"
+      },
       "survives-repeat": {
         "go": "SurvivesRepeat",
         "typescript": "survivesRepeat"
@@ -2114,6 +2178,10 @@
       "watches-see-the-triggers": {
         "go": "WatchesSeeTheTriggers",
         "typescript": "watchesSeeTheTriggers"
+      },
+      "whole-at-every-crash-point": {
+        "go": "WholeAtEveryCrashPoint",
+        "typescript": "wholeAtEveryCrashPoint"
       },
       "works-after": {
         "go": "WorksAfter",
@@ -2225,6 +2293,10 @@
         "go": "GroupingDependent",
         "typescript": "groupingDependent"
       },
+      "half-written-on-full": {
+        "go": "HalfWrittenOnFull",
+        "typescript": "halfWrittenOnFull"
+      },
       "healthy-after-induce": {
         "go": "HealthyAfterInduce",
         "typescript": "healthyAfterInduce"
@@ -2252,6 +2324,10 @@
       "lost-a-key": {
         "go": "LostAKey",
         "typescript": "lostAKey"
+      },
+      "lost-acknowledged-write": {
+        "go": "LostAcknowledgedWrite",
+        "typescript": "lostAcknowledgedWrite"
       },
       "lost-cause": {
         "go": "LostCause",
@@ -2441,6 +2517,10 @@
         "go": "SwallowedFailure",
         "typescript": "swallowedFailure"
       },
+      "torn-record": {
+        "go": "TornRecord",
+        "typescript": "tornRecord"
+      },
       "uncompensated-step": {
         "go": "UncompensatedStep",
         "typescript": "uncompensatedStep"
@@ -2500,6 +2580,10 @@
       "unreplaced-write": {
         "go": "UnreplacedWrite",
         "typescript": "unreplacedWrite"
+      },
+      "unreported-corruption": {
+        "go": "UnreportedCorruption",
+        "typescript": "unreportedCorruption"
       },
       "unreturned-loan": {
         "go": "UnreturnedLoan",

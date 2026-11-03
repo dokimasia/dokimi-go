@@ -113,11 +113,6 @@
       "note": "The claims of the mixin need concurrent callers."
     },
     {
-      "id": "mixin:durable",
-      "stance": "needs",
-      "note": "The claims of the mixin need a killable process or a breakable medium."
-    },
-    {
       "id": "mixin:default-on-error",
       "stance": "blocked",
       "note": "The mixin declares no default value for a check to compare."

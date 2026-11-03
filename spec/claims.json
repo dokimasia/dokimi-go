@@ -5236,6 +5236,160 @@
       "since": "1.1.0"
     },
     {
+      "id": "synced-writes-survive",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "durable"
+        }
+      ],
+      "gates": [
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "paired"
+        }
+      ],
+      "law": "acknowledged-write-survives-a-crash",
+      "machineries": [
+        "killable-process-or-breakable-medium"
+      ],
+      "statement": "{read} returns each value that {callable} wrote with success before a crash at any persistence point",
+      "probe": "survives-every-crash-point",
+      "inputs": [
+        {
+          "name": "durable",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "acknowledges-before-sync",
+        "clause": "a {declaration} over a medium whose syncs persist nothing",
+        "reason": "lost-acknowledged-write"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "no-torn-record",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "durable"
+        }
+      ],
+      "gates": [
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "paired"
+        }
+      ],
+      "law": "recovery-returns-whole-records",
+      "machineries": [
+        "killable-process-or-breakable-medium"
+      ],
+      "statement": "{read} returns each value of {callable} whole or not at all after a crash during a torn write",
+      "probe": "whole-at-every-crash-point",
+      "inputs": [
+        {
+          "name": "durable",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "trusts-a-partial-record",
+        "clause": "a {declaration} whose {callable} writes the zero value under the key before its first value",
+        "reason": "torn-record"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "corruption-is-reported",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "durable",
+          "needs-param": "corrupt"
+        }
+      ],
+      "gates": [
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "paired"
+        }
+      ],
+      "law": "corrupted-read-is-reported",
+      "machineries": [
+        "killable-process-or-breakable-medium"
+      ],
+      "statement": "{read} fails with the declared error of a corrupted record, and returns no value of it",
+      "probe": "reports-each-flipped-bit",
+      "inputs": [
+        {
+          "name": "durable",
+          "from": "partner",
+          "partner": "read"
+        },
+        {
+          "name": "corrupt",
+          "from": "param",
+          "param": "corrupt"
+        }
+      ],
+      "defect": {
+        "form": "ignores-checksum",
+        "clause": "a {declaration} whose {read} returns the zero value of a corrupted record",
+        "reason": "unreported-corruption"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "full-medium-is-reported",
+      "generator": "suite",
+      "licences": [
+        {
+          "mixin": "durable"
+        }
+      ],
+      "gates": [
+        "failure"
+      ],
+      "partners": [
+        {
+          "name": "read",
+          "mode": "paired"
+        }
+      ],
+      "law": "refused-write-leaves-the-state",
+      "machineries": [
+        "killable-process-or-breakable-medium"
+      ],
+      "statement": "{callable} fails on a full medium, and {read} returns each value as before the write",
+      "probe": "refuses-on-a-full-medium",
+      "inputs": [
+        {
+          "name": "durable",
+          "from": "partner",
+          "partner": "read"
+        }
+      ],
+      "defect": {
+        "form": "hides-a-full-medium",
+        "clause": "a {declaration} over a medium that reports a full write as written",
+        "reason": "half-written-on-full"
+      },
+      "since": "1.1.0"
+    },
+    {
       "id": "delivers-each-append",
       "generator": "suite",
       "licences": [

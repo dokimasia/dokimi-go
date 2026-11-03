@@ -148,6 +148,9 @@
           "cases": {
             "type": "integer"
           },
+          "points": {
+            "type": "integer"
+          },
           "shallow": {
             "type": "boolean"
           },

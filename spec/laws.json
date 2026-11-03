@@ -807,6 +807,34 @@
       "depth": "concurrent-callers",
       "since": "1.1.0",
       "distinct-from": []
+    },
+    {
+      "id": "acknowledged-write-survives-a-crash",
+      "statement": "A write that returned success is readable after a crash.",
+      "depth": "killable-process-or-breakable-medium",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "recovery-returns-whole-records",
+      "statement": "Recovery after a crash during a write returns each record whole or not at all.",
+      "depth": "killable-process-or-breakable-medium",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "corrupted-read-is-reported",
+      "statement": "A read of a corrupted record fails with the declared error and returns no value.",
+      "depth": "killable-process-or-breakable-medium",
+      "since": "1.1.0",
+      "distinct-from": []
+    },
+    {
+      "id": "refused-write-leaves-the-state",
+      "statement": "A write that the medium cannot hold fails, and the state is as before the write.",
+      "depth": "killable-process-or-breakable-medium",
+      "since": "1.1.0",
+      "distinct-from": []
     }
   ]
 }

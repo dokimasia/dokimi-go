@@ -2579,6 +2579,70 @@
       "reasons": [
         "unguarded-write"
       ]
+    },
+    {
+      "id": "survives-every-crash-point",
+      "summary": "Each sequence of one to three writes of the samples crashes the medium once at each of its persistence points, and a read after each crash returns each write that returned success before it.",
+      "vacuous": "No write returns success.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "durable",
+          "kind": "durable"
+        }
+      ],
+      "reasons": [
+        "lost-acknowledged-write"
+      ]
+    },
+    {
+      "id": "whole-at-every-crash-point",
+      "summary": "Each sequence of one to three writes of the samples crashes the medium once at each of its persistence points with a torn write, and a read after each crash returns a value that a write wrote whole, or an error.",
+      "vacuous": "No read after a crash returns a value.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "durable",
+          "kind": "durable"
+        }
+      ],
+      "reasons": [
+        "torn-record"
+      ]
+    },
+    {
+      "id": "reports-each-flipped-bit",
+      "summary": "Each sequence of one to three writes of the samples flips a bit of each byte of the durable files, one at a time, and a read after a restart returns the written value, or the declared error beside the zero value.",
+      "vacuous": "No read fails with the declared error.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "durable",
+          "kind": "durable"
+        },
+        {
+          "name": "corrupt",
+          "kind": "error"
+        }
+      ],
+      "reasons": [
+        "unreported-corruption"
+      ]
+    },
+    {
+      "id": "refuses-on-a-full-medium",
+      "summary": "Each sequence of one to three writes of the samples fills the medium below the bytes of its last write, and the last write fails and leaves each read as before it.",
+      "vacuous": "No last write writes a byte.",
+      "since": "1.1.0",
+      "inputs": [
+        {
+          "name": "durable",
+          "kind": "durable"
+        }
+      ],
+      "reasons": [
+        "half-written-on-full"
+      ]
     }
   ]
 }

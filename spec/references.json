@@ -1,0 +1,34 @@
+{
+  "references": [
+    {
+      "id": "persister",
+      "contract": "persister",
+      "state": "map",
+      "roles": {
+        "reader": "load",
+        "writer": "store"
+      },
+      "since": "1.1.0"
+    },
+    {
+      "id": "cache",
+      "contract": "cache",
+      "state": "map",
+      "roles": {
+        "backing": "load",
+        "cache": "load"
+      },
+      "writers": "store",
+      "since": "1.1.0"
+    },
+    {
+      "id": "appender",
+      "contract": "appender",
+      "state": "list",
+      "roles": {
+        "fn": "append"
+      },
+      "since": "1.1.0"
+    }
+  ]
+}

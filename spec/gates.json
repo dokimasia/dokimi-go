@@ -342,6 +342,13 @@
       "why": "no callable of {declaration} returns a value on its own",
       "remedy": "give {declaration} a callable that returns a value without the mixin waits or runs-until-cancelled",
       "since": "1.0.0"
+    },
+    {
+      "id": "reference-role",
+      "passes": "Each callable of the declaration has a role of a contract with a reference form, or is a writer of such a form, and has no mixin and no role in another contract.",
+      "why": "{callable} has no role of a contract with a reference form",
+      "remedy": "give {callable} a role of a contract with a reference form, or leave {declaration} without the directive fake",
+      "since": "1.1.0"
     }
   ]
 }
