@@ -1,5 +1,22 @@
 # go.dokimi.dev/spec
 
+## 0.2.0
+
+### Minor Changes
+
+- 317d5ff: Add the claim `causal-history` with its probe and defect form.
+- 0a9d402: Add the claim `computes-once` with its law, reason, probe and defect form.
+- 0a9d402: Add the claim `linearizable` with its law, reason, probe and defect form.
+- 0a9d402: Add the claim `one-holder-at-a-time` with its probe and defect form.
+- 317d5ff: Add the claim `pins-the-snapshot-under-writes` with its probe and defect form.
+- 0a9d402: Add the claim `reads-agree-under-concurrency` with its law, reason, probe and defect form.
+- 0a9d402: Add the five claims of the rules of a runtime of the generator `sim`, with their laws, reasons, probes and defect forms.
+- 0a9d402: Add the claims, laws, reasons, probes, gates and defect forms of deliveries, iterations, totals and failed calls.
+- d2d7f23: Add the claims of the mixin `durable` with their laws, probes, reasons and defect forms.
+- d2d7f23: Add the field `points` to the check record of the suite schema.
+- d2d7f23: Add the reference forms of the contracts `persister`, `cache` and `appender`, and the gate `reference-role`.
+- 0a9d402: Add the stance `gap` of the mixin `returns-on-error`.
+
 ## 0.1.0
 
 ### Minor Changes

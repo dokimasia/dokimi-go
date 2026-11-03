@@ -1,5 +1,30 @@
 # go.dokimi.dev/conform
 
+## 0.10.0
+
+### Minor Changes
+
+- a8b6b1c: Add `conform.Durable` with `Handle.Open` and `Handle.FreshOpen`, which open each subject of an application over a new `medium.Memory`.
+- 53fe828: Add the probe `probe.ConcurrentReadsAgree`, which checks each read of concurrent clients against the read alone.
+- 53fe828: Add the probe `probe.ExclusiveUnderConcurrency`, which checks that concurrent calls with one key take the lease once.
+- 53fe828: Add the probe `probe.LinearizableHistory`, which checks a history of concurrent clients against a reference.
+- 90b15e0: Add the probe `probe.PinnedUnderConcurrentWrites`, which checks that reads with the same arguments return one value beside concurrent writes.
+- 53fe828: Add the probe `probe.SharesOneComputation`, which checks that concurrent calls with one key record one computation in the dependencies.
+- 90b15e0: Add the probe `probe.VersionsFollowTheCausalOrder`, which checks that the versions of reads and writes keep the causal order of their calls.
+- 53fe828: Add `probe.Pull` and the seven probes of deliveries, iterations, totals and failed calls, such as `probe.AppendsArrive` and `probe.MovesKeepTheTotal`.
+- a8b6b1c: Add `probe.Durable` with the four probes of a durable subject and the faulty media `probe.Unsynced` and `probe.Unfilled`.
+- a8b6b1c: Add `Handle.AddPoints` and the field `points` of a check record, the points of a medium that the check enumerated.
+- b7847bc: Add `Handle.Schedule` and `Handle.Yield`, which run the clients of a planted defect as tasks of a scheduler with the strategy Uniform.
+
+### Patch Changes
+
+- a8b6b1c: Run the concurrent sections of `probe.PinnedUnderConcurrentWrites` and `probe.VersionsFollowTheCausalOrder` with a mean of 16 steps.
+- b7847bc: Fix `conform.Isolate` to leave out the check of linearizability for every planted defect, as it leaves out the check of agreement with a reference.
+- Updated dependencies [1bc3e13, 317d5ff, 0a9d402, d2d7f23]
+  - go.dokimi.dev/medium@0.1.0
+  - go.dokimi.dev/spec@0.2.0
+  - go.dokimi.dev/fault@0.2.1
+
 ## 0.9.0
 
 ### Minor Changes
