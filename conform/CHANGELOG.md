@@ -1,5 +1,11 @@
 # go.dokimi.dev/conform
 
+## 0.11.0
+
+### Minor Changes
+
+- 0261c82: Fail a check that panics on a subject or on its own planted defect, in place of ending the test binary.
+
 ## 0.10.0
 
 ### Minor Changes
