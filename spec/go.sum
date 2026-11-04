@@ -1,8 +1,6 @@
-go.dokimi.dev/assert v0.14.1 h1:rHvyO47LufLTzSUK9sDMpXcncsWBnvoRxVIjL0g6POU=
-go.dokimi.dev/assert v0.14.1/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
-go.dokimi.dev/assert v0.14.2-0.20261102161013-cb6f57ea3893 h1:sfZ6g+sVc97ffGXJ4pSX+UJObhp2smuZ+8VXQMBYMOI=
-go.dokimi.dev/assert v0.14.2-0.20261102161013-cb6f57ea3893/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
-go.dokimi.dev/assert v0.14.2-0.20261102175602-48658cd22f27 h1:EaEAvFopi47yqo2aGJHy8OTbiTVDZGBnP47rjY45KoQ=
-go.dokimi.dev/assert v0.14.2-0.20261102175602-48658cd22f27/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+github.com/google/jsonschema-go v0.4.3 h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+DQPd0=
+github.com/google/jsonschema-go v0.4.3/go.mod h1:r5quNTdLOYEz95Ru18zA0ydNbBuYoo9tgaYcxEYhJVE=
 go.dokimi.dev/assert v0.15.1-0.20261103092510-62a33bee050b h1:Li/TZogManzq89/ZeyVr6OYCX3MHKn99IW4/fOCdy1M=
 go.dokimi.dev/assert v0.15.1-0.20261103092510-62a33bee050b/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=

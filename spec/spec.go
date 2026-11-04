@@ -10,54 +10,17 @@ import (
 	"sync"
 )
 
-// LawID identifies a law.
-type LawID string
-
-// ClaimID identifies a claim. It is the segment of each check of the claim.
-type ClaimID string
-
-// GateID identifies a gate.
-type GateID string
-
-// ProbeID identifies a probe.
-type ProbeID string
-
-// ReasonID identifies a reason code.
-type ReasonID string
-
-// DefectFormID identifies a form of a planted defect.
-type DefectFormID string
-
-// MachineryID identifies a machinery.
-type MachineryID string
-
-// StanceID identifies a stance.
-type StanceID string
-
-// Probe is the procedure of a check, with the reason codes that it reports.
-// The package probe implements each probe of the spec.
-type Probe struct {
-	ID ProbeID `json:"id"`
-
-	// Vacuous is the condition under which the probe does not exercise its
-	// claim, as a sentence. A run names it when it fails a vacuous check.
-	Vacuous string `json:"vacuous"`
-
-	// Reasons lists the reason codes that the probe reports. The handle
-	// fails a check whose probe sets another code.
-	Reasons []ReasonID `json:"reasons"`
-}
-
-// files contains the version and the probes of the copy of the spec. The
-// test of the package compares the probes that [Probes] returns with the
-// probes that encoding/json reads from the same file, so a file that does
-// not decode fails the test, and no function reports a decoding error.
+// files contains the version, the entries and the schema of the suite record
+// of the copy of the spec. The test of the package decodes each file with
+// every field of the model, so a file that the model cannot read fails the
+// test, and no function reports a decoding error.
 //
-//go:embed VERSION probes.json
+//go:embed VERSION claims.json defects.json gates.json laws.json machineries.json probes.json
+//go:embed reasons.json stances.json schemas/suite.schema.json
 var files embed.FS
 
 // Version returns the version of the spec from the file VERSION, such as
-// 1.0.0.
+// 2.0.0.
 func Version() string {
 	return version()
 }
@@ -67,35 +30,42 @@ var version = sync.OnceValue(func() string {
 	return strings.TrimSpace(string(data))
 })
 
-// probes contains the probes in the order of probes.json, and the position
-// of each by its identifier.
-var probes = sync.OnceValues(func() ([]Probe, map[ProbeID]int) {
-	data, _ := files.ReadFile("probes.json")
-	var doc struct {
-		Probes []Probe `json:"probes"`
-	}
-	_ = json.Unmarshal(data, &doc)
-	at := make(map[ProbeID]int, len(doc.Probes))
-	for i, p := range doc.Probes {
-		at[p.ID] = i
-	}
-	return doc.Probes, at
-})
-
-// Probes returns every probe in the order of probes.json. The slice is
-// shared with every other call, so a caller does not modify it.
-func Probes() []Probe {
-	all, _ := probes()
-	return all
+// keyed is a pointer to an entry E of the spec with the identifier K.
+type keyed[K ~string, E any] interface {
+	*E
+	key() K
 }
 
-// ProbeOf returns the probe with the identifier id, and false when the spec
-// has no such probe.
-func ProbeOf(id ProbeID) (Probe, bool) {
-	all, at := probes()
-	i, ok := at[id]
+// table contains the entries of one section of a file in the order of the
+// file, and the position of each entry by its identifier.
+type table[K ~string, E any] struct {
+	at      map[K]int
+	entries []E
+}
+
+// of returns the entry with the identifier id, and false when the section
+// has no such entry.
+func (t table[K, E]) of(id K) (E, bool) {
+	i, ok := t.at[id]
 	if !ok {
-		return Probe{}, false
+		var zero E
+		return zero, false
 	}
-	return all[i], true
+	return t.entries[i], true
+}
+
+// section returns a function that decodes the section of a file on its first
+// call and returns the same table on every call.
+func section[K ~string, E any, P keyed[K, E]](file, name string) func() table[K, E] {
+	return sync.OnceValue(func() table[K, E] {
+		data, _ := files.ReadFile(file)
+		var doc map[string][]E
+		_ = json.Unmarshal(data, &doc)
+		entries := doc[name]
+		at := make(map[K]int, len(entries))
+		for i := range entries {
+			at[P(&entries[i]).key()] = i
+		}
+		return table[K, E]{entries: entries, at: at}
+	})
 }

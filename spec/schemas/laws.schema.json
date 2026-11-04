@@ -16,43 +16,14 @@
           "statement": {
             "type": "string"
           },
-          "depth": {
-            "type": "string",
-            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
-          },
           "since": {
             "type": "string"
-          },
-          "distinct-from": {
-            "type": [
-              "null",
-              "array"
-            ],
-            "items": {
-              "type": "object",
-              "properties": {
-                "law": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
-                },
-                "case": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "law",
-                "case"
-              ],
-              "additionalProperties": false
-            }
           }
         },
         "required": [
           "id",
           "statement",
-          "depth",
-          "since",
-          "distinct-from"
+          "since"
         ],
         "additionalProperties": false
       }

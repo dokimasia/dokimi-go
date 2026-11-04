@@ -13,25 +13,17 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
           },
-          "changes": {
-            "type": "string"
-          },
           "does": {
             "type": "string"
           },
           "since": {
             "type": "string"
-          },
-          "min-steps": {
-            "type": "integer"
           }
         },
         "required": [
           "id",
-          "changes",
           "does",
-          "since",
-          "min-steps"
+          "since"
         ],
         "additionalProperties": false
       }
