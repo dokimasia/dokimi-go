@@ -1,5 +1,12 @@
 # go.dokimi.dev/sim
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [b9681ea]
+  - go.dokimi.dev/spec@0.3.0
+
 ## 0.1.0
 
 ### Minor Changes

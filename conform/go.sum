@@ -4,5 +4,5 @@ go.dokimi.dev/fault v0.2.1 h1:7km68CK/2aAdB0PsJqZbOSNpI3FFUja9tQdOCzVa9VU=
 go.dokimi.dev/fault v0.2.1/go.mod h1:2NBzNLo16vL8Ti383uhe3h9pT8iq2QKCLf6n900S1UY=
 go.dokimi.dev/medium v0.1.0 h1:QkGXJ/vRo0hhRuaGDW/vwnduhJ1shhc/mzBo5nvAFlA=
 go.dokimi.dev/medium v0.1.0/go.mod h1:PIhA96rXaPLImsaDAJLDfflaqLLxCX2YaQRtFIcvE3w=
-go.dokimi.dev/spec v0.2.0 h1:61sp7G/ZtEx6NzYme81Q/Gd9r55KI9sNVfpGNn8vbao=
-go.dokimi.dev/spec v0.2.0/go.mod h1:uDBB8KSnXW9lLAWTNs+jWulNW38/A4eDme9E+5RSRUs=
+go.dokimi.dev/spec v0.3.0 h1:1dlP7w1WJxBsqQWWYbCQ3nk2vu3dTQ2lHMdZNBKeUPM=
+go.dokimi.dev/spec v0.3.0/go.mod h1:uDBB8KSnXW9lLAWTNs+jWulNW38/A4eDme9E+5RSRUs=
