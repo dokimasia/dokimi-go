@@ -1,5 +1,13 @@
 # go.dokimi.dev/conform
 
+## 0.13.0
+
+### Minor Changes
+
+- 80acf19: Add `ExcuseSuite` to excuse every check of a suite with one option.
+- 80acf19: Add `ID.Generated` to return the identity of the generated binding of a check.
+- 80acf19: Take the probe, the reason code and the law of a derived check from its claim where the check does not state them.
+
 ## 0.12.1
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # go.dokimi.dev/stub
 
+## 0.3.0
+
+### Minor Changes
+
+- c06eebc: **Breaking:** Check the arguments, the hook `OnRecord` and the fixed results of a method in `Behaviour` through the new fields `Arguments`, `Reset` and `Returns` of `Subject`.
+- c06eebc: **Breaking:** Check the reset of a double through the subject of each method in `ResetBehaviour`, in place of the field `Reset` of `Instance`.
+- c06eebc: **Breaking:** Pass the call of its arguments to the function that `Subject.Override` sets.
+
+### Patch Changes
+
+- go.dokimi.dev/fault@0.2.1
+
 ## 0.2.1
 
 ### Patch Changes
