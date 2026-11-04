@@ -64,6 +64,20 @@ check: lint-github
 lint-github: ## Lint the workflows with actionlint and the configuration of .github/actionlint.yaml
 	$(ACTIONLINT) -shellcheck= -pyflakes=
 
+##@ Spec
+#
+# The section spec of .ergon.yaml sets the roles of the repository and the release of spec. spec
+# reads its own configuration from .spec.yaml.
+
+# The program spec, which ergon installs at the version of the section spec.
+SPEC := $(ERGON) tool run spec.spec --
+
+.PHONY: check-spec
+check: check-spec
+
+check-spec: ## Check the copies of the definitions against their manifests with spec
+	$(SPEC) check
+
 ##@ Go
 #
 # The Go targets run in every module that go list -m lists, which is every module of go.work. The

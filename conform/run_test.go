@@ -12,9 +12,9 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // An application runs each check of a suite as a test of its own, once it

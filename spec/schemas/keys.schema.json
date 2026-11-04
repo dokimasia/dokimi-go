@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "keys": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "identity": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity",
+          "key"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "keys"
+  ],
+  "additionalProperties": false
+}

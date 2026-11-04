@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // errBody is the error of the body of a scope that [RollsBackOnFailure] runs.

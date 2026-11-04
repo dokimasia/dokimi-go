@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "reasons": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "meaning": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "meaning",
+          "since"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "reasons"
+  ],
+  "additionalProperties": false
+}

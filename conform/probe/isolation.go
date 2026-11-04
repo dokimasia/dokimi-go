@@ -10,9 +10,9 @@ import (
 	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // txnOperation is the name of the action of a transaction among the actions

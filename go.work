@@ -1,7 +1,7 @@
 // Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
-go 1.27.3
+go 1.27.2
 
 // The repository has no module at its root. Each directory below contains
 // the module of one concern of the runtime, and every ergon per-module
@@ -11,6 +11,7 @@ use (
 	./fault
 	./medium
 	./sim
+	./spec
 	./stub
 )
 
@@ -20,3 +21,5 @@ replace (
 )
 
 replace go.dokimi.dev/medium v0.1.0 => ./medium
+
+replace go.dokimi.dev/spec v0.3.0 => ./spec

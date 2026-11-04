@@ -9,9 +9,9 @@ import (
 	"slices"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // NoElementTwice writes twice, drains once, and fails when an element

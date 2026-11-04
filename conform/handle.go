@@ -19,9 +19,9 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/medium"
+	"go.dokimi.dev/spec"
 )
 
 // origin is the instant at which the clock of each handle starts.

@@ -8,9 +8,9 @@ import (
 	"context"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // Survives calls call, and fails when the call panics.

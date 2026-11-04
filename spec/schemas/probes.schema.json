@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "properties": {
+    "probes": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "vacuous": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          },
+          "inputs": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "reasons": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "summary",
+          "vacuous",
+          "since",
+          "inputs",
+          "reasons"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "probes"
+  ],
+  "additionalProperties": false
+}

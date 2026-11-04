@@ -13,10 +13,10 @@ import (
 	"syscall"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/medium"
+	"go.dokimi.dev/spec"
 )
 
 // samples is the number of samples of each input of a derived check, and

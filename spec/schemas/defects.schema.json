@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "forms": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
+          },
+          "changes": {
+            "type": "string"
+          },
+          "does": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          },
+          "min-steps": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "changes",
+          "does",
+          "since",
+          "min-steps"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "required": [
+    "forms"
+  ],
+  "additionalProperties": false
+}

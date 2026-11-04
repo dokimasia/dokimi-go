@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
+	"go.dokimi.dev/spec"
 )
 
 // queue is the subject of the specs of drains: entries in the order of their

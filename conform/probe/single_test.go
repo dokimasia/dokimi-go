@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
+	"go.dokimi.dev/spec"
 )
 
 // value returns an answer of v and no error.

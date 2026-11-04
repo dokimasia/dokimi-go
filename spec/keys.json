@@ -1,0 +1,100 @@
+{
+  "keys": [
+    {
+      "identity": "Store.Read/zero-on-error",
+      "key": "store.read/zero-on-error"
+    },
+    {
+      "identity": "Store.ReadAll/zero-on-error",
+      "key": "store.read-all/zero-on-error"
+    },
+    {
+      "identity": "Store.readAll/zero-on-error",
+      "key": "store.read-all/zero-on-error"
+    },
+    {
+      "identity": "Store.read_all/zero-on-error",
+      "key": "store.read-all/zero-on-error"
+    },
+    {
+      "identity": "Store.read-all/zero-on-error",
+      "key": "store.read-all/zero-on-error"
+    },
+    {
+      "identity": "HTTPServer.Serve/cancel",
+      "key": "http-server.serve/cancel"
+    },
+    {
+      "identity": "httpServer.serve/cancel",
+      "key": "http-server.serve/cancel"
+    },
+    {
+      "identity": "http_server.serve/cancel",
+      "key": "http-server.serve/cancel"
+    },
+    {
+      "identity": "URLPath.Join/smoke",
+      "key": "url-path.join/smoke"
+    },
+    {
+      "identity": "Store.GetID/smoke",
+      "key": "store.get-id/smoke"
+    },
+    {
+      "identity": "Store.GetIPv4/smoke",
+      "key": "store.get-i-pv4/smoke"
+    },
+    {
+      "identity": "Store.$Get/smoke",
+      "key": "store.$get/smoke"
+    },
+    {
+      "identity": "Store.__init__/smoke",
+      "key": "store.init/smoke"
+    },
+    {
+      "identity": "UserIDs.List/stable-order",
+      "key": "user-ids.list/stable-order"
+    },
+    {
+      "identity": "URLsToFetch.Add/smoke",
+      "key": "urls-to-fetch.add/smoke"
+    },
+    {
+      "identity": "IDsort.Get/smoke",
+      "key": "i-dsort.get/smoke"
+    },
+    {
+      "identity": "Int64Value.Get/smoke",
+      "key": "int64-value.get/smoke"
+    },
+    {
+      "identity": "Version2.Get/smoke",
+      "key": "version2.get/smoke"
+    },
+    {
+      "identity": "Größe.Get/smoke",
+      "key": "größe.get/smoke"
+    },
+    {
+      "identity": "Store.Get/expires#0-generated",
+      "key": "store.get/expires#0-generated"
+    },
+    {
+      "identity": "Store.Get/zero-on-error#generated",
+      "key": "store.get/zero-on-error#generated"
+    },
+    {
+      "identity": "OrderStore/agrees-with-the-reference",
+      "key": "order-store/agrees-with-the-reference"
+    },
+    {
+      "identity": "slug/round-trip",
+      "key": "slug/round-trip"
+    },
+    {
+      "identity": "Store.PutAll",
+      "key": "store.put-all"
+    }
+  ]
+}

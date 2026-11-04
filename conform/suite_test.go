@@ -11,10 +11,10 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/prop"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/medium"
+	"go.dokimi.dev/spec"
 )
 
 // striped is a Store over a slice of disks, so its values do not compare. Put

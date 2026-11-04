@@ -7,9 +7,9 @@ import (
 	"context"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // EitherOrderAgrees calls call with first and second in both orders, and

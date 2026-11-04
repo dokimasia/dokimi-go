@@ -16,6 +16,7 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+
 	"go.dokimi.dev/spec"
 )
 

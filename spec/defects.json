@@ -1,0 +1,788 @@
+{
+  "forms": [
+    {
+      "id": "panics",
+      "changes": "callable",
+      "does": "The callable panics or throws on every call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "panics-on-repeat",
+      "changes": "callable",
+      "does": "The callable returns on its first call and panics or throws on every later call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "succeeds-always",
+      "changes": "callable",
+      "does": "The callable returns the zero value of each value result and no error on every call, and does nothing else.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "fails-always",
+      "changes": "callable",
+      "does": "The callable fails with an error that no directive declares wherever the call of the fresh subject succeeds.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "reports-another-error",
+      "changes": "callable",
+      "does": "The callable fails with an error that no directive declares.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "ignores-the-predicate",
+      "changes": "callable",
+      "does": "The callable applies its first call, and returns the zero value of each value result and no error on every later call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "refuses-repeat",
+      "changes": "callable",
+      "does": "The callable succeeds on its first call and fails on every later call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "ignores-cancel",
+      "changes": "callable",
+      "does": "The callable returns its zero results and no error for a cancelled context, and calls the fresh subject for any other.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "value-beside",
+      "changes": "callable",
+      "does": "A failed call returns the second sample of the value instead of the zero value.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "values-beside",
+      "changes": "callable",
+      "does": "A failed call returns the second sample of each value instead of the zero values.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "value-beside-a-false-flag",
+      "changes": "callable",
+      "does": "A call that returns a false presence flag returns the second sample of the value.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "values-beside-a-false-flag",
+      "changes": "callable",
+      "does": "A call that returns a false presence flag returns the second sample of each value.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "invents-a-pointer",
+      "changes": "callable",
+      "does": "The callable returns a pointer to the second sample where nothing was stored.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "invents-a-value",
+      "changes": "callable",
+      "does": "The callable returns the second sample where nothing was stored.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "drifts",
+      "changes": "callable",
+      "does": "The callable returns the zero value on its first call and the second sample on every later call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "descends",
+      "changes": "callable",
+      "does": "The callable returns the second sample on its first call and the zero value on every later call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "stamps-the-past",
+      "changes": "partner:write",
+      "does": "The partner calls the fresh subject and returns its value with the version 0.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "version-descends",
+      "changes": "callable",
+      "does": "The callable returns a value whose version is 1 on its first call and 0 on every later call.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "answers-a-sample",
+      "changes": "callable",
+      "does": "The callable returns the second sample and no error, whatever the state of the subject.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "reads-another-value",
+      "changes": "callable",
+      "does": "The callable returns the second sample of each value wherever the call of the fresh subject succeeds.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "stores-nothing",
+      "changes": "callable",
+      "does": "The callable returns success and stores nothing.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "drains-twice",
+      "changes": "callable",
+      "does": "The drain returns its first element twice.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reorders-drain",
+      "changes": "callable",
+      "does": "The drain returns its elements in one order on its first call and in the reverse order on every later call.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "drains-nothing",
+      "changes": "callable",
+      "does": "The drain returns no element.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "echoes",
+      "changes": "callable",
+      "does": "The callable returns its input unchanged.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "accepts-the-invalid",
+      "changes": "callable",
+      "does": "The validator refuses the declared invalid value, and the callable accepts it.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "observation-unmoved",
+      "changes": "partner:observe",
+      "does": "The observation returns the zero value on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "verify-silent",
+      "changes": "partner:verify",
+      "does": "The verify returns no error on every call.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "settles-twice",
+      "changes": "partner:rollback",
+      "does": "The rollback returns no error on every call, also for a transaction that a commit settled.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "count-drifts",
+      "changes": "partner:count",
+      "does": "The count returns the zero value on its first call and the second sample on every later call.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "slow",
+      "changes": "callable",
+      "does": "The callable waits on the clock of the run for longer than its declared budget before it returns.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "read-survives-delete",
+      "changes": "partner:read",
+      "does": "The read returns the second sample and no error, also after a delete.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "swallows-hooks",
+      "changes": "partner:register",
+      "does": "The registrar accepts a hook and never installs it.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "replays-reversed",
+      "changes": "partner:replay",
+      "does": "The replay returns the entries newest first.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "opens-a-live-handle",
+      "changes": "callable",
+      "does": "The callable returns a handle whose calls succeed also after its close.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "leads-on",
+      "changes": "partner:is-leader",
+      "does": "The leadership read reports leadership on every call.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "keeps-failed-writes",
+      "changes": "partner:read",
+      "does": "The read returns its zero results and no error until a call of a dependency fails.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "commits-on-failure",
+      "changes": "partner:read",
+      "does": "The read returns the second sample and no error once a call of a dependency failed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "swallows-failure",
+      "changes": "callable",
+      "does": "The callable returns its zero results and no error where a call of a dependency fails during the call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "half-applied",
+      "changes": "partner:read",
+      "does": "The read returns the second sample and no error once a call of a dependency failed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "gives-up-early",
+      "changes": "callable",
+      "does": "The callable fails on every call once a call of a dependency failed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "never-opens",
+      "changes": "callable",
+      "does": "Each call goes to a fresh subject, whose breaker is closed.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "balances-each-call",
+      "changes": "callable",
+      "does": "Each call goes to a fresh subject over new dependencies.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "opens-without-closing",
+      "changes": "callable",
+      "does": "A call that fails records one more acquisition of its own, which no release follows.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "put-refuses",
+      "changes": "partner:put",
+      "does": "The put fails on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "compensation-refuses",
+      "changes": "partner:compensate",
+      "does": "The compensation fails on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "files-refused-write",
+      "changes": "partner:reader",
+      "does": "The reader returns the refused value and no error.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "serves-one-page",
+      "changes": "callable",
+      "does": "The read ignores its cursor and returns the first page to every caller.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "drops-a-variant",
+      "changes": "values",
+      "does": "The list of the variants lacks the last variant.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "shares-a-text",
+      "changes": "name",
+      "does": "The second variant renders the text of the first variant.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "rejects-a-variant",
+      "changes": "valid",
+      "does": "The last variant is not valid.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "parses-to-the-first",
+      "changes": "parse",
+      "does": "Every text parses to the first variant without an error.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "encodes-the-first-text",
+      "changes": "encode",
+      "does": "Every variant encodes the text of the first variant.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "decodes-to-the-first",
+      "changes": "decode",
+      "does": "Every text decodes to the first variant without an error.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "repeats-a-message",
+      "changes": "error-values",
+      "does": "The second error value has the message of the first error value.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "repeated-error",
+      "changes": "error-values",
+      "does": "The second error value is the first error value.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "drops-the-opening",
+      "changes": "error-types",
+      "does": "The message of the error type lacks the opening of the package.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "matches-everything",
+      "changes": "error-types",
+      "does": "The hook Is of the error type matches every error.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "loses-the-cause",
+      "changes": "error-types",
+      "does": "The error type returns no cause.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "matches-other-types",
+      "changes": "error-types",
+      "does": "The error type matches a value of another error type of the package.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "ignores-the-second-input",
+      "changes": "callable",
+      "does": "The callable returns its first input, or for a result of another type its value with a zero second input.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "keeps-its-first-result",
+      "changes": "callable",
+      "does": "The callable returns its first input where that input equals the value of its first call.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-the-last-key",
+      "changes": "callable",
+      "does": "The callable returns the list of the fresh subject without its last value.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reports-poison",
+      "changes": "callable",
+      "does": "The callable fails with an error that no directive declares on every call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "admits-the-size",
+      "changes": "callable",
+      "does": "The callable returns its second samples and no error for every position.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "stops-delegating",
+      "changes": "callable",
+      "does": "The callable returns its second samples and no error on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reports-tamper",
+      "changes": "callable",
+      "does": "The verify fails with an error that no directive declares on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "release-keeps-the-lease",
+      "changes": "partner:release",
+      "does": "The release returns no error and does nothing.",
+      "since": "1.0.0",
+      "min-steps": 3
+    },
+    {
+      "id": "frozen-stats",
+      "changes": "callable",
+      "does": "The stats return the zero value on every call.",
+      "since": "1.0.0",
+      "min-steps": 2
+    },
+    {
+      "id": "goes-back-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first result again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reads-the-past-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reorders-after-three",
+      "changes": "callable",
+      "does": "The callable reverses the elements that it returns from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reorders-writes-after-three",
+      "changes": "partner:write",
+      "does": "The write stores nothing from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reads-a-stale-version-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "stamps-the-past-after-three",
+      "changes": "partner:write",
+      "does": "The write returns each value with the version 0 from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "descends-after-three",
+      "changes": "callable",
+      "does": "The callable returns the position 0 from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reverses-after-three",
+      "changes": "partner:replay",
+      "does": "The replay reverses the entries that it returns from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "repeats-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first element twice from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-after-three",
+      "changes": "callable",
+      "does": "The callable drops the last element that it returns from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-a-repeat-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and does nothing from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "reads-a-stale-value-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "drops-a-write-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and does nothing from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "serves-a-stale-value-after-three",
+      "changes": "callable",
+      "does": "The callable returns its first value again from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "diverges-after-three",
+      "changes": "declaration",
+      "does": "The first callable of the declaration with a value result returns its second sample from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "grows-past-the-limit-after-three",
+      "changes": "partner:observe",
+      "does": "The reader of the use returns a use one above the limit from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "ignores-the-other-replica",
+      "changes": "callable",
+      "does": "The merge returns no error and does nothing on every call.",
+      "since": "1.0.0",
+      "min-steps": 1
+    },
+    {
+      "id": "admits-any-transition-after-three",
+      "changes": "callable",
+      "does": "The callable makes its transition twice from its fourth call on.",
+      "since": "1.0.0",
+      "min-steps": 4
+    },
+    {
+      "id": "leaks-one-unit",
+      "changes": "partner:observe",
+      "does": "The reader of the total returns one unit more than on the call before it, on every call.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "half-applied-after-three",
+      "changes": "partner:read",
+      "does": "The reader returns its second sample once a call of a dependency failed, from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "iterates-a-copy",
+      "changes": "callable",
+      "does": "The callable returns a stream over a copy of its source, on every call.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "drops-appends-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and records nothing from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "breaks-the-mode-after-three",
+      "changes": "callable",
+      "does": "From its fourth call on, the callable publishes nothing under at-least-once and exactly-once, and publishes each event twice under at-most-once.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "skips-a-redelivery-after-three",
+      "changes": "callable",
+      "does": "The callable returns no error and does nothing from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "misses-updates-after-three",
+      "changes": "partner:trigger",
+      "does": "The trigger returns no error and does nothing from its fourth call on.",
+      "since": "1.1.0",
+      "min-steps": 4
+    },
+    {
+      "id": "replies-twice",
+      "changes": "machine",
+      "does": "The machine returns each reply of a step twice.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "forgets-a-call-on-stop",
+      "changes": "machine",
+      "does": "The machine drops the replies that it returns on the stop event.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "writes-after-stop",
+      "changes": "machine",
+      "does": "On the stop event, the machine returns once more the last effect with a token that it returned before.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "steps-after-error",
+      "changes": "machine",
+      "does": "The error method of the machine returns an error from its first step on, and the machine keeps returning the effects of each step.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "reuses-a-token",
+      "changes": "machine",
+      "does": "In each step that starts a call or a wait, the machine returns the first such effect of its run once more.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-read-write",
+      "changes": "declaration",
+      "does": "Every callable but the first callable of the declaration with a value result marks its call, yields, and then calls the subject. The first callable with a value result returns its second sample while another call is marked.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-read",
+      "changes": "callable",
+      "does": "The callable keeps the results of the subject in a field of the defect, yields, and returns the field, so a call that overlaps another returns the results of the other.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "computes-per-call",
+      "changes": "callable",
+      "does": "The callable calls a fresh subject for each call, so each call computes its result.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-pin",
+      "changes": "callable",
+      "does": "The callable keeps the results of the subject in a field of the defect, yields, and returns the field, so a read that overlaps another read returns the value that the other read pinned.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "racy-causal-read",
+      "changes": "callable",
+      "does": "The callable keeps the results of the subject in a field of the defect, yields, and returns the field, so a read that overlaps another read returns the version that the other read returned.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "check-then-grant",
+      "changes": "callable",
+      "does": "Each call of the callable marks itself and yields. A call that finds another call marked returns the zero value of each result and no error without the subject. Any other call calls the subject.",
+      "since": "1.1.0",
+      "min-steps": 2
+    },
+    {
+      "id": "acknowledges-before-sync",
+      "changes": "medium",
+      "does": "The defect opens the subject over a medium whose Sync and SyncDir return nil and do not persist anything.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "trusts-a-partial-record",
+      "changes": "callable",
+      "does": "The first call of the callable writes the zero value under the key of its value and then its value. A crash between the two writes leaves a value that the caller never wrote under a key without an acknowledged write. Each later call writes its value once.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "ignores-checksum",
+      "changes": "partner:read",
+      "does": "The read returns the zero value and no error where the read of the subject fails with the declared error of a corrupted record.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "hides-a-full-medium",
+      "changes": "medium",
+      "does": "The defect opens the subject over a medium whose writes report every byte as written where the medium is full, so a write that the medium cannot hold succeeds.",
+      "since": "1.1.0",
+      "min-steps": 1
+    },
+    {
+      "id": "drops-the-field",
+      "changes": "callable",
+      "does": "A failed call returns the zero value of its result in place of the field of its request.",
+      "since": "1.2.0",
+      "min-steps": 1
+    },
+    {
+      "id": "reads-uncommitted",
+      "changes": "declaration",
+      "does": "The write keeps its value in a field of the defect until its transaction commits or rolls back. A read returns the value that the latest open transaction kept for the key, also when another transaction kept it. The defect yields after each call of a transaction.",
+      "since": "1.2.0",
+      "min-steps": 2
+    },
+    {
+      "id": "writes-without-a-snapshot",
+      "changes": "declaration",
+      "does": "The write keeps its value in a field of the defect, and a read returns the value that its own transaction kept for the key. The commit applies the kept writes in a transaction of its own, which begins at the commit, so two transactions that write one key both commit. The defect yields after each call of a transaction.",
+      "since": "1.2.0",
+      "min-steps": 2
+    }
+  ]
+}

@@ -8,9 +8,9 @@ import (
 	"slices"
 
 	"go.dokimi.dev/assert"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // The bounds of the calls of a probe of failing dependencies:

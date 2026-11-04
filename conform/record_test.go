@@ -16,9 +16,9 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/prop"
-	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/spec"
 )
 
 // suiteOf returns a suite of Store with the checks, and with the package, the
