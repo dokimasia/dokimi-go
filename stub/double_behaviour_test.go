@@ -90,40 +90,70 @@ func TestDoubleBehaviour(t *testing.T) {
 	t.Run("ResetBehaviour", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("passes a double whose reset clears its log", func(t *testing.T) {
+		t.Run("passes a double whose reset clears its log and keeps its fixed results", func(t *testing.T) {
 			t.Parallel()
 
-			stub.ResetBehaviour(t, func(tb assert.TB) stub.Instance[call] { return instance(tb) })
+			stub.ResetBehaviour(t, "Get", subject)
+		})
+
+		t.Run("leaves out the check of the fixed results for a method without results", func(t *testing.T) {
+			t.Parallel()
+
+			stub.ResetBehaviour(t, "Close", func(tb assert.TB) stub.Subject[call, ret] {
+				s := subject(tb)
+				s.Result, s.Returns = nil, nil
+				return s
+			})
 		})
 
 		t.Run("runs each check in parallel", func(t *testing.T) {
 			t.Parallel()
 
-			var built atomic.Int32
-			stub.ResetBehaviour(t, func(tb assert.TB) stub.Instance[call] {
-				built.Add(1)
-				return instance(tb)
+			var checks atomic.Int32
+			stub.ResetBehaviour(t, "Get", func(tb assert.TB) stub.Subject[call, ret] {
+				if tb != assert.TB(t) {
+					checks.Add(1)
+				}
+				return subject(tb)
 			})
-			assert.Equal(t, built.Load(), int32(0), "no check starts before the test returns")
+			assert.Equal(t, checks.Load(), int32(0), "no check starts before the test returns")
 		})
 
 		tests := []struct {
 			name string
-			give func(tb assert.TB) stub.Instance[call]
+			give func(tb assert.TB) stub.Subject[call, ret]
+			want string
 		}{
 			{
-				name: "fails the check of the instants for a double whose reset keeps the log",
-				give: func(tb assert.TB) stub.Instance[call] {
-					i := instance(tb)
-					i.Reset = func() {}
-					return i
+				name: "fails the check of the calls for a double whose reset keeps the log",
+				give: func(tb assert.TB) stub.Subject[call, ret] {
+					s := subject(tb)
+					s.Reset = func() {}
+					return s
 				},
+				want: "clears_the_calls_of_the_method_and_their_instants",
 			},
 			{
-				name: "fails the check of the instants for a double that records no call",
-				give: func(tb assert.TB) stub.Instance[call] {
-					return instance(tb, stub.Configurable.BenchMode)
+				name: "fails the check of the calls for a double that records no call",
+				give: func(tb assert.TB) stub.Subject[call, ret] {
+					f := newFake(tb)
+					f.on.BenchMode()
+					return f.subject()
 				},
+				want: "clears_the_calls_of_the_method_and_their_instants",
+			},
+			{
+				name: "fails the check of the fixed results for a double whose reset drops them",
+				give: func(tb assert.TB) stub.Subject[call, ret] {
+					f := newFake(tb)
+					s := f.subject()
+					s.Reset = func() {
+						f.on.Reset()
+						f.fixed = nil
+					}
+					return s
+				},
+				want: "keeps_the_fixed_results_of_Returns",
 			},
 		}
 		for _, tt := range tests {
@@ -131,10 +161,10 @@ func TestDoubleBehaviour(t *testing.T) {
 				t.Parallel()
 
 				if os.Getenv(suiteEnv) == t.Name() {
-					stub.ResetBehaviour(t, tt.give)
+					stub.ResetBehaviour(t, "Get", tt.give)
 					return
 				}
-				assertFailedChecks(t, "clears_the_instants_of_the_recorded_calls")
+				assertFailedChecks(t, tt.want)
 			})
 		}
 	})
@@ -292,7 +322,7 @@ func instance(tb assert.TB, options ...func(stub.Configurable)) stub.Instance[ca
 	for _, apply := range options {
 		apply(f.on)
 	}
-	return stub.Instance[call]{Stub: f.on, Call: func() { _, _ = f.Get("k") }, Reset: f.on.Reset}
+	return stub.Instance[call]{Stub: f.on, Call: func() { _, _ = f.Get("k") }}
 }
 
 // onClock returns the instance of a fake on clk.

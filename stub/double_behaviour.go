@@ -33,14 +33,12 @@ func (s *readSource) Uint64() uint64 {
 var errDouble = errors.New("stub: the fault of the checks of the options")
 
 // Instance is one double, as the checks of its options drive it: the stub of
-// one method, a call of that method, and the reset of the double.
+// one method and a call of that method.
 type Instance[C any] struct {
 	// Stub is the stub of the method that the checks configure and read.
 	Stub *MethodStub[C]
-	// Call calls the method with zero arguments.
+	// Call calls the method with the samples of its arguments.
 	Call func()
-	// Reset resets the double, as its method ResetCalls does.
-	Reset func()
 }
 
 // BenchModeBehaviour checks the option of a generated double that turns the
@@ -73,19 +71,34 @@ func StrictBehaviour[C any](t *testing.T, newInstance func(tb assert.TB) Instanc
 	})
 }
 
-// ResetBehaviour checks the reset of a generated double, which clears the
-// instants of the recorded calls with the log. newInstance returns a new
-// double that reports to tb. Each check is a parallel subtest of t.
-func ResetBehaviour[C any](t *testing.T, newInstance func(tb assert.TB) Instance[C]) {
+// ResetBehaviour checks the reset of a generated double through the method of
+// the subject that newSubject returns. Each check is a parallel subtest of t.
+// name is the name of the method in each message.
+//
+// The checks cover the calls of the method and their instants, which a reset
+// clears, and the fixed results of the method, which a reset keeps. The check
+// of the fixed results needs the fields Result and Returns of the subject.
+func ResetBehaviour[C, R any](t *testing.T, name string, newSubject func(tb assert.TB) Subject[C, R]) {
 	t.Helper()
 
-	t.Run("clears the instants of the recorded calls", func(t *testing.T) {
+	t.Run("clears the calls of the method and their instants", func(t *testing.T) {
 		t.Parallel()
-		i := newInstance(t)
-		i.Call()
-		assert.Length(t, i.Stub.Timestamped(), 1, "the double stamps the instant of a call")
-		i.Reset()
-		assert.Length(t, i.Stub.Timestamped(), 0, "a reset clears the instants with the log")
+		s := newSubject(t)
+		s.Call()
+		assert.Length(t, s.Stub.Timestamped(), 1, "the double records a call of "+name+" with its instant")
+		s.Reset()
+		assert.Length(t, s.Stub.Timestamped(), 0, "a reset clears the calls of "+name+" with their instants")
+	})
+
+	if newSubject(t).Returns == nil {
+		return
+	}
+	t.Run("keeps the fixed results of Returns", func(t *testing.T) {
+		t.Parallel()
+		s := newSubject(t)
+		want := s.Returns()
+		s.Reset()
+		assert.Equal(t, s.Result(), want, "a reset keeps the fixed results of "+name)
 	})
 }
 

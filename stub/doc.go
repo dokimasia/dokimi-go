@@ -32,11 +32,12 @@
 // the instant of each, and an [OrderTracker] checks the order of the calls of
 // two methods.
 //
-// [Behaviour] checks the contract of each method of a generated double.
-// [BenchModeBehaviour], [StrictBehaviour], [ResetBehaviour],
-// [RandSourceBehaviour], [ClockBehaviour] and [LatencyBehaviour] each check
-// one option or one method of the double as a whole. A generated test runs
-// each of them under the function that it checks.
+// [Behaviour] checks the contract of each method of a generated double, and
+// [ResetBehaviour] checks the reset of the double through each method.
+// [BenchModeBehaviour], [StrictBehaviour], [RandSourceBehaviour],
+// [ClockBehaviour] and [LatencyBehaviour] each check one option of the double
+// as a whole. A generated test runs each of them under the function that it
+// checks.
 //
 // # Dependency position
 //

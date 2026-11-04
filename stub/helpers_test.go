@@ -56,11 +56,12 @@ func arms() stub.Arms[call, ret] {
 }
 
 // fake is a double of Store.Get as a generated double writes it: the stub of
-// the method, a function, the default results, and a method that returns its
-// results through stub.Answer.
+// the method, a function, the fixed results, the default results, and a
+// method that returns its results through stub.Answer.
 type fake struct {
 	on       *stub.MethodStub[call]
 	fn       func(key string) error
+	fixed    *ret
 	defaults func() ret
 }
 
@@ -75,6 +76,7 @@ func (f *fake) Get(key string) (string, error) {
 	if f.fn != nil {
 		a.Invoke = func() ret { return ret{Err: f.fn(key)} }
 	}
+	a.Fallback = f.fixed
 	a.Default = f.defaults
 	r := stub.Answer(f.on, call{Key: key}, a)
 	return r.Value, r.Err
