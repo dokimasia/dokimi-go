@@ -1,5 +1,11 @@
 # go.dokimi.dev/medium
 
+## 0.1.1
+
+### Patch Changes
+
+- a43530a: Require `go.dokimi.dev/assert` v0.17.0.
+
 ## 0.1.0
 
 ### Minor Changes

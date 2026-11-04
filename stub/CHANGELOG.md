@@ -1,5 +1,13 @@
 # go.dokimi.dev/stub
 
+## 0.3.1
+
+### Patch Changes
+
+- a43530a: Require `go.dokimi.dev/assert` v0.17.0.
+- Updated dependencies [a43530a]
+  - go.dokimi.dev/fault@0.2.2
+
 ## 0.3.0
 
 ### Minor Changes

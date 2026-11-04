@@ -15,8 +15,8 @@ use (
 	./stub
 )
 
-replace go.dokimi.dev/fault v0.2.1 => ./fault
+replace go.dokimi.dev/fault v0.2.2 => ./fault
 
-replace go.dokimi.dev/medium v0.1.0 => ./medium
+replace go.dokimi.dev/medium v0.1.1 => ./medium
 
-replace go.dokimi.dev/spec v0.4.0 => ./spec
+replace go.dokimi.dev/spec v0.4.1 => ./spec

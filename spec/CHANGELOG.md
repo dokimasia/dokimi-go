@@ -1,5 +1,11 @@
 # go.dokimi.dev/spec
 
+## 0.4.1
+
+### Patch Changes
+
+- a43530a: Require `go.dokimi.dev/assert` v0.17.0.
+
 ## 0.4.0
 
 ### Minor Changes
