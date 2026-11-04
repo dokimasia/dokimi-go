@@ -1,5 +1,14 @@
 # go.dokimi.dev/sim
 
+## 0.1.3
+
+### Patch Changes
+
+- a43530a: Require `go.dokimi.dev/assert` v0.17.0.
+- Updated dependencies [a43530a]
+  - go.dokimi.dev/medium@0.1.1
+  - go.dokimi.dev/spec@0.4.1
+
 ## 0.1.2
 
 ### Patch Changes
