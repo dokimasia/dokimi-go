@@ -11,10 +11,10 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
-	"go.dokimi.dev/spec"
 )
 
 // errClosed is the error of a call of a store after its close.

@@ -22,10 +22,10 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/medium"
-	"go.dokimi.dev/spec"
 )
 
 // Store is the declaration of the specs: a store of values by key.

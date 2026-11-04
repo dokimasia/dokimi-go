@@ -21,10 +21,10 @@ import (
 	"go.dokimi.dev/assert/files"
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/medium"
-	"go.dokimi.dev/spec"
 )
 
 // TempDir makes its directory in the directory of temporary files. The test

@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
-	"go.dokimi.dev/spec"
 )
 
 // errExpired is the error of a read of an entry whose lifetime has passed.

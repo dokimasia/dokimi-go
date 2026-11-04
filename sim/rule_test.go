@@ -8,9 +8,9 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/sim"
-	"go.dokimi.dev/spec"
 )
 
 // script is a machine that returns the effects of each of its steps in turn,

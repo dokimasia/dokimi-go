@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
-	"go.dokimi.dev/spec"
 )
 
 // The probes of enumerations and errors call no subject. Each probe collects

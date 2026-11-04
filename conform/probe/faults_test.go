@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
-	"go.dokimi.dev/spec"
 )
 
 // errOpen is the error of a breaker of the specs that refuses a call.

@@ -12,10 +12,10 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/sim"
-	"go.dokimi.dev/spec"
 )
 
 // mediumWith returns a medium in memory whose durable file f contains data,

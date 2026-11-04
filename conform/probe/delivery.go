@@ -12,9 +12,9 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
-	"go.dokimi.dev/spec"
 )
 
 // The probes of deliveries run inside a testing/synctest bubble, which the

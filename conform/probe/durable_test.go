@@ -17,11 +17,11 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
 	"go.dokimi.dev/medium"
-	"go.dokimi.dev/spec"
 )
 
 // errAbsent is the error of a get of a key without a value, and errCorrupt the

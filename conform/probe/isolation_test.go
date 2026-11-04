@@ -13,10 +13,10 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
-	"go.dokimi.dev/spec"
 )
 
 // lists keeps a list of numbers under each key, which transactions append to.

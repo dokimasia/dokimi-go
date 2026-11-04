@@ -64,7 +64,7 @@
     {
       "path": ".github/workflows/ci.yml",
       "producer": "github",
-      "sha256": "5c26a7f019d99490cf4113d03a09d1311be56d0cee46483a62c1c88ce1ae7914"
+      "sha256": "f3c6dc611200c39dead228510d2b5c3d975cdc6dd1582e5eda24dc12d0e2c9dc"
     },
     {
       "path": ".github/workflows/codeql.yml",
@@ -74,7 +74,7 @@
     {
       "path": ".github/workflows/nightly.yml",
       "producer": "github",
-      "sha256": "ec33d1b4edd73b71f59abb99114bff11c9db58321f6dcec4f4d676dd0d3d20ae"
+      "sha256": "aa27282a8853966dc5393d2b46901bc2250129cf1a743f20324539bbaf027349"
     },
     {
       "path": ".github/workflows/release.yml",
@@ -99,8 +99,8 @@
     {
       "path": ".golangci.yml",
       "producer": "go",
-      "local": "fdce64db0b51e2c378e763f3ce1128dc5d6692d76152b1630e083d6206d52a14",
-      "sha256": "1fe565329d8d9d2c899c3e1070c9dc693658bedf9bc987781e5c64c8c6fb2bf5"
+      "local": "8228870c248e8f5bdafa84be0b508b202ef77473f6c03c9b2eb608749e4971e3",
+      "sha256": "997cbb1593d1941afff8ab12425b9fc80298c995e7492ade4fd198f4f5955dd1"
     },
     {
       "path": ".markdownlint.yml",
@@ -131,7 +131,7 @@
       "path": "Makefile",
       "producer": "common",
       "local": "0b87a90b41bc0ef3c22e6c3afbad822203dc96d339e065085d4ae0349f23f985",
-      "sha256": "62a57bb58081b22e5887e61c064fc355d46f111880f40866a359bc8604430a46"
+      "sha256": "c69473172c083dfd0293f15d65f89c0e5e67c36bc6b28bb052e61dd38f2bb1c2"
     }
   ],
   "settings": {

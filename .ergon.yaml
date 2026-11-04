@@ -358,7 +358,7 @@ spec:
   # What the repository is to spec: definition for the repository of a conformance definition, and
   # implementation for a repository with copies of definitions. Each role needs its section of
   # .spec.yaml, definition or implements. A repository without a role gets no target or job of spec.
-  roles: [implementation]
+  roles: []
   # The limit in minutes of the job spec of ci.yml and of the job propose-spec of nightly.yml. The
   # jobs run spec through ergon, and they do not run an action of their own.
   ci:

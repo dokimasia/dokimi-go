@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
-	"go.dokimi.dev/spec"
 )
 
 // color is the enumeration of the specs of the enumerations.

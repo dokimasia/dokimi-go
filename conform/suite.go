@@ -17,9 +17,9 @@ import (
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/medium"
-	"go.dokimi.dev/spec"
 )
 
 // seedEnv is the variable of the environment that states the seed of the

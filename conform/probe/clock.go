@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
-	"go.dokimi.dev/spec"
 )
 
 // The probes of the clock advance the clock of the handle, which the factory

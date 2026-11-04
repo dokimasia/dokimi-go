@@ -7,9 +7,10 @@ import (
 	"context"
 	"testing"
 
+	"go.dokimi.dev/spec"
+
 	"go.dokimi.dev/conform"
 	"go.dokimi.dev/conform/probe"
-	"go.dokimi.dev/spec"
 )
 
 // mixer is the subject of the specs of the probes that combine two values.

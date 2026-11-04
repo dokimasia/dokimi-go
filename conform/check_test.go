@@ -12,9 +12,9 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/spec"
 
 	"go.dokimi.dev/conform"
-	"go.dokimi.dev/spec"
 )
 
 // outsideCases returns a factory of stores in memory, which counts each store
