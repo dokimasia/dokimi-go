@@ -1,5 +1,14 @@
 # go.dokimi.dev/spec
 
+## 0.4.0
+
+### Minor Changes
+
+- 45feafe: Add `Claims`, `Laws`, `Reasons`, `DefectForms`, `Machineries`, `Gates` and `Stances`, each with a function that returns one entry by its identifier, such as `ClaimOf`.
+- 45feafe: Add the fields `Summary`, `Since` and `Inputs` to `Probe`.
+- 45feafe: Add `ValidateSuiteRecord` and the types of the suite record, such as `SuiteRecord` and `CheckRecord`.
+- 45feafe: Vendor spec 2.0.0 of dokimi-spec, the runtime contract without the rules of the generator.
+
 ## 0.3.0
 
 ### Minor Changes

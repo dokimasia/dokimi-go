@@ -1,5 +1,12 @@
 # go.dokimi.dev/conform
 
+## 0.12.1
+
+### Patch Changes
+
+- Updated dependencies [45feafe]
+  - go.dokimi.dev/spec@0.4.0
+
 ## 0.12.0
 
 ### Minor Changes
