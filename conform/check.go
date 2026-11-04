@@ -89,17 +89,17 @@ type Check[S any] struct {
 	// applies it, and [Falsify] leaves it out.
 	Claim spec.ClaimID
 
-	// Probe is the probe of the claim, whose reasons [Handle.Expect] accepts,
-	// and empty for a check of the consumer. A check with a probe engages its
-	// claim through [Handle.Engage] alone.
+	// Probe is the probe that the check calls, whose reasons [Handle.Expect]
+	// accepts. A derived check without a probe takes the probe of its claim. A
+	// check with a probe engages its claim through [Handle.Engage] alone.
 	Probe spec.ProbeID
 
-	// Reason is the reason code of the planted defect of the check, and empty
-	// for a check of the consumer.
+	// Reason is the reason code of the planted defect of the check. A derived
+	// check without a reason takes the reason code of the defect of its claim.
 	Reason spec.ReasonID
 
-	// Law is the law that the check witnesses, and empty for a check of the
-	// consumer.
+	// Law is the law that the check witnesses. A derived check without a law
+	// takes the law of its claim.
 	Law spec.LawID
 
 	// Machineries are the machineries of the claim, the deepest first, and nil
@@ -145,7 +145,7 @@ type Check[S any] struct {
 // without a test.
 func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	tb.Helper()
-	cfg := configure(nil, opts)
+	cfg := configure(nil, nil, opts)
 	if invalid := cfg.invalid(); len(invalid) > 0 {
 		assert.Fault(tb, fmt.Errorf("%w: %s", ErrConfig, invalid[0]))
 		return
@@ -180,7 +180,7 @@ func (c Check[S]) apply(
 // a test.
 func (c Check[S]) Falsify(tb assert.TB, opts ...Option[S]) {
 	tb.Helper()
-	cfg := configure(nil, opts)
+	cfg := configure(nil, nil, opts)
 	c.falsify(tb, cfg, cfg.checks, new(verdict))
 }
 
@@ -255,6 +255,42 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S],
 		"directive excuse or conform.Excuse and a reason.", c.ID, c.vacuity())
 }
 
+// probe returns the probe of the check: its field Probe, and the probe of its
+// claim for a derived check without one.
+func (c *Check[S]) probe() spec.ProbeID {
+	if c.Probe == "" {
+		return c.claim().Probe
+	}
+	return c.Probe
+}
+
+// reason returns the reason code of the planted defect of the check: its field
+// Reason, and the reason code of the defect of its claim for a derived check
+// without one.
+func (c *Check[S]) reason() spec.ReasonID {
+	if c.Reason == "" {
+		return c.claim().Defect.Reason
+	}
+	return c.Reason
+}
+
+// law returns the law that the check witnesses: its field Law, and the law of
+// its claim for a derived check without one.
+func (c *Check[S]) law() spec.LawID {
+	if c.Law == "" {
+		return c.claim().Law
+	}
+	return c.Law
+}
+
+// claim returns the entry of the claim of the check in the copy of the spec,
+// and the zero claim for a check of the consumer and for a claim that the copy
+// does not contain.
+func (c *Check[S]) claim() spec.Claim {
+	claim, _ := spec.ClaimOf(c.Claim)
+	return claim
+}
+
 // faults reports whether the machineries of the check include
 // call-that-fails-on-demand, so a handle builds its subjects through the door
 // Faults.
@@ -273,7 +309,7 @@ func (f *firsts) failed(tb assert.TB) bool {
 // claim. It is the vacuous condition of the probe of the check. A check
 // without a probe is vacuous when no assertion passes its statement.
 func (c *Check[S]) vacuity() string {
-	if probe, _ := spec.ProbeOf(c.Probe); probe.Vacuous != "" {
+	if probe, _ := spec.ProbeOf(c.probe()); probe.Vacuous != "" {
 		return strings.ToLower(probe.Vacuous[:1]) + strings.TrimSuffix(probe.Vacuous[1:], ".")
 	}
 	return "no assertion ran with the statement of the check as its message"
@@ -355,7 +391,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 	}
 	contract := "the planted defect of " + string(c.ID) + " fails the check"
 	if c.Claim != "" {
-		contract += " with the reason " + string(c.Reason) + " of the claim " + string(c.Claim)
+		contract += " with the reason " + string(c.reason()) + " of the claim " + string(c.Claim)
 	}
 	rejects := func(seat assert.TB) []assert.Failure {
 		seat.Helper()
@@ -415,7 +451,8 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 		if set := kept.reason.Load(); set != nil {
 			reason = *set
 		}
-		if reason != c.Reason {
+		want := c.reason()
+		if reason != want {
 			v.set(resultWrongReason, kept)
 			c.wrongReason(tb, reason)
 			return false
@@ -424,7 +461,7 @@ func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 		// every call, and the defect of a check of the reason overran-budget
 		// waits past the budget on every call, so a check that calls its
 		// callable fails on it.
-		if !cfg.isolate || c.Reason == spec.Panicked || c.Reason == spec.OverranBudget {
+		if !cfg.isolate || want == spec.Panicked || want == spec.OverranBudget {
 			v.set(resultProven, kept)
 			return true
 		}
@@ -464,7 +501,7 @@ func (c Check[S]) wrongReason(tb assert.TB, reason spec.ReasonID) {
 	}
 	tb.Fatalf("the planted defect of %s fails the check %s, and the claim %s needs the reason %s. "+
 		"Call h.Expect with the reason before the decisive assertion of the probe.",
-		c.ID, with, c.Claim, c.Reason)
+		c.ID, with, c.Claim, c.reason())
 }
 
 // outside fails tb for a planted defect that fails the check with message,

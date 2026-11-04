@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"go.dokimi.dev/spec"
 )
 
 // T is the test of an application. *testing.T implements it. FailNow must
@@ -54,7 +56,7 @@ type T interface {
 func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	name := "Run" + suite.Declaration + "Suite"
-	cfg := configure(suite.overrides(t), opts)
+	cfg := configure(suite.overrides(t), suite.Checks, opts)
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification, onSubject)
 	newSubject = app.factory(cfg.factory(newSubject))
@@ -117,6 +119,15 @@ func stopAt(t failer, found []string) {
 func validate[S any](name string, suite Suite[S], cfg *config[S]) []string {
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
 	found := problems(name, checks, cfg.excusals, ceilingIDs(suite.Calls, cfg.ceilings))
+	if reason := cfg.suiteReason; reason != nil {
+		if *reason == "" {
+			found = append(found, "the excusal of the suite has no reason")
+		}
+		if len(suite.Checks) == 0 {
+			found = append(found, fmt.Sprintf("the excusal of the suite matches no check of %s, because the suite "+
+				"of %s has no checks", name, suite.Declaration))
+		}
+	}
 	return append(append(found, budgetProblems(name, suite.Calls, cfg.ceilings)...), cfg.invalid()...)
 }
 
@@ -149,8 +160,12 @@ func problems[S any](name string, checks []Check[S], excusals []excusal[S], know
 		if c.Defect == nil {
 			found = append(found, fmt.Sprintf("the check %s has no planted defect", c.ID))
 		}
-		if c.Claim != "" && c.Reason == "" {
-			found = append(found, fmt.Sprintf("the check %s has the claim %s and no reason", c.ID, c.Claim))
+		if c.Claim != "" && c.reason() == "" {
+			found = append(
+				found,
+				fmt.Sprintf("the check %s has no reason, and the spec %s does not contain its claim %s",
+					c.ID, spec.Version(), c.Claim),
+			)
 		}
 		if of, twice := repeated(c.Doors.Values); twice {
 			found = append(found, fmt.Sprintf("the check %s has two doors of a value of the type %v", c.ID, of))

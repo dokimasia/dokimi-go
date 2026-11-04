@@ -130,6 +130,13 @@ func TestRecord(t *testing.T) {
 			assert.Equal(t, []string{falsified.Checks[0].Result, falsified.Checks[1].Result},
 				[]string{"proven", "proven"}, "each defect proves its check")
 			assert.Equal(t, falsified.Checks[0].Claim, "read-after-write", "the record has the claim of the check")
+			claim, _ := spec.ClaimOf(spec.ReadAfterWrite)
+			assert.Equal(
+				t,
+				falsified.Checks[0].Law,
+				string(claim.Law),
+				"the record has the law of the claim of the check",
+			)
 			assert.Equal(
 				t,
 				falsified.Checks[0].Key,
@@ -359,6 +366,21 @@ func TestRecord(t *testing.T) {
 
 			assert.Equal(t, judged.Checks[0].Key, "store.get-all/keeps-the-value",
 				"the key splits the name of the callable into its words")
+		})
+
+		t.Run("records the law that a derived check states", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				c := derivedKeeps()
+				c.Law = spec.NoPanicOnAnyInput
+				conform.Run(t, suiteOf(c), newStore)
+				return
+			}
+			judged := recordsOf(t, childOutput(t))[1]
+
+			assert.Equal(t, judged.Checks[0].Law, string(spec.NoPanicOnAnyInput),
+				"the record has the law of the check in place of the law of its claim")
 		})
 
 		t.Run("records the number of cases of a property check", func(t *testing.T) {

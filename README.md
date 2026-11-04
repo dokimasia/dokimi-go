@@ -51,7 +51,8 @@ The options of an application change what it runs:
 | Option | Effect |
 |---|---|
 | `conform.With(checks...)` | Adds checks of your own. The application applies each of them to its planted defect before it applies the check to the subject |
-| `conform.Excuse(id, reason)` | Excuses a check that the subject does not pass |
+| `conform.Excuse(id, reason)` | Excuses a check that the subject does not pass, with its generated binding. `conform.Excuse(id.Generated(), reason)` excuses the generated binding alone |
+| `conform.ExcuseSuite[S](reason)` | Excuses every check of the suite, and no check of `With` and no ceiling of a budget |
 | `conform.Cases(n)` | Sets the number of cases of each property run |
 | `conform.Using[S](g)` | Adds the generator of a type, such as a value that only a registry builds |
 | `conform.Reference`, `conform.Second`, `conform.Restartable` and `conform.Crashable` | Supply the reference implementation, the second subject, the restart and the crash that a check needs and that only you can build |

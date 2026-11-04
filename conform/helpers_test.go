@@ -663,6 +663,7 @@ type record struct {
 		Identity       string           `json:"identity"`
 		Key            string           `json:"key"`
 		Claim          string           `json:"claim"`
+		Law            string           `json:"law"`
 		Result         string           `json:"result"`
 		Other          string           `json:"other"`
 		Why            string           `json:"why"`

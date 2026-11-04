@@ -175,6 +175,47 @@ func TestSuite(t *testing.T) {
 		})
 	})
 
+	t.Run("ExcuseSuite", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("skips each check of the suite", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Int32
+			first, second := keeps(), misses()
+			first.Apply = func(*conform.Handle[Store]) { applied.Add(1) }
+			second.Apply = func(*conform.Handle[Store]) { applied.Add(1) }
+			t.Cleanup(func() {
+				assert.Equal(t, applied.Load(), int32(0), "the application applies no check of the suite")
+			})
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{first, second}},
+				newStore, conform.ExcuseSuite[Store]("the test applies the checks of its options alone"))
+		})
+
+		t.Run("applies each check that With adds", func(t *testing.T) {
+			t.Parallel()
+
+			var applied atomic.Int32
+			c := misses()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				applied.Add(1)
+				apply(h)
+			}
+			t.Cleanup(func() {
+				assert.Equal(t, applied.Load(), int32(2),
+					"the application applies the added check to its defect and to the subject")
+			})
+			conform.Run(
+				t,
+				conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keeps()}},
+				newStore,
+				conform.With(c),
+				conform.ExcuseSuite[Store]("the test applies the checks of its options alone"),
+			)
+		})
+	})
+
 	t.Run("Reference", func(t *testing.T) {
 		t.Parallel()
 

@@ -141,7 +141,7 @@ func repeat[S any](
 func benchmarked[S any](
 	b B, name string, suite Suite[S], callable Callable[S], opts []Option[S],
 ) (*config[S], *Call[S], []string) {
-	cfg := configure(suite.overrides(b), opts)
+	cfg := configure(suite.overrides(b), suite.Checks, opts)
 	found := validate(name, suite, cfg)
 	for i := range suite.Calls {
 		call := &suite.Calls[i]

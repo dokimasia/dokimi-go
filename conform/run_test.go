@@ -393,6 +393,14 @@ func TestRun(t *testing.T) {
 				newStore)
 		})
 
+		t.Run("applies a derived check that takes its probe and its reason from its claim", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Probe, c.Reason = "", ""
+			conform.Run(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}, newStore)
+		})
+
 		tests := []struct {
 			name       string
 			giveSuite  conform.Suite[Store]
@@ -474,6 +482,21 @@ func TestRun(t *testing.T) {
 				wantErrors: []string{"the excusal of Store.Get/keeps-the-value has no reason"},
 			},
 			{
+				name:       "reports an excusal of the suite without a reason",
+				giveSuite:  suite,
+				giveOpts:   []conform.Option[Store]{conform.ExcuseSuite[Store]("")},
+				wantErrors: []string{"the excusal of the suite has no reason"},
+			},
+			{
+				name:      "reports an excusal of a suite without checks",
+				giveSuite: conform.Suite[Store]{Declaration: "Store"},
+				giveOpts:  []conform.Option[Store]{conform.ExcuseSuite[Store]("the store keeps no values")},
+				wantErrors: []string{
+					"the excusal of the suite matches no check of RunStoreSuite, because the suite of " +
+						"Store has no checks",
+				},
+			},
+			{
 				name: "reports a problem of a call of the suite",
 				giveSuite: func() conform.Suite[Store] {
 					s := budgeted(conform.Budget{})
@@ -485,9 +508,11 @@ func TestRun(t *testing.T) {
 			},
 			{
 				name:      "reports a derived check without a reason",
-				giveSuite: broken(func(c *conform.Check[Store]) { c.Claim = "read-after-write" }),
-				wantErrors: []string{"the check Store.Get/keeps-the-value has the claim read-after-write and no " +
-					"reason"},
+				giveSuite: broken(func(c *conform.Check[Store]) { c.Claim = "keeps-the-value" }),
+				wantErrors: []string{
+					"the check Store.Get/keeps-the-value has no reason, and the spec " + spec.Version() +
+						" does not contain its claim keeps-the-value",
+				},
 			},
 			{
 				name: "reports an edge to a check that the application lacks",

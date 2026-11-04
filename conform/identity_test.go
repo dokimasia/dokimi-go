@@ -25,4 +25,32 @@ func TestIdentity(t *testing.T) {
 				"the identity is the name of the callable, a slash and the segment")
 		})
 	})
+
+	t.Run("Generated", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			give conform.ID[Store]
+			want conform.ID[Store]
+		}{
+			{
+				name: "adds the case generated to an identity without a case",
+				give: "Store.Get/keeps-the-value",
+				want: "Store.Get/keeps-the-value#generated",
+			},
+			{
+				name: "adds the suffix generated to the case of an identity",
+				give: "Store.Get/expires#0",
+				want: "Store.Get/expires#0-generated",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				assert.Equal(t, tt.give.Generated(), tt.want, "Generated returns the identity of the generated binding")
+			})
+		}
+	})
 }

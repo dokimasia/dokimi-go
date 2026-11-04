@@ -543,6 +543,14 @@ func TestHandle(t *testing.T) {
 			c.Run(t, newStore)
 		})
 
+		t.Run("accepts a reason of the probe of the claim of a derived check", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Probe = ""
+			c.Run(t, newStore)
+		})
+
 		tests := []struct {
 			name      string
 			giveProbe spec.ProbeID

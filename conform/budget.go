@@ -63,7 +63,7 @@ type ceiling[S any] struct {
 func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Option[S]) {
 	t.Helper()
 	name := "Run" + suite.Declaration + "Budgets"
-	cfg := configure(suite.overrides(t), opts)
+	cfg := configure(suite.overrides(t), suite.Checks, opts)
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, onSubject)
 	newSubject = app.factory(cfg.factory(newSubject))
@@ -126,7 +126,7 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 // as [Falsify] does.
 func FalsifyAllocs[S any](t T, suite Suite[S]) {
 	t.Helper()
-	cfg := configure[S](suite.overrides(t), nil)
+	cfg := configure[S](suite.overrides(t), nil, nil)
 	name := suite.Declaration + "Suite"
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification)

@@ -34,7 +34,7 @@ func Fuzz[S any](
 	f *testing.F, suite Suite[S], callable Callable[S], newSubject func(h *Handle[S]) S, opts ...Option[S],
 ) {
 	f.Helper()
-	cfg := configure(suite.overrides(f), opts)
+	cfg := configure(suite.overrides(f), suite.Checks, opts)
 	stopAt(f, validate("Fuzz"+suite.Declaration+"Suite", suite, cfg))
 	newSubject = cfg.factory(newSubject)
 	var ids []ID[S]

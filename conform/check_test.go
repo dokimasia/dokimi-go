@@ -492,6 +492,15 @@ func TestCheck(t *testing.T) {
 			})
 		}
 
+		t.Run("falsifies a derived check by the reason of its claim", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Probe, c.Reason = "", ""
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.False(t, r.Failed(), "the planted defect fails the check with the reason of its claim")
+		})
+
 		t.Run("fails a derived check whose failed assertion bypasses the handle", func(t *testing.T) {
 			t.Parallel()
 
@@ -538,6 +547,20 @@ func TestCheck(t *testing.T) {
 			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
 			assert.Contains(t, r.Message(), "Store.Get/keeps-the-value never engaged: the write fails.",
 				"the probe of a derived check engages it")
+		})
+
+		t.Run("names the vacuous condition of the probe of the claim of a derived check", func(t *testing.T) {
+			t.Parallel()
+
+			c := derivedKeeps()
+			c.Probe, c.Reason = "", ""
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Expect(spec.UnobservedWrite)
+				keeps().Apply(h)
+			}
+			r := recorded(func(tb assert.TB) { c.Run(tb, newStore) })
+			assert.Contains(t, r.Message(), "Store.Get/keeps-the-value never engaged: the write fails.",
+				"the vacuous condition is the condition of the probe of the claim")
 		})
 
 		t.Run("passes a derived check that engages its claim", func(t *testing.T) {

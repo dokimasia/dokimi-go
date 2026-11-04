@@ -233,7 +233,7 @@ func (h *Handle[S]) Fresh() S {
 // the probe of the check does not list the reason.
 func (h *Handle[S]) Expect(reason spec.ReasonID) {
 	h.Helper()
-	probe, found := spec.ProbeOf(h.check.Probe)
+	probe, found := spec.ProbeOf(h.check.probe())
 	if !slices.Contains(probe.Reasons, reason) {
 		lists := "the check has no probe"
 		if found {
@@ -264,7 +264,7 @@ func (h *Handle[S]) Engage() {
 // through [Handle.Engage] alone, because the probe passes the statement to
 // the assertions of its guards too.
 func (h *Handle[S]) ObserveCall(call assert.Call) {
-	if h.check.Probe == "" && call.Contract == h.check.Statement {
+	if h.check.probe() == "" && call.Contract == h.check.Statement {
 		h.kept.engaged.Store(true)
 	}
 }

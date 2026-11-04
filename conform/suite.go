@@ -199,8 +199,17 @@ func With[S any](checks ...Check[S]) Option[S] {
 // excusal of a generated check excuses that check alone.
 func Excuse[S any](id ID[S], reason string) Option[S] {
 	return Option[S]{set: func(c *config[S]) {
-		c.excusals = append(c.excusals, excusal[S]{id: id, generated: id.generated(), reason: reason})
+		c.excusals = append(c.excusals, excusal[S]{id: id, generated: id.Generated(), reason: reason})
 	}}
+}
+
+// ExcuseSuite excuses each check of the field Checks of the suite from an
+// application. The application skips each such check with the reason. It does
+// not excuse a check that [With] adds or a ceiling of a budget. An application
+// fails when the reason is empty, and when the suite has no check. A later
+// ExcuseSuite replaces the reason of an earlier one.
+func ExcuseSuite[S any](reason string) Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.suiteReason = &reason }}
 }
 
 // Reference supplies the reference implementations of an application.
@@ -325,6 +334,12 @@ type config[S any] struct {
 	// excusals are the excusals of Excuse in the order of the options.
 	excusals []excusal[S]
 
+	// suiteReason is the reason of the option ExcuseSuite, and nil without the
+	// option. suite contains the identity of each check of the suite under the
+	// option.
+	suiteReason *string
+	suite       map[ID[S]]bool
+
 	// ceilings are the budgets of the option Ceilings in the order of the
 	// options.
 	ceilings []stated[S]
@@ -377,6 +392,9 @@ func (c *config[S]) excused(id ID[S]) (string, bool) {
 			return e.reason, true
 		}
 	}
+	if c.suite[id] {
+		return *c.suiteReason, true
+	}
 	return "", false
 }
 
@@ -397,11 +415,18 @@ type stated[S any] struct {
 
 // configure returns the configuration that opts and the variable DOKIMI_SEED
 // set, with the overrides using of the suite before the generators of opts.
-func configure[S any](using []prop.Option, opts []Option[S]) *config[S] {
+// checks are the checks of the suite, which the option ExcuseSuite excuses.
+func configure[S any](using []prop.Option, checks []Check[S], opts []Option[S]) *config[S] {
 	c := &config[S]{using: slices.Clip(using)}
 	for _, o := range opts {
 		if o.set != nil {
 			o.set(c)
+		}
+	}
+	if c.suiteReason != nil {
+		c.suite = make(map[ID[S]]bool, len(checks))
+		for i := range checks {
+			c.suite[checks[i].ID] = true
 		}
 	}
 	if text, set := os.LookupEnv(seedEnv); set {

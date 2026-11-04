@@ -50,12 +50,12 @@ func (id ID[S]) subtest() string {
 	return string(id)
 }
 
-// generated returns the identity of the check that generates the inputs of the
-// check with the identity id. It adds the case generated to an identity
-// without a case, such as Store.Get/keeps-the-value#generated, and the suffix
-// -generated to the case of any other identity, such as
-// Store.Get/expires#0-generated.
-func (id ID[S]) generated() ID[S] {
+// Generated returns the identity of the generated binding of the check with
+// the identity id: the check that generates the inputs of its calls. It adds
+// the case generated to an identity without a case, such as
+// Store.Get/keeps-the-value#generated, and the suffix -generated to the case
+// of any other identity, such as Store.Get/expires#0-generated.
+func (id ID[S]) Generated() ID[S] {
 	if strings.Contains(string(id), "#") {
 		return id + "-generated"
 	}

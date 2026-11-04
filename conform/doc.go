@@ -24,10 +24,11 @@
 //		storetest.RunStoreSuite(t, storetest.NewInMemory, conform.With(keepsTheValue()))
 //	}
 //
-// The options of an application also excuse a check through [Excuse], set the
-// number of cases of each property run through [Cases], state the generator of
-// a type through [Using], and supply the machinery that only the consumer can
-// build through [Reference], [Second], [Restartable], [Crashable], [Durable],
+// The options of an application also excuse a check through [Excuse], excuse
+// every check of the suite through [ExcuseSuite], set the number of cases of
+// each property run through [Cases], state the generator of a type through
+// [Using], and supply the machinery that only the consumer can build through
+// [Reference], [Second], [Restartable], [Crashable], [Durable],
 // [Faultable] and [Supplies]. A subject of [Faultable] asks an [Injector] at
 // each call of a dependency, through [FaultOf] for a double, so a probe can
 // fail the calls of the dependencies and read the calls that the subject

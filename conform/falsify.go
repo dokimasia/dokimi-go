@@ -49,7 +49,7 @@ import (
 // *testing.T, as [Run] writes its records.
 func Falsify[S any](t T, suite Suite[S]) {
 	t.Helper()
-	cfg := configure[S](suite.overrides(t), nil)
+	cfg := configure[S](suite.overrides(t), nil, nil)
 	name := suite.Declaration + "Suite"
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification)

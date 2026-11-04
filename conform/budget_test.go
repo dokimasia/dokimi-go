@@ -445,6 +445,18 @@ func TestBudgetAllocs(t *testing.T) {
 				conform.Excuse(storeGet.Check("keeps-every-value"), "the store keeps no values"))
 		})
 
+		t.Run("applies each ceiling of a budget under the excusal of the suite", func(t *testing.T) {
+			skipUnchecked(t)
+			var built atomic.Int32
+			suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
+			suite.Checks = []conform.Check[Store]{countedEvery()}
+			conform.RunBudgets(t, suite, func(h *conform.Handle[Store]) Store {
+				built.Add(1)
+				return forget(h)
+			}, conform.ExcuseSuite[Store]("the test applies the ceilings alone"))
+			assert.True(t, built.Load() > 0, "the ceiling of the budget runs on subjects of the factory")
+		})
+
 		t.Run("falsifies a check that counts allocations of the option With before it applies it", func(t *testing.T) {
 			skipUnchecked(t)
 			var falsified atomic.Bool
