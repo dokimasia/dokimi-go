@@ -169,6 +169,10 @@ type CheckRecord struct {
 	// Reason is the reason code that the probe reported.
 	Reason ReasonID `json:"reason,omitempty"`
 
+	// World is the record of the world of a check that runs one, and nil for
+	// every other check.
+	World *WorldRecord `json:"world,omitempty"`
+
 	Machineries []MachineryID `json:"machineries,omitempty"`
 
 	// Cases is the number of valid cases of a property check.
@@ -182,6 +186,65 @@ type CheckRecord struct {
 
 	// Authored is true for a check of the directive check.
 	Authored bool `json:"authored,omitempty"`
+}
+
+// Mode is the execution mode of the world of a check.
+type Mode string
+
+// The modes of a world.
+const (
+	// ModeTasks runs the subject as tasks of the task scheduler, and a replay
+	// of a case repeats the whole case.
+	ModeTasks Mode = "tasks"
+	// ModeNative runs the subject on goroutines in a testing/synctest bubble,
+	// and a replay of a case repeats the choices of the case alone.
+	ModeNative Mode = "native"
+)
+
+// Modes are the modes of a world, in the order of the record table of the
+// spec.
+var Modes = []Mode{ModeTasks, ModeNative}
+
+// WorldRecord is the record of the world of a check over the cases of its
+// run. The world runs the subject on a simulated host, crashes it, strikes
+// faults of its machine and advances its clocks.
+type WorldRecord struct {
+	Mode Mode `json:"mode"`
+
+	// Crashes is the number of the crashes of the subject by the kind of the
+	// crash, such as power-loss.
+	Crashes map[string]int `json:"crashes,omitempty"`
+
+	Faults WorldFaults `json:"faults"`
+
+	// Leaked is the stack of each goroutine of a crashed incarnation of the
+	// subject that was alive after quiescence.
+	Leaked []string `json:"leaked,omitempty"`
+
+	// Replays is the number of the replays of a failing case, and Reproduced
+	// is the number of the replays that reproduced its failure. Both are 0
+	// for a run without a failing case.
+	Replays    int `json:"replays,omitempty"`
+	Reproduced int `json:"reproduced,omitempty"`
+
+	// Steps is the number of the steps of the world over the cases of the
+	// run.
+	Steps int `json:"steps"`
+
+	// Undecided is the number of the partitions of a history whose search
+	// ended undecided at its budget.
+	Undecided int `json:"undecided,omitempty"`
+}
+
+// WorldFaults are the faults of the world of a check.
+type WorldFaults struct {
+	// Struck is the number of the strikes of each fault, by the name of the
+	// fault, such as hold.
+	Struck map[string]int `json:"struck,omitempty"`
+
+	// Vacuous are the faults that the world recorded as vacuous, such as the
+	// faults of a clock that the subject never read.
+	Vacuous []string `json:"vacuous,omitempty"`
 }
 
 // RefusalRecord is a licensed claim whose gate fails for a callable.

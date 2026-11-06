@@ -135,6 +135,67 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$"
           },
+          "world": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "tasks",
+                  "native"
+                ]
+              },
+              "crashes": {
+                "type": "object"
+              },
+              "faults": {
+                "type": "object",
+                "properties": {
+                  "struck": {
+                    "type": "object"
+                  },
+                  "vacuous": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "leaked": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "replays": {
+                "type": "integer"
+              },
+              "reproduced": {
+                "type": "integer"
+              },
+              "steps": {
+                "type": "integer"
+              },
+              "undecided": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "mode",
+              "faults",
+              "steps"
+            ]
+          },
           "machineries": {
             "type": [
               "null",

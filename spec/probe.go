@@ -85,6 +85,13 @@ const (
 	// its partner over a subject that the probe opens, by the index of a
 	// sample, with the value and the key that each sample writes.
 	KindDurable InputKind = "durable"
+
+	// KindWorld is the world of the subject of a handle: the operations that
+	// its clients call, the reference that judges the history of their calls,
+	// the number of clients and the bound of a call after the recovery. Each
+	// operation requests its input from the case, and states the arguments
+	// and the keys of a call in the history.
+	KindWorld InputKind = "world"
 )
 
 // Input is one input of a probe.

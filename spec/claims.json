@@ -1768,6 +1768,42 @@
       ]
     },
     {
+      "id": "linearizable-under-faults",
+      "law": "history-under-faults-is-linearizable",
+      "statement": "the history of the calls of {declaration} through crashes and faults has a linearization that the reference accepts",
+      "probe": "faulty-world-history",
+      "defect": {
+        "form": "amnesiac-recovery",
+        "reason": "not-linearizable-under-faults"
+      },
+      "since": "2.1.0",
+      "machineries": [
+        "quiescence",
+        "concurrent-callers",
+        "generated-sequences",
+        "killable-process-or-breakable-medium",
+        "call-that-fails-on-demand",
+        "reference-implementation",
+        "clock-the-run-advances"
+      ]
+    },
+    {
+      "id": "completes-after-recovery",
+      "law": "call-completes-after-recovery",
+      "statement": "each call of {declaration} completes within the bound of the world once every fault ends and the subject opens again",
+      "probe": "world-recovery",
+      "defect": {
+        "form": "blocks-after-recovery",
+        "reason": "call-open-after-recovery"
+      },
+      "since": "2.1.0",
+      "machineries": [
+        "quiescence",
+        "generated-sequences",
+        "killable-process-or-breakable-medium"
+      ]
+    },
+    {
       "id": "delivers-each-append",
       "law": "each-append-is-delivered",
       "statement": "each message that {callable} records arrives on the channel of {subscribe}",

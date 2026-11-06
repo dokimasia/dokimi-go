@@ -509,6 +509,16 @@
       "id": "not-snapshot-isolated",
       "meaning": "The transactions of a history had an anomaly that snapshot isolation excludes, such as a dirty read or a lost update.",
       "since": "1.2.0"
+    },
+    {
+      "id": "not-linearizable-under-faults",
+      "meaning": "A partition of the history of the concurrent calls through crashes and faults had no order that respects their real-time order and that the reference accepts.",
+      "since": "2.1.0"
+    },
+    {
+      "id": "call-open-after-recovery",
+      "meaning": "A call that started after every fault ended and the subject opened again had not completed within the bound of the world.",
+      "since": "2.1.0"
     }
   ]
 }

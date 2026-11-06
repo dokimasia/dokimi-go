@@ -559,6 +559,16 @@
       "id": "writes-without-a-snapshot",
       "does": "The write keeps its value in a field of the defect, and a read returns the value that its own transaction kept for the key. The commit applies the kept writes in a transaction of its own, which begins at the commit, so two transactions that write one key both commit. The defect yields after each call of a transaction.",
       "since": "1.2.0"
+    },
+    {
+      "id": "amnesiac-recovery",
+      "does": "Each restart opens the subject over a new medium.",
+      "since": "2.1.0"
+    },
+    {
+      "id": "blocks-after-recovery",
+      "does": "Each call after the first restart blocks until its case ends.",
+      "since": "2.1.0"
     }
   ]
 }

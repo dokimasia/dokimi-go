@@ -73,6 +73,10 @@
         "go": "Commutative",
         "typescript": "commutative"
       },
+      "completes-after-recovery": {
+        "go": "CompletesAfterRecovery",
+        "typescript": "completesAfterRecovery"
+      },
       "compounds-over-sequences": {
         "go": "CompoundsOverSequences",
         "typescript": "compoundsOverSequences"
@@ -236,6 +240,10 @@
       "linearizable": {
         "go": "Linearizable",
         "typescript": "linearizable"
+      },
+      "linearizable-under-faults": {
+        "go": "LinearizableUnderFaults",
+        "typescript": "linearizableUnderFaults"
       },
       "merges-in-any-order": {
         "go": "MergesInAnyOrder",
@@ -603,6 +611,10 @@
         "go": "AdmitsTheSize",
         "typescript": "admitsTheSize"
       },
+      "amnesiac-recovery": {
+        "go": "AmnesiacRecovery",
+        "typescript": "amnesiacRecovery"
+      },
       "answers-a-sample": {
         "go": "AnswersASample",
         "typescript": "answersASample"
@@ -610,6 +622,10 @@
       "balances-each-call": {
         "go": "BalancesEachCall",
         "typescript": "balancesEachCall"
+      },
+      "blocks-after-recovery": {
+        "go": "BlocksAfterRecovery",
+        "typescript": "blocksAfterRecovery"
       },
       "breaks-the-mode-after-three": {
         "go": "BreaksTheModeAfterThree",
@@ -1291,6 +1307,10 @@
         "go": "CallAcceptsItsDeclaredDomain",
         "typescript": "callAcceptsItsDeclaredDomain"
       },
+      "call-completes-after-recovery": {
+        "go": "CallCompletesAfterRecovery",
+        "typescript": "callCompletesAfterRecovery"
+      },
       "call-converges-once-its-scope-is-open": {
         "go": "CallConvergesOnceItsScopeIsOpen",
         "typescript": "callConvergesOnceItsScopeIsOpen"
@@ -1454,6 +1474,10 @@
       "history-replays-in-its-stamped-order": {
         "go": "HistoryReplaysInItsStampedOrder",
         "typescript": "historyReplaysInItsStampedOrder"
+      },
+      "history-under-faults-is-linearizable": {
+        "go": "HistoryUnderFaultsIsLinearizable",
+        "typescript": "historyUnderFaultsIsLinearizable"
       },
       "induced-failure-latches": {
         "go": "InducedFailureLatches",
@@ -1757,6 +1781,10 @@
         "go": "NothingBeyondACaller",
         "typescript": "nothingBeyondACaller"
       },
+      "quiescence": {
+        "go": "Quiescence",
+        "typescript": "quiescence"
+      },
       "reference-implementation": {
         "go": "ReferenceImplementation",
         "typescript": "referenceImplementation"
@@ -1890,6 +1918,10 @@
       "fails-without-effect": {
         "go": "FailsWithoutEffect",
         "typescript": "failsWithoutEffect"
+      },
+      "faulty-world-history": {
+        "go": "FaultyWorldHistory",
+        "typescript": "faultyWorldHistory"
       },
       "field-beside-error": {
         "go": "FieldBesideError",
@@ -2255,6 +2287,10 @@
         "go": "WorksAfter",
         "typescript": "worksAfter"
       },
+      "world-recovery": {
+        "go": "WorldRecovery",
+        "typescript": "worldRecovery"
+      },
       "write-then-read": {
         "go": "WriteThenRead",
         "typescript": "writeThenRead"
@@ -2308,6 +2344,10 @@
       "cache-disagrees": {
         "go": "CacheDisagrees",
         "typescript": "cacheDisagrees"
+      },
+      "call-open-after-recovery": {
+        "go": "CallOpenAfterRecovery",
+        "typescript": "callOpenAfterRecovery"
       },
       "call-without-reply": {
         "go": "CallWithoutReply",
@@ -2472,6 +2512,10 @@
       "not-linearizable": {
         "go": "NotLinearizable",
         "typescript": "notLinearizable"
+      },
+      "not-linearizable-under-faults": {
+        "go": "NotLinearizableUnderFaults",
+        "typescript": "notLinearizableUnderFaults"
       },
       "not-redelivered": {
         "go": "NotRedelivered",

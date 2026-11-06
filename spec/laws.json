@@ -579,6 +579,16 @@
       "id": "concurrent-transactions-are-snapshot-isolated",
       "statement": "Every history of concurrent transactions has no anomaly that snapshot isolation excludes, such as a dirty read or a lost update.",
       "since": "1.2.0"
+    },
+    {
+      "id": "history-under-faults-is-linearizable",
+      "statement": "Through crashes of the subject and faults of its medium, its dependencies and its clock, each partition of the history of concurrent calls has an order that respects their real-time order and that the reference accepts.",
+      "since": "2.1.0"
+    },
+    {
+      "id": "call-completes-after-recovery",
+      "statement": "Once every fault ends and the subject opens again, each call completes within the bound of the world.",
+      "since": "2.1.0"
     }
   ]
 }

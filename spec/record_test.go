@@ -88,6 +88,25 @@ const failing = `{
   "unclaimed": []
 }`
 
+// world is the record of the world of a check in native mode, whose failing
+// case seven of ten replays reproduced.
+const world = `{
+  "mode": "native",
+  "replays": 10,
+  "reproduced": 7,
+  "steps": 412,
+  "crashes": {"process-crash": 9, "power-loss": 4},
+  "faults": {"struck": {"fail-before": 3, "hold": 1}, "vacuous": ["bump", "strobe"]},
+  "undecided": 1,
+  "leaked": ["goroutine 42 [chan receive]:"]
+}`
+
+// withWorld returns the example record whose first check has the record of
+// the world w.
+func withWorld(w string) string {
+	return strings.Replace(example, `"shallow": false,`, `"shallow": false, "world": `+w+`,`, 1)
+}
+
 // jsonFields returns the names of the JSON fields of the struct type t, in
 // order.
 func jsonFields(t reflect.Type) []string {
@@ -121,6 +140,12 @@ func TestRecord(t *testing.T) {
 			assert.NoError(t, spec.ValidateSuiteRecord([]byte(record)), "the record validates")
 		})
 
+		t.Run("accepts the record of the world of a check", func(t *testing.T) {
+			t.Parallel()
+
+			assert.NoError(t, spec.ValidateSuiteRecord([]byte(withWorld(world))), "the record validates")
+		})
+
 		tests := []struct {
 			name       string
 			giveRecord string
@@ -142,6 +167,16 @@ func TestRecord(t *testing.T) {
 				name:       "refuses points that are no integer",
 				giveRecord: strings.Replace(example, `"shallow": false,`, `"shallow": false, "points": "82",`, 1),
 				want:       "points",
+			},
+			{
+				name:       "refuses a world of a mode outside the spec",
+				giveRecord: withWorld(strings.Replace(world, `"native"`, `"simulated"`, 1)),
+				want:       "mode",
+			},
+			{
+				name:       "refuses a world without its steps",
+				giveRecord: withWorld(strings.Replace(world, `"steps": 412,`, "", 1)),
+				want:       "steps",
 			},
 		}
 		for _, tt := range tests {
@@ -185,6 +220,15 @@ func TestRecord(t *testing.T) {
 			{
 				name:     "has a field for each property of a check",
 				giveType: reflect.TypeFor[spec.CheckRecord](), wantSchema: items("checks"),
+			},
+			{
+				name:     "has a field for each property of the world of a check",
+				giveType: reflect.TypeFor[spec.WorldRecord](), wantSchema: items("checks").Properties["world"],
+			},
+			{
+				name:       "has a field for each property of the faults of a world",
+				giveType:   reflect.TypeFor[spec.WorldFaults](),
+				wantSchema: items("checks").Properties["world"].Properties["faults"],
 			},
 			{
 				name:     "has a field for each property of a refusal",

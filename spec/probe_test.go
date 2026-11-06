@@ -38,7 +38,7 @@ func TestProbe(t *testing.T) {
 				spec.KindCall, spec.KindValue, spec.KindError, spec.KindDuration, spec.KindCount, spec.KindProjection,
 				spec.KindScope, spec.KindHook, spec.KindPredicate, spec.KindClock, spec.KindValues,
 				spec.KindActions, spec.KindOperation, spec.KindApply, spec.KindReference,
-				spec.KindPull, spec.KindChannel, spec.KindHandleMethod, spec.KindDurable,
+				spec.KindPull, spec.KindChannel, spec.KindHandleMethod, spec.KindDurable, spec.KindWorld,
 			}
 
 			for _, p := range spec.Probes() {
