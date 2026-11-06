@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.4.0
+
+### Minor Changes
+
+- c240592: Add `sim.Component.Running` to report whether an incarnation of a component process runs.
+
 ## 0.3.0
 
 ### Minor Changes
