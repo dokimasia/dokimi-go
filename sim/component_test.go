@@ -119,6 +119,38 @@ func TestComponent(t *testing.T) {
 		})
 	})
 
+	t.Run("Running", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			give func(w *sim.World[event, effect])
+			want bool
+		}{
+			{name: "reports true while an incarnation of the component runs", want: true},
+			{name: "reports false while the component has crashed", give: func(w *sim.World[event, effect]) {
+				w.Crash("a")
+			}},
+			{name: "reports false after the stop of the world", give: (*sim.World[event, effect]).Stop},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var got bool
+				inBubble(t, still, func(c *prop.Case, _ bool) {
+					w, a, _ := cells(c)
+					if tt.give != nil {
+						tt.give(w)
+					}
+					got = a.Running()
+					w.Stop()
+				})
+
+				assert.Equal(t, got, tt.want, "the component a runs as the world left it")
+			})
+		}
+	})
+
 	t.Run("ComponentOf", func(t *testing.T) {
 		t.Parallel()
 

@@ -103,6 +103,14 @@ func ComponentOf[T, E, F any](w *World[E, F], name string) *Component[T] {
 	return c
 }
 
+// Running reports whether an incarnation of the process runs, so that Value
+// returns its value. It reports false while the process has crashed and after
+// the stop of the world, such as for the check of an invariant that follows
+// the stop.
+func (c *Component[T]) Running() bool {
+	return c.c.inc != nil
+}
+
 // Value returns the value of the incarnation that runs. It fails the case of
 // the world while the process has crashed or stopped.
 func (c *Component[T]) Value() T {
