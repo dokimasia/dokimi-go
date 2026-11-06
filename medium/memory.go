@@ -21,10 +21,11 @@ const root = "."
 
 // Memory is an FS in memory that keeps the data that a sync made durable apart
 // from the data written since, as the package states the model of
-// persistence. Its methods crash it, tear a write, corrupt a byte at rest and
-// fill it, so a check exercises what a crash, a power loss in the middle of a
-// write, a flipped bit and a full disk leave a durable subject. A Memory is
-// safe for concurrent use.
+// persistence. Its methods crash it, kill its process, tear a write, corrupt a
+// byte at rest, fill it, fail a call and block its calls, so a check exercises
+// what a crash, the kill of a process, a power loss in the middle of a write,
+// a flipped bit, a full disk, a failed read or write and a slow disk leave a
+// durable subject. A Memory is safe for concurrent use.
 type Memory struct {
 	// current maps the name of each entry that the process reads to its
 	// node, and durable maps the name of each entry that a SyncDir of its
@@ -35,6 +36,15 @@ type Memory struct {
 	// crash replaces. A file that the medium opened in an earlier epoch is
 	// closed.
 	epoch *int
+
+	// fault is the failure that FailBefore, FailAfter or FailPart armed, and
+	// nil without one.
+	fault *failure
+
+	// hold is the hold of the calls that Hold started, and nil without one.
+	hold *hold
+
+	mu sync.Mutex
 
 	// points counts the persistence points, and crashAt is the persistence
 	// point in place of whose next operation the medium crashes, or -1.
@@ -47,8 +57,6 @@ type Memory struct {
 	// written counts the bytes of the writes, and limit is the count at
 	// which the writes stop, or -1.
 	written, limit int64
-
-	mu sync.Mutex
 
 	// down reports that the medium crashed in place of a persistence point,
 	// so it serves no call until Crash.
@@ -72,14 +80,44 @@ func NewMemory() *Memory {
 // writes of its file before it and its own first bytes. Each open file is
 // closed, and its later calls fail with ErrCrashed. The medium then serves the
 // calls of a new process. A crash after CrashAt does not drop anything more.
-// Crash ends a crash that CrashAt armed and that did not happen.
+// Crash ends a crash that CrashAt armed and that did not happen, the failure
+// that FailBefore, FailAfter or FailPart armed, and a hold. Each call that the
+// hold blocked fails with ErrCrashed.
 func (m *Memory) Crash() {
+	m.crash(nil)
+}
+
+// CrashKeeping crashes the medium as Crash does, and keeps of each file name
+// the first keep(name, pending) of its pending writes and truncates, in the
+// order of the calls. It drops the other pending calls of the file. A count of
+// 0 drops every pending call, and a count of pending or more keeps every one.
+// The last kept call of a file is torn where Tear armed it, and an armed write
+// that a later kept call follows is kept whole. The pending entries of each
+// directory are kept or dropped as a whole, by keep of the name of the
+// directory with a count of 1.
+//
+// CrashKeeping calls keep for the directories and then for the files that the
+// crash keeps, each in the order of their names, and only for those whose
+// entries or calls are pending. keep must not call the medium. A medium that
+// crashed in place of a persistence point dropped its pending state already,
+// so CrashKeeping calls keep for no name then.
+func (m *Memory) CrashKeeping(keep func(name string, pending int) int) {
+	m.crash(keep)
+}
+
+// Kill ends the process that the medium serves, as a kill of the process does.
+// Each open file is closed, and its later calls fail with ErrCrashed. The data
+// of every write remains, durable or pending, so a later crash drops what no
+// sync covered. Kill ends what Crash ends: a crash that CrashAt armed, the
+// failure that FailBefore, FailAfter or FailPart armed, and a hold. Each call
+// that the hold blocked fails with ErrCrashed. Kill also ends a tear that no
+// write took, and a medium that crashed in place of a persistence point serves
+// the calls of the next process.
+func (m *Memory) Kill() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.down {
-		m.drop()
-	}
-	m.down, m.crashAt = false, -1
+	m.epoch, m.tear = new(int), -1
+	m.restart()
 }
 
 // CrashAt makes the medium crash in place of its persistence point point+1:
@@ -128,6 +166,58 @@ func (m *Memory) Fill(n int64) {
 	}
 }
 
+// FailBefore makes the next call of the medium or of one of its files fail
+// with an error that wraps err, and the call does not change the medium. A
+// later FailBefore, FailAfter or FailPart replaces it.
+func (m *Memory) FailBefore(err error) {
+	m.arm(&failure{err: err, stage: before})
+}
+
+// FailAfter makes the next call of the medium or of one of its files take its
+// whole effect, and then fail with an error that wraps err. The call returns
+// its results beside the error. A call that fails on its own returns its own
+// error. A later FailBefore, FailAfter or FailPart replaces it.
+func (m *Memory) FailAfter(err error) {
+	m.arm(&failure{err: err, stage: after})
+}
+
+// FailPart makes the next write of a file of the medium write its first n
+// bytes, and then fail with an error that wraps err. The write returns the
+// count of the bytes that it wrote beside the error, and writes no byte for an
+// n below 0. A later FailBefore, FailAfter or FailPart replaces it.
+func (m *Memory) FailPart(n int, err error) {
+	m.arm(&failure{err: err, stage: part, part: n})
+}
+
+// Hold blocks each later call of the medium and of its files until Release or
+// Crash. A call that a crash ends fails with ErrCrashed. A blocked call waits
+// on a channel that Hold makes, so a call that blocks in a testing/synctest
+// bubble whose goroutine called Hold is durably blocked. A Hold while a hold
+// is in force changes nothing.
+func (m *Memory) Hold() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.hold == nil {
+		m.hold = &hold{released: make(chan struct{})}
+	}
+}
+
+// Release ends the hold of the medium, and each blocked call goes on.
+// Release without a hold changes nothing.
+func (m *Memory) Release() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.release(false)
+}
+
+// Held reports whether a hold of Hold is in force. A Release and a crash end
+// the hold.
+func (m *Memory) Held() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.hold != nil
+}
+
 // Points returns the number of persistence points so far: each Sync and each
 // SyncDir that returned nil.
 func (m *Memory) Points() int {
@@ -148,137 +238,150 @@ func (m *Memory) Written() int64 {
 // with perm where flag contains os.O_CREATE. A created file is a pending
 // entry of its directory.
 func (m *Memory) OpenFile(name string, flag int, perm fs.FileMode) (File, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.check("open", name); err != nil {
-		return nil, err
-	}
-	n, exists := m.current[name]
-	switch {
-	case exists && flag&os.O_CREATE != 0 && flag&os.O_EXCL != 0:
-		return nil, pathError("open", name, fs.ErrExist)
-	case exists && n.dir:
-		return nil, pathError("open", name, syscall.EISDIR)
-	case !exists && flag&os.O_CREATE == 0:
-		return nil, pathError("open", name, fs.ErrNotExist)
-	case !exists:
-		if err := m.parent("open", name); err != nil {
-			return nil, err
+	var opened File
+	err := m.serve("open", name, func() error {
+		if err := m.check("open", name); err != nil {
+			return err
 		}
-		n = &node{mode: perm.Perm()}
-		m.current[name] = n
-	}
-	if flag&os.O_TRUNC != 0 {
-		n.apply(op{off: 0, truncate: true, keep: -1})
-	}
-	return &file{m: m, n: n, name: name, flag: flag, epoch: m.epoch}, nil
+		n, exists := m.current[name]
+		switch {
+		case exists && flag&os.O_CREATE != 0 && flag&os.O_EXCL != 0:
+			return pathError("open", name, fs.ErrExist)
+		case exists && n.dir:
+			return pathError("open", name, syscall.EISDIR)
+		case !exists && flag&os.O_CREATE == 0:
+			return pathError("open", name, fs.ErrNotExist)
+		case !exists:
+			if err := m.parent("open", name); err != nil {
+				return err
+			}
+			n = &node{mode: perm.Perm()}
+			m.current[name] = n
+		}
+		if flag&os.O_TRUNC != 0 {
+			n.apply(op{off: 0, truncate: true, keep: -1})
+		}
+		opened = &file{m: m, n: n, name: name, flag: flag, epoch: m.epoch}
+		return nil
+	})
+	return opened, err
 }
 
 // Remove removes the file or the empty directory name from the pending
 // entries of its directory.
 func (m *Memory) Remove(name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.check("remove", name); err != nil {
-		return err
-	}
-	_, exists := m.current[name]
-	switch {
-	case name == root:
-		return pathError("remove", name, fs.ErrInvalid)
-	case !exists:
-		return pathError("remove", name, fs.ErrNotExist)
-	case m.children(name):
-		return pathError("remove", name, syscall.ENOTEMPTY)
-	}
-	delete(m.current, name)
-	return nil
+	return m.serve("remove", name, func() error {
+		if err := m.check("remove", name); err != nil {
+			return err
+		}
+		_, exists := m.current[name]
+		switch {
+		case name == root:
+			return pathError("remove", name, fs.ErrInvalid)
+		case !exists:
+			return pathError("remove", name, fs.ErrNotExist)
+		case m.children(name):
+			return pathError("remove", name, syscall.ENOTEMPTY)
+		}
+		delete(m.current, name)
+		return nil
+	})
 }
 
 // Rename moves the file or the directory oldName to newName in the pending
 // entries of their directories, and replaces a file at newName, or an empty
 // directory at newName with a directory.
 func (m *Memory) Rename(oldName, newName string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.renamable(oldName, newName); err != nil {
-		return &os.LinkError{Op: "rename", Old: oldName, New: newName, Err: err}
-	}
-	moved := map[string]*node{}
-	for name, n := range m.current {
-		if name == oldName || strings.HasPrefix(name, oldName+"/") {
-			moved[newName+strings.TrimPrefix(name, oldName)] = n
-			delete(m.current, name)
+	return m.serve("rename", oldName, func() error {
+		if err := m.renamable(oldName, newName); err != nil {
+			return &os.LinkError{Op: "rename", Old: oldName, New: newName, Err: err}
 		}
-	}
-	maps.Copy(m.current, moved)
-	return nil
+		moved := map[string]*node{}
+		for name, n := range m.current {
+			if name == oldName || strings.HasPrefix(name, oldName+"/") {
+				moved[newName+strings.TrimPrefix(name, oldName)] = n
+				delete(m.current, name)
+			}
+		}
+		maps.Copy(m.current, moved)
+		return nil
+	})
 }
 
 // MkdirAll creates the directory name and each parent that it lacks, each a
 // pending entry of its directory.
 func (m *Memory) MkdirAll(name string, perm fs.FileMode) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.check("mkdir", name); err != nil {
-		return err
-	}
-	parts := strings.Split(name, "/")
-	for i := range parts {
-		dir := strings.Join(parts[:i+1], "/")
-		n, exists := m.current[dir]
-		switch {
-		case !exists:
-			m.current[dir] = &node{dir: true, mode: perm.Perm()}
-		case !n.dir:
-			return pathError("mkdir", dir, syscall.ENOTDIR)
+	return m.serve("mkdir", name, func() error {
+		if err := m.check("mkdir", name); err != nil {
+			return err
 		}
-	}
-	return nil
+		parts := strings.Split(name, "/")
+		for i := range parts {
+			dir := strings.Join(parts[:i+1], "/")
+			n, exists := m.current[dir]
+			switch {
+			case !exists:
+				m.current[dir] = &node{dir: true, mode: perm.Perm()}
+			case !n.dir:
+				return pathError("mkdir", dir, syscall.ENOTDIR)
+			}
+		}
+		return nil
+	})
 }
 
 // ReadDir returns the entries of the directory name, sorted by name.
 func (m *Memory) ReadDir(name string) ([]fs.DirEntry, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.dir("readdir", name); err != nil {
-		return nil, err
-	}
 	var out []fs.DirEntry
-	for entry, n := range m.current {
-		if entry != root && path.Dir(entry) == name {
-			out = append(out, fs.FileInfoToDirEntry(n.info(entry)))
+	err := m.serve("readdir", name, func() error {
+		if err := m.dir("readdir", name); err != nil {
+			return err
 		}
-	}
-	slices.SortFunc(out, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
-	return out, nil
+		for entry, n := range m.current {
+			if entry != root && path.Dir(entry) == name {
+				out = append(out, fs.FileInfoToDirEntry(n.info(entry)))
+			}
+		}
+		slices.SortFunc(out, func(a, b fs.DirEntry) int { return strings.Compare(a.Name(), b.Name()) })
+		return nil
+	})
+	return out, err
 }
 
 // Stat returns the information of the file or the directory name.
 func (m *Memory) Stat(name string) (fs.FileInfo, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.check("stat", name); err != nil {
-		return nil, err
-	}
-	n, exists := m.current[name]
-	if !exists {
-		return nil, pathError("stat", name, fs.ErrNotExist)
-	}
-	return n.info(name), nil
+	var stat fs.FileInfo
+	err := m.serve("stat", name, func() error {
+		if err := m.check("stat", name); err != nil {
+			return err
+		}
+		n, exists := m.current[name]
+		if !exists {
+			return pathError("stat", name, fs.ErrNotExist)
+		}
+		stat = n.info(name)
+		return nil
+	})
+	return stat, err
 }
 
 // SyncDir makes the pending entries of the directory name durable. It is a
 // persistence point.
 func (m *Memory) SyncDir(name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if err := m.dir("syncdir", name); err != nil {
-		return err
-	}
-	if err := m.persist("syncdir", name); err != nil {
-		return err
-	}
+	return m.serve("syncdir", name, func() error {
+		if err := m.dir("syncdir", name); err != nil {
+			return err
+		}
+		if err := m.persist("syncdir", name); err != nil {
+			return err
+		}
+		m.syncEntries(name)
+		return nil
+	})
+}
+
+// syncEntries makes the pending entries of the directory name durable.
+func (m *Memory) syncEntries(name string) {
 	// The root is in the root, so a sync of the root keeps the root.
 	in := func(entry string) bool { return path.Dir(entry) == name }
 	maps.DeleteFunc(m.durable, func(entry string, _ *node) bool { return in(entry) })
@@ -287,7 +390,116 @@ func (m *Memory) SyncDir(name string) error {
 			m.durable[entry] = n
 		}
 	}
+}
+
+// entriesOf returns the entries of the directory name among entries.
+func entriesOf(entries map[string]*node, name string) map[string]*node {
+	out := map[string]*node{}
+	for entry, n := range entries {
+		if path.Dir(entry) == name {
+			out[entry] = n
+		}
+	}
+	return out
+}
+
+// crash crashes the medium, and keeps of each file and each directory what
+// keep chooses, or what Crash keeps for a nil keep.
+func (m *Memory) crash(keep func(name string, pending int) int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.down {
+		m.drop(keep)
+	}
+	m.restart()
+}
+
+// restart makes the medium serve the calls of a new process. It ends a crash
+// that CrashAt armed, the failure that FailBefore, FailAfter or FailPart armed,
+// and a hold, whose blocked calls fail with ErrCrashed.
+func (m *Memory) restart() {
+	m.down, m.crashAt, m.fault = false, -1, nil
+	m.release(true)
+}
+
+// keepEntries makes durable the pending entries of each directory for which
+// keep of its name and 1 returns more than 0. It asks for each durable
+// directory that a crash keeps and whose entries differ from its durable
+// entries, in the order of the names. A name sorts after the names of its
+// parents, so a directory whose entry a parent keeps is asked after that
+// parent.
+func (m *Memory) keepEntries(keep func(name string, pending int) int) {
+	names := maps.Clone(m.current)
+	maps.Copy(names, m.durable)
+	for _, name := range slices.Sorted(maps.Keys(names)) {
+		d, durable := m.durable[name]
+		if !durable || !d.dir || !m.rooted(name) {
+			continue
+		}
+		if !maps.Equal(entriesOf(m.current, name), entriesOf(m.durable, name)) && keep(name, 1) > 0 {
+			m.syncEntries(name)
+		}
+	}
+}
+
+// serve runs body, a call of the operation op on name, with the medium
+// locked. The call waits while a hold is in force, and fails with ErrCrashed
+// where a crash ends the hold. It fails without its effect where FailBefore
+// armed a failure, and after its effect where FailAfter armed one.
+func (m *Memory) serve(op, name string, body func() error) error {
+	if err := m.enter(op, name); err != nil {
+		return err
+	}
+	defer m.mu.Unlock()
+	err := body()
+	if f := m.fault; f != nil && f.stage == after {
+		m.fault = nil
+		if err == nil {
+			err = pathError(op, name, f.err)
+		}
+	}
+	return err
+}
+
+// enter locks the medium for a call of the operation op on name. It waits
+// while a hold is in force, and returns ErrCrashed for a call that a crash
+// ended during the hold. It returns the error of a failure that FailBefore
+// armed, and ends the failure. It returns with the medium locked where it
+// returns nil.
+func (m *Memory) enter(op, name string) error {
+	m.mu.Lock()
+	for m.hold != nil {
+		h := m.hold
+		m.mu.Unlock()
+		<-h.released
+		m.mu.Lock()
+		if h.crashed {
+			m.mu.Unlock()
+			return pathError(op, name, ErrCrashed)
+		}
+	}
+	if f := m.fault; f != nil && f.stage == before {
+		m.fault = nil
+		m.mu.Unlock()
+		return pathError(op, name, f.err)
+	}
 	return nil
+}
+
+// arm arms the failure f in place of an earlier one.
+func (m *Memory) arm(f *failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.fault = f
+}
+
+// release ends the hold of the medium, for a crash where crashed is true.
+func (m *Memory) release(crashed bool) {
+	if m.hold != nil {
+		m.hold.crashed = crashed
+		close(m.hold.released)
+		m.hold = nil
+	}
 }
 
 // renamable returns the error of a rename of oldName to newName that the
@@ -369,7 +581,7 @@ func (m *Memory) children(name string) bool {
 // and returns ErrCrashed then.
 func (m *Memory) persist(op, name string) error {
 	if m.points == m.crashAt {
-		m.drop()
+		m.drop(nil)
 		m.down, m.crashAt = true, -1
 		return pathError(op, name, ErrCrashed)
 	}
@@ -379,16 +591,27 @@ func (m *Memory) persist(op, name string) error {
 
 // drop drops the pending state of each file and the pending entries of each
 // directory, as a crash does. An entry survives where each of its parents is
-// a durable directory. The files of the epoch are closed.
-func (m *Memory) drop() {
+// a durable directory. With keep, each directory keeps its pending entries and
+// each file its first pending calls as keep chooses. Without keep, a file
+// keeps its pending calls up to a torn write. The files of the epoch are
+// closed.
+func (m *Memory) drop(keep func(name string, pending int) int) {
+	if keep != nil {
+		m.keepEntries(keep)
+	}
 	survivors := map[string]*node{}
 	for name, n := range m.durable {
 		if m.rooted(name) {
 			survivors[name] = n
 		}
 	}
-	for _, n := range survivors {
-		n.recover()
+	for _, name := range slices.Sorted(maps.Keys(survivors)) {
+		n := survivors[name]
+		count := n.torn() + 1
+		if keep != nil && len(n.pending) > 0 {
+			count = min(max(keep(name, len(n.pending)), 0), len(n.pending))
+		}
+		n.recover(count)
 	}
 	m.current, m.durable = survivors, maps.Clone(survivors)
 	m.tear = -1
@@ -408,12 +631,18 @@ func (m *Memory) rooted(name string) bool {
 }
 
 // write writes data at the offset off of the file of n, opened as name, and
-// returns the count of bytes that it wrote. It writes the bytes that fit under
-// the limit of Fill, and returns an error that wraps syscall.ENOSPC beside
-// them. The write is torn where Tear armed it.
+// returns the count of bytes that it wrote. It writes the first bytes that
+// FailPart armed, and returns an error that wraps its error beside them. It
+// writes the bytes that fit under the limit of Fill, and returns an error that
+// wraps syscall.ENOSPC beside them. The write is torn where Tear armed it.
 func (m *Memory) write(n *node, name string, data []byte, off int64) (int, error) {
 	count := int64(len(data))
 	var err error
+	if f := m.fault; f != nil && f.stage == part {
+		m.fault = nil
+		count = min(count, max(0, int64(f.part)))
+		err = pathError("write", name, f.err)
+	}
 	if m.limit >= 0 && m.written+count > m.limit {
 		count = max(0, m.limit-m.written)
 		err = pathError("write", name, syscall.ENOSPC)
@@ -426,6 +655,38 @@ func (m *Memory) write(n *node, name string, data []byte, off int64) (int, error
 	n.apply(o)
 	m.written += count
 	return int(count), err
+}
+
+// stage is when an armed failure fails its call.
+type stage int
+
+// The stages of an armed failure.
+const (
+	// before fails the next call without its effect.
+	before stage = iota
+	// after fails the next call after its whole effect.
+	after
+	// part fails the next write after its first bytes.
+	part
+)
+
+// failure is a failure that FailBefore, FailAfter or FailPart armed.
+type failure struct {
+	// err is the error that the failed call wraps.
+	err error
+	// stage is when the call fails.
+	stage stage
+	// part is the count of bytes that a write writes before it fails, for the
+	// stage part.
+	part int
+}
+
+// hold blocks the calls of a Memory until its release.
+type hold struct {
+	// released is closed when the hold ends.
+	released chan struct{}
+	// crashed reports that a crash ended the hold.
+	crashed bool
 }
 
 // node is a file or a directory of a Memory.
@@ -460,14 +721,22 @@ func (n *node) sync() {
 	n.durable, n.pending = slices.Clone(n.current), nil
 }
 
+// torn returns the index of the first pending write that Tear armed, and -1
+// without one.
+func (n *node) torn() int {
+	return slices.IndexFunc(n.pending, func(o op) bool { return o.keep >= 0 })
+}
+
 // recover makes the content of the file of n what a crash keeps: its durable
-// content, and the pending operations before a torn write with the first
-// bytes of the torn write.
-func (n *node) recover() {
-	if at := slices.IndexFunc(n.pending, func(o op) bool { return o.keep >= 0 }); at >= 0 {
-		torn := n.pending[at]
-		torn.data = torn.data[:min(torn.keep, len(torn.data))]
-		n.pending = append(n.pending[:at], torn)
+// content with its first count pending operations applied. The last of them
+// keeps its first bytes where Tear armed it.
+func (n *node) recover(count int) {
+	if count > 0 {
+		kept := n.pending[:count]
+		if last := &kept[count-1]; last.keep >= 0 {
+			last.data = last.data[:min(last.keep, len(last.data))]
+		}
+		n.pending = kept
 		n.durable = n.replay()
 	}
 	n.current, n.pending = slices.Clone(n.durable), nil
@@ -524,125 +793,145 @@ type file struct {
 // Read reads from the offset of the file and moves the offset. It returns
 // io.EOF only for a read that reads nothing, as a file of the os package does.
 func (f *file) Read(p []byte) (int, error) {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.readable("read"); err != nil {
-		return 0, err
-	}
-	n, err := f.at(p, f.off)
-	f.off += int64(n)
-	if n > 0 {
-		return n, nil
-	}
+	var n int
+	err := f.m.serve("read", f.name, func() error {
+		if err := f.readable("read"); err != nil {
+			return err
+		}
+		got, err := f.at(p, f.off)
+		n = got
+		f.off += int64(got)
+		if got > 0 {
+			return nil
+		}
+		return err
+	})
 	return n, err
 }
 
 // ReadAt reads from the offset off of the file.
 func (f *file) ReadAt(p []byte, off int64) (int, error) {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.readable("read"); err != nil {
-		return 0, err
-	}
-	if off < 0 {
-		return 0, pathError("read", f.name, syscall.EINVAL)
-	}
-	return f.at(p, off)
+	var n int
+	err := f.m.serve("read", f.name, func() error {
+		if err := f.readable("read"); err != nil {
+			return err
+		}
+		if off < 0 {
+			return pathError("read", f.name, syscall.EINVAL)
+		}
+		got, err := f.at(p, off)
+		n = got
+		return err
+	})
+	return n, err
 }
 
 // Write writes at the offset of the file, or at its end for a file opened
 // with os.O_APPEND, and moves the offset.
 func (f *file) Write(p []byte) (int, error) {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.writable("write"); err != nil {
-		return 0, err
-	}
-	if f.flag&os.O_APPEND != 0 {
-		f.off = int64(len(f.n.current))
-	}
-	n, err := f.m.write(f.n, f.name, p, f.off)
-	f.off += int64(n)
+	var n int
+	err := f.m.serve("write", f.name, func() error {
+		if err := f.writable("write"); err != nil {
+			return err
+		}
+		if f.flag&os.O_APPEND != 0 {
+			f.off = int64(len(f.n.current))
+		}
+		wrote, err := f.m.write(f.n, f.name, p, f.off)
+		n = wrote
+		f.off += int64(wrote)
+		return err
+	})
 	return n, err
 }
 
 // WriteAt writes at the offset off of the file. A file opened with
 // os.O_APPEND refuses it, as the os package does.
 func (f *file) WriteAt(p []byte, off int64) (int, error) {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.writable("write"); err != nil {
-		return 0, err
-	}
-	if f.flag&os.O_APPEND != 0 || off < 0 {
-		return 0, pathError("write", f.name, syscall.EINVAL)
-	}
-	return f.m.write(f.n, f.name, p, off)
+	var n int
+	err := f.m.serve("write", f.name, func() error {
+		if err := f.writable("write"); err != nil {
+			return err
+		}
+		if f.flag&os.O_APPEND != 0 || off < 0 {
+			return pathError("write", f.name, syscall.EINVAL)
+		}
+		wrote, err := f.m.write(f.n, f.name, p, off)
+		n = wrote
+		return err
+	})
+	return n, err
 }
 
 // Seek sets the offset of the file.
 func (f *file) Seek(offset int64, whence int) (int64, error) {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.check("seek"); err != nil {
-		return 0, err
-	}
-	base := map[int]int64{io.SeekStart: 0, io.SeekCurrent: f.off, io.SeekEnd: int64(len(f.n.current))}
-	from, valid := base[whence]
-	if !valid || from+offset < 0 {
-		return 0, pathError("seek", f.name, syscall.EINVAL)
-	}
-	f.off = from + offset
-	return f.off, nil
+	var at int64
+	err := f.m.serve("seek", f.name, func() error {
+		if err := f.check("seek"); err != nil {
+			return err
+		}
+		base := map[int]int64{io.SeekStart: 0, io.SeekCurrent: f.off, io.SeekEnd: int64(len(f.n.current))}
+		from, valid := base[whence]
+		if !valid || from+offset < 0 {
+			return pathError("seek", f.name, syscall.EINVAL)
+		}
+		f.off = from + offset
+		at = f.off
+		return nil
+	})
+	return at, err
 }
 
 // Sync makes the content of the file durable. It is a persistence point.
 func (f *file) Sync() error {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.check("sync"); err != nil {
-		return err
-	}
-	if err := f.m.persist("sync", f.name); err != nil {
-		return err
-	}
-	f.n.sync()
-	return nil
+	return f.m.serve("sync", f.name, func() error {
+		if err := f.check("sync"); err != nil {
+			return err
+		}
+		if err := f.m.persist("sync", f.name); err != nil {
+			return err
+		}
+		f.n.sync()
+		return nil
+	})
 }
 
 // Truncate sets the size of the file to size.
 func (f *file) Truncate(size int64) error {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.writable("truncate"); err != nil {
-		return err
-	}
-	if size < 0 {
-		return pathError("truncate", f.name, syscall.EINVAL)
-	}
-	f.n.apply(op{off: size, truncate: true, keep: -1})
-	return nil
+	return f.m.serve("truncate", f.name, func() error {
+		if err := f.writable("truncate"); err != nil {
+			return err
+		}
+		if size < 0 {
+			return pathError("truncate", f.name, syscall.EINVAL)
+		}
+		f.n.apply(op{off: size, truncate: true, keep: -1})
+		return nil
+	})
 }
 
 // Stat returns the information of the file.
 func (f *file) Stat() (fs.FileInfo, error) {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.check("stat"); err != nil {
-		return nil, err
-	}
-	return f.n.info(f.name), nil
+	var stat fs.FileInfo
+	err := f.m.serve("stat", f.name, func() error {
+		if err := f.check("stat"); err != nil {
+			return err
+		}
+		stat = f.n.info(f.name)
+		return nil
+	})
+	return stat, err
 }
 
 // Close closes the file.
 func (f *file) Close() error {
-	f.m.mu.Lock()
-	defer f.m.mu.Unlock()
-	if err := f.check("close"); err != nil {
-		return err
-	}
-	f.closed = true
-	return nil
+	return f.m.serve("close", f.name, func() error {
+		if err := f.check("close"); err != nil {
+			return err
+		}
+		f.closed = true
+		return nil
+	})
 }
 
 // at copies the content of the file at the offset off into p, and returns

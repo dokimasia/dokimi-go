@@ -7,9 +7,12 @@
 // A subject writes through an [FS], and its production code passes [OS]. A
 // check passes a [Memory], which keeps the data that a sync made durable apart
 // from the data written since. A crash of a Memory drops every write that a
-// sync did not cover, so a check reads back what a crash of the process keeps.
-// A Memory can also crash at a persistence point, tear a write, flip a bit of
-// a file at rest and run out of space.
+// sync did not cover, so a check reads back what a power loss keeps. A kill of
+// its process keeps every write, as the page cache of the operating system
+// does. A Memory can also crash at a persistence point, keep a part of the
+// pending writes at a crash, tear a write, flip a bit of a file at rest and
+// run out of space. It can fail a call before, after or in the middle of its
+// effect, and block each call until a release.
 //
 // # The model of persistence
 //
@@ -23,6 +26,10 @@
 //   - A crash drops the pending state of each file and the pending entries of
 //     each directory. A torn write keeps the pending writes of its file before
 //     it and its own first bytes.
+//   - A crash by [Memory.CrashKeeping] keeps the first pending calls of each
+//     file in the order of the calls, as a disk that wrote them before the
+//     power loss keeps them. It keeps or drops the pending entries of each
+//     directory as a whole.
 //
 // A name is a slash-separated path relative to the root of an FS, as
 // [fs.ValidPath] states it. The module imports the standard library alone.

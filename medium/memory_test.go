@@ -4,12 +4,15 @@
 package medium_test
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"sync"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.dokimi.dev/assert"
@@ -17,6 +20,9 @@ import (
 
 	"go.dokimi.dev/medium"
 )
+
+// errDisk is the error that the specs arm for a call of a medium.
+var errDisk = errors.New("medium_test: the disk failed")
 
 // durable returns a Memory with the file a of content, whose content and entry
 // are durable.
@@ -29,6 +35,34 @@ func durable(t *testing.T, content string) *medium.Memory {
 	assert.NoError(t, err, "the medium writes a")
 	assert.NoError(t, f.Sync(), "the medium syncs a")
 	assert.NoError(t, m.SyncDir("."), "the medium syncs the root")
+	return m
+}
+
+// keeping returns a keep function of CrashKeeping that returns the count of
+// counts for each name, 0 for a name without one, and the calls that it
+// receives, each as name:pending.
+func keeping(counts map[string]int) (func(name string, pending int) int, *[]string) {
+	calls := &[]string{}
+	return func(name string, pending int) int {
+		*calls = append(*calls, fmt.Sprintf("%s:%d", name, pending))
+		return counts[name]
+	}, calls
+}
+
+// tornAfterAB returns a Memory whose durable file a is empty, with three
+// pending writes of ab, cd and ef, of which Tear armed the second at one byte.
+func tornAfterAB(t *testing.T) *medium.Memory {
+	t.Helper()
+
+	m := durable(t, "")
+	f := open(t, m, "a")
+	for i, part := range []string{"ab", "cd", "ef"} {
+		if i == 1 {
+			m.Tear(1)
+		}
+		_, err := io.WriteString(f, part)
+		assert.NoError(t, err, "the medium writes a pending body")
+	}
 	return m
 }
 
@@ -156,6 +190,348 @@ func TestMemory(t *testing.T) {
 			_, err := f.Read(make([]byte, 1))
 			assert.ErrorIs(t, err, medium.ErrCrashed, "a file of the crashed process refuses a read")
 			assert.Equal(t, read(t, m, "a"), "body", "the medium serves a new process")
+		})
+	})
+
+	t.Run("CrashKeeping", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name      string
+			giveKeep  map[string]int
+			wantRead  string
+			wantCalls []string
+		}{
+			{
+				name:      "keeps the first pending writes of a file that keep chooses",
+				giveKeep:  map[string]int{"a": 2},
+				wantRead:  "abcd",
+				wantCalls: []string{"a:3"},
+			},
+			{
+				name:      "drops every pending call of a file for a keep of 0",
+				giveKeep:  map[string]int{},
+				wantRead:  "",
+				wantCalls: []string{"a:3"},
+			},
+			{
+				name:      "keeps every pending call of a file for a keep above their count",
+				giveKeep:  map[string]int{"a": 9},
+				wantRead:  "abcdef",
+				wantCalls: []string{"a:3"},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				m := durable(t, "")
+				f := open(t, m, "a")
+				for _, part := range []string{"ab", "cd", "ef"} {
+					_, err := io.WriteString(f, part)
+					assert.NoError(t, err, "the medium writes a pending body")
+				}
+				keep, calls := keeping(tt.giveKeep)
+
+				m.CrashKeeping(keep)
+
+				assert.Equal(t, read(t, m, "a"), tt.wantRead, "the crash keeps the chosen writes in order")
+				assert.Equal(t, *calls, tt.wantCalls, "keep receives the name and the count of the pending calls")
+			})
+		}
+
+		t.Run("keeps a pending truncate in the order of the calls", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "abcd")
+			f := open(t, m, "a")
+			assert.NoError(t, f.Truncate(1), "the medium truncates a")
+			_, err := f.WriteAt([]byte("z"), 1)
+			assert.NoError(t, err, "the medium writes after the truncate")
+			keep, _ := keeping(map[string]int{"a": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, read(t, m, "a"), "a", "the crash keeps the truncate and drops the write after it")
+		})
+
+		t.Run("tears the last kept write where Tear armed it", func(t *testing.T) {
+			t.Parallel()
+			m := tornAfterAB(t)
+			keep, _ := keeping(map[string]int{"a": 2})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, read(t, m, "a"), "abc", "the second write is the last kept, and keeps one byte")
+		})
+
+		t.Run("keeps a torn write whole when a later write is kept", func(t *testing.T) {
+			t.Parallel()
+			m := tornAfterAB(t)
+			keep, _ := keeping(map[string]int{"a": 3})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, read(t, m, "a"), "abcdef", "the device wrote past the armed write")
+		})
+
+		t.Run("keeps the pending entries of a directory for which keep returns more than 0", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			f := open(t, m, "a")
+			assert.NoError(t, f.Sync(), "the medium syncs the content of a")
+			keep, calls := keeping(map[string]int{".": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.True(t, exists(t, m, "a"), "the crash keeps the entry of a")
+			assert.Equal(t, *calls, []string{".:1"}, "keep receives the directory with a count of 1")
+		})
+
+		t.Run("drops the pending entries of a directory for which keep returns 0", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			assert.NoError(t, m.Remove("a"), "the medium removes a")
+			keep, _ := keeping(map[string]int{})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, read(t, m, "a"), "body", "the crash restores the durable entry of a")
+		})
+
+		t.Run("asks for the directories, then for the files, each in the order of their names", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			create(t, m, "c", "new")
+			for _, name := range []string{"c", "a"} {
+				f := open(t, m, name)
+				_, err := f.WriteAt([]byte("x"), 0)
+				assert.NoError(t, err, "the medium writes "+name)
+			}
+			keep, calls := keeping(map[string]int{".": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, *calls, []string{".:1", "a:1", "c:3"}, "the root, then a and c")
+		})
+
+		t.Run("asks for no entry of a directory that the crash drops", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			assert.NoError(t, m.MkdirAll("d", 0o755), "the medium makes d")
+			create(t, m, "d/a", "body")
+			keep, calls := keeping(map[string]int{})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, *calls, []string{".:1"}, "the root drops d, so keep receives neither d nor d/a")
+		})
+
+		t.Run("keeps the pending removal of an entry of a directory that the process removed", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			assert.NoError(t, m.MkdirAll("d", 0o755), "the medium makes d")
+			assert.NoError(t, open(t, m, "d/a").Sync(), "the medium syncs the content of d/a")
+			for _, dir := range []string{"d", "."} {
+				assert.NoError(t, m.SyncDir(dir), "the medium syncs "+dir)
+			}
+			assert.NoError(t, m.Remove("d/a"), "the medium removes d/a")
+			assert.NoError(t, m.Remove("d"), "the medium removes d")
+			keep, calls := keeping(map[string]int{"d": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, []bool{exists(t, m, "d"), exists(t, m, "d/a")}, []bool{true, false},
+				"the crash drops the removal of d and keeps the removal of d/a")
+			assert.Equal(t, *calls, []string{".:1", "d:1"}, "keep receives the removed directory")
+		})
+
+		t.Run("asks for no directory whose entries are not pending", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			assert.NoError(t, m.MkdirAll("d", 0o755), "the medium makes d")
+			assert.NoError(t, m.SyncDir("."), "the medium syncs the entry of d")
+			create(t, m, "d/b", "x")
+			keep, calls := keeping(map[string]int{"d": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, *calls, []string{"d:1", "d/b:2"}, "keep receives d and d/b, and not the root")
+		})
+
+		t.Run("asks for no directory whose parent the crash removes", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			assert.NoError(t, m.MkdirAll("p/d", 0o755), "the medium makes p/d")
+			create(t, m, "p/d/x", "")
+			for _, dir := range []string{"p/d", "p", "."} {
+				assert.NoError(t, m.SyncDir(dir), "the medium syncs "+dir)
+			}
+			for _, name := range []string{"p/d/x", "p/d", "p"} {
+				assert.NoError(t, m.Remove(name), "the medium removes "+name)
+			}
+			keep, calls := keeping(map[string]int{".": 1, "p/d": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, *calls, []string{".:1"}, "the root drops p, so keep does not receive p/d")
+		})
+
+		t.Run("asks for no file that replaced a durable directory", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			assert.NoError(t, m.MkdirAll("d", 0o755), "the medium makes d")
+			create(t, m, "d/a", "body")
+			assert.NoError(t, m.SyncDir("d"), "the medium syncs the entry d/a")
+			assert.NoError(t, m.Remove("d/a"), "the medium removes d/a")
+			assert.NoError(t, m.Remove("d"), "the medium removes d")
+			create(t, m, "d", "file")
+			assert.NoError(t, m.SyncDir("."), "the medium syncs the file d")
+			keep, calls := keeping(map[string]int{})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, *calls, []string{"d:2"}, "keep receives the pending calls of the file d alone")
+		})
+
+		t.Run("asks for nothing after a crash in place of a persistence point", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "kept")
+			m.CrashAt(m.Points())
+			f := open(t, m, "a")
+			_, err := f.WriteAt([]byte("lost"), 0)
+			assert.NoError(t, err, "the medium writes over the synced content")
+			assert.ErrorIs(t, f.Sync(), medium.ErrCrashed, "the sync crashes the medium")
+			keep, calls := keeping(map[string]int{"a": 1})
+
+			m.CrashKeeping(keep)
+
+			assert.Equal(t, read(t, m, "a"), "kept", "the crash keeps the content of the last point")
+			assert.Empty(t, *calls, "the medium dropped its pending calls already")
+		})
+
+		t.Run("closes the open files", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			f := open(t, m, "a")
+			keep, _ := keeping(map[string]int{})
+
+			m.CrashKeeping(keep)
+
+			_, err := f.Read(make([]byte, 1))
+			assert.ErrorIs(t, err, medium.ErrCrashed, "a file of the crashed process refuses a read")
+		})
+	})
+
+	t.Run("Kill", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("keeps a write that a sync did not cover", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "kept")
+			f := open(t, m, "a")
+			_, err := f.WriteAt([]byte("more"), 4)
+			assert.NoError(t, err, "the medium writes after the synced content")
+
+			m.Kill()
+
+			assert.Equal(t, read(t, m, "a"), "keptmore", "the page cache survives the kill")
+		})
+
+		t.Run("leaves a pending write pending for a later crash", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "kept")
+			f := open(t, m, "a")
+			_, err := f.WriteAt([]byte("lost"), 4)
+			assert.NoError(t, err, "the medium writes after the synced content")
+			m.Kill()
+
+			m.Crash()
+
+			assert.Equal(t, read(t, m, "a"), "kept", "the crash drops the write that no sync covered")
+		})
+
+		t.Run("keeps an entry that a SyncDir did not cover", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			create(t, m, "a", "body")
+
+			m.Kill()
+
+			assert.Equal(t, read(t, m, "a"), "body", "the kill keeps the pending entry of a")
+		})
+
+		t.Run("closes the open files", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			f := open(t, m, "a")
+
+			m.Kill()
+
+			_, err := f.Read(make([]byte, 1))
+			assert.ErrorIs(t, err, medium.ErrCrashed, "a file of the killed process refuses a read")
+		})
+
+		t.Run("fails a blocked call with ErrCrashed", func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				m := durable(t, "body")
+				m.Hold()
+				done := make(chan error, 1)
+				go func() {
+					_, err := m.Stat("a")
+					done <- err
+				}()
+				synctest.Wait()
+
+				m.Kill()
+
+				assert.ErrorIs(t, <-done, medium.ErrCrashed, "the kill ends the blocked call")
+				assert.Equal(t, read(t, m, "a"), "body", "the kill ends the hold")
+			})
+		})
+
+		t.Run("ends the failure that FailBefore armed", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			m.FailBefore(errDisk)
+
+			m.Kill()
+
+			assert.Equal(t, read(t, m, "a"), "body", "the next process reads a")
+		})
+
+		t.Run("ends a tear that no write took", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "")
+			m.Tear(1)
+			m.Kill()
+			f := open(t, m, "a")
+			_, err := io.WriteString(f, "ab")
+			assert.NoError(t, err, "the medium writes after the kill")
+
+			m.Crash()
+
+			assert.Equal(t, read(t, m, "a"), "", "the write after the kill drops whole")
+		})
+
+		t.Run("ends a crash that CrashAt armed", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			m.CrashAt(m.Points())
+
+			m.Kill()
+
+			assert.NoError(t, open(t, m, "a").Sync(), "the armed point passes after the kill")
+		})
+
+		t.Run("serves the calls of a new process after a crash in place of a persistence point", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "kept")
+			m.CrashAt(m.Points())
+			assert.ErrorIs(t, open(t, m, "a").Sync(), medium.ErrCrashed, "the sync crashes the medium")
+
+			m.Kill()
+
+			assert.Equal(t, read(t, m, "a"), "kept", "the next process reads the state of the crash")
 		})
 	})
 
@@ -417,6 +793,333 @@ func TestMemory(t *testing.T) {
 				})
 			}
 		}
+	})
+
+	t.Run("FailBefore", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("fails the next call without its effect", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			m.FailBefore(errDisk)
+
+			_, err := m.OpenFile("a", os.O_CREATE|os.O_WRONLY, 0o644)
+
+			assert.ErrorIs(t, err, errDisk, "the open fails with the armed error")
+			assert.False(t, exists(t, m, "a"), "the failed open creates nothing")
+			_, err = m.OpenFile("a", os.O_CREATE|os.O_WRONLY, 0o644)
+			assert.NoError(t, err, "the call after the failed one creates a")
+		})
+
+		t.Run("fails the next call of a file without its effect", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			f := open(t, m, "a")
+			m.FailBefore(errDisk)
+
+			_, err := f.WriteAt([]byte("x"), 0)
+
+			assert.ErrorIs(t, err, errDisk, "the write fails with the armed error")
+			assert.Equal(t, read(t, m, "a"), "body", "the failed write writes nothing")
+		})
+
+		{
+			tests := []struct {
+				name string
+				give func(m *medium.Memory, f medium.File) error
+			}{
+				{
+					name: "fails the next Remove",
+					give: func(m *medium.Memory, _ medium.File) error { return m.Remove("a") },
+				},
+				{
+					name: "fails the next Rename",
+					give: func(m *medium.Memory, _ medium.File) error { return m.Rename("a", "b") },
+				},
+				{
+					name: "fails the next MkdirAll",
+					give: func(m *medium.Memory, _ medium.File) error { return m.MkdirAll("d", 0o755) },
+				},
+				{name: "fails the next ReadDir", give: func(m *medium.Memory, _ medium.File) error {
+					_, err := m.ReadDir(".")
+					return err
+				}},
+				{name: "fails the next Stat", give: func(m *medium.Memory, _ medium.File) error {
+					_, err := m.Stat("a")
+					return err
+				}},
+				{
+					name: "fails the next SyncDir",
+					give: func(m *medium.Memory, _ medium.File) error { return m.SyncDir(".") },
+				},
+				{name: "fails the next Read of a file", give: func(_ *medium.Memory, f medium.File) error {
+					_, err := f.Read(make([]byte, 1))
+					return err
+				}},
+				{name: "fails the next ReadAt of a file", give: func(_ *medium.Memory, f medium.File) error {
+					_, err := f.ReadAt(make([]byte, 1), 0)
+					return err
+				}},
+				{name: "fails the next Write of a file", give: func(_ *medium.Memory, f medium.File) error {
+					_, err := f.Write([]byte("x"))
+					return err
+				}},
+				{name: "fails the next Seek of a file", give: func(_ *medium.Memory, f medium.File) error {
+					_, err := f.Seek(1, io.SeekStart)
+					return err
+				}},
+				{
+					name: "fails the next Sync of a file",
+					give: func(_ *medium.Memory, f medium.File) error { return f.Sync() },
+				},
+				{
+					name: "fails the next Truncate of a file",
+					give: func(_ *medium.Memory, f medium.File) error { return f.Truncate(1) },
+				},
+				{name: "fails the next Stat of a file", give: func(_ *medium.Memory, f medium.File) error {
+					_, err := f.Stat()
+					return err
+				}},
+				{
+					name: "fails the next Close of a file",
+					give: func(_ *medium.Memory, f medium.File) error { return f.Close() },
+				},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					t.Parallel()
+					m := durable(t, "body")
+					f := open(t, m, "a")
+					m.FailBefore(errDisk)
+
+					assert.ErrorIs(t, tt.give(m, f), errDisk, "the call fails with the armed error")
+					assert.NoError(t, tt.give(m, f), "the same call after it succeeds")
+				})
+			}
+		}
+
+		t.Run("ends at a crash", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			m.FailBefore(errDisk)
+
+			m.Crash()
+
+			assert.Equal(t, read(t, m, "a"), "body", "the first call after the crash succeeds")
+		})
+	})
+
+	t.Run("FailAfter", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("fails the next call after its whole effect", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			f := open(t, m, "a")
+			m.FailAfter(errDisk)
+
+			n, err := f.WriteAt([]byte("west"), 0)
+
+			assert.ErrorIs(t, err, errDisk, "the write fails with the armed error")
+			assert.Equal(t, n, 4, "the write writes each byte")
+			assert.Equal(t, read(t, m, "a"), "west", "the failed write takes its effect")
+		})
+
+		t.Run("returns the error of a call that fails on its own", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			m.FailAfter(errDisk)
+
+			_, err := m.Stat("a")
+
+			assert.ErrorIs(t, err, fs.ErrNotExist, "the stat of no file fails with its own error")
+			assert.NoError(t, m.MkdirAll("d", 0o755), "the call after it succeeds")
+		})
+
+		t.Run("ends at a crash", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			m.FailAfter(errDisk)
+
+			m.Crash()
+
+			assert.Equal(t, read(t, m, "a"), "body", "the first call after the crash succeeds")
+		})
+	})
+
+	t.Run("FailPart", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("writes the first bytes of the next write, and fails it", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "")
+			f := open(t, m, "a")
+			m.FailPart(2, errDisk)
+			_, err := f.Stat()
+			assert.NoError(t, err, "a call that writes nothing succeeds")
+
+			n, err := io.WriteString(f, "abc")
+
+			assert.ErrorIs(t, err, errDisk, "the write fails with the armed error")
+			assert.Equal(t, n, 2, "the write writes its first two bytes")
+			n, err = io.WriteString(f, "cd")
+			assert.NoError(t, err, "the write after the failed one succeeds")
+			assert.Equal(t, n, 2, "the write after the failed one writes each byte")
+			assert.Equal(t, read(t, m, "a"), "abcd", "the file has the bytes of both writes")
+		})
+
+		t.Run("fails the next WriteAt after its first bytes", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+			f := open(t, m, "a")
+			m.FailPart(1, errDisk)
+
+			n, err := f.WriteAt([]byte("xyz"), 0)
+
+			assert.ErrorIs(t, err, errDisk, "the write fails with the armed error")
+			assert.Equal(t, n, 1, "the write writes its first byte")
+			assert.Equal(t, read(t, m, "a"), "xody", "the file has the byte of the failed write")
+		})
+
+		t.Run("writes no byte for a part below zero", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "")
+			f := open(t, m, "a")
+			m.FailPart(-1, errDisk)
+
+			n, err := io.WriteString(f, "ab")
+
+			assert.ErrorIs(t, err, errDisk, "the write fails with the armed error")
+			assert.Equal(t, n, 0, "the write writes no byte")
+		})
+
+		t.Run("writes each byte of a write shorter than the part", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "")
+			f := open(t, m, "a")
+			m.FailPart(5, errDisk)
+
+			n, err := io.WriteString(f, "ab")
+
+			assert.ErrorIs(t, err, errDisk, "the write fails with the armed error")
+			assert.Equal(t, n, 2, "the write writes each of its bytes")
+		})
+
+		t.Run("ends at a crash", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "")
+			m.FailPart(0, errDisk)
+
+			m.Crash()
+
+			f := open(t, m, "a")
+			_, err := io.WriteString(f, "ab")
+			assert.NoError(t, err, "the first write after the crash succeeds")
+		})
+	})
+
+	t.Run("Hold", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("blocks each later call until Release", func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				m := durable(t, "body")
+				f := open(t, m, "a")
+				m.Hold()
+				done := make(chan error, 2)
+				go func() {
+					_, err := m.Stat("a")
+					done <- err
+				}()
+				synctest.Wait()
+				m.Hold()
+				go func() {
+					_, err := f.Write([]byte("x"))
+					done <- err
+				}()
+				synctest.Wait()
+
+				assert.Equal(t, len(done), 0, "both calls wait for the release of the one hold")
+				m.Release()
+
+				assert.NoError(t, <-done, "a call goes on after the release")
+				assert.NoError(t, <-done, "the other call goes on after the release")
+			})
+		})
+
+		t.Run("fails a blocked call with ErrCrashed at a crash", func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				m := durable(t, "body")
+				m.Hold()
+				done := make(chan error, 1)
+				go func() {
+					_, err := m.ReadDir(".")
+					done <- err
+				}()
+				synctest.Wait()
+
+				m.Crash()
+
+				assert.ErrorIs(t, <-done, medium.ErrCrashed, "the crash ends the blocked call")
+				assert.Equal(t, read(t, m, "a"), "body", "the crash ends the hold")
+			})
+		})
+	})
+
+	t.Run("Release", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("changes nothing without a hold", func(t *testing.T) {
+			t.Parallel()
+			m := durable(t, "body")
+
+			m.Release()
+
+			assert.Equal(t, read(t, m, "a"), "body", "the medium serves its calls")
+		})
+	})
+
+	t.Run("Held", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name     string
+			giveHold func(m *medium.Memory)
+			want     bool
+		}{
+			{name: "reports a hold in force", giveHold: (*medium.Memory).Hold, want: true},
+			{name: "reports no hold without one", giveHold: func(*medium.Memory) {}},
+			{name: "reports no hold after a release", giveHold: func(m *medium.Memory) {
+				m.Hold()
+				m.Release()
+			}},
+			{name: "reports no hold after a crash", giveHold: func(m *medium.Memory) {
+				m.Hold()
+				m.Crash()
+			}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				m := medium.NewMemory()
+
+				tt.giveHold(m)
+
+				assert.Equal(t, m.Held(), tt.want, "the medium reports its hold")
+			})
+		}
+
+		t.Run("reports a hold until its release", func(t *testing.T) {
+			t.Parallel()
+			m := medium.NewMemory()
+			m.Hold()
+			held := m.Held()
+			m.Release()
+
+			assert.Equal(t, []bool{held, m.Held()}, []bool{true, false}, "the release ends the hold that Held reports")
+		})
 	})
 
 	t.Run("Points", func(t *testing.T) {
