@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.3.0
+
+### Minor Changes
+
+- 2034159: Add `sim.ComponentOf` to return the component process of a world by its name.
+
 ## 0.2.0
 
 ### Minor Changes
