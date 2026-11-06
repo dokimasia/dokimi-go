@@ -4,15 +4,18 @@
 package sim_test
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"hash/fnv"
 	"maps"
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.dokimi.dev/assert"
@@ -20,8 +23,11 @@ import (
 	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/conform"
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/sim"
+	"go.dokimi.dev/spec"
 )
 
 // every tolerates one fault of each kind at once.
@@ -900,6 +906,524 @@ func TestRun(t *testing.T) {
 					"event 5: client 0 fail Park store: stopped",
 			}, "the failing case notes each step of the log and each event of the history")
 		})
+
+		t.Run("runs a world of components in each case inside the environment of the simulation", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Actions = unparked(s.Actions)
+			s.Tolerate = map[sim.Fault]int{
+				sim.FaultCrash: 1, sim.FaultRestart: 1, sim.FaultPartition: 1, sim.FaultClockJump: 1,
+				sim.FaultTornWrite: 1, sim.FaultCorruption: 1, sim.FaultFullDisk: 1, sim.FaultReset: 1,
+			}
+
+			sim.Test(t, s)
+		})
+
+		t.Run("runs the hosts of the components under a task scheduler in Tasks mode", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Mode, s.Around = spec.ModeTasks, nil
+			s.Actions = unparked(s.Actions)
+			s.Tolerate = map[sim.Fault]int{
+				sim.FaultCrash: 1, sim.FaultRestart: 1, sim.FaultPause: 1, sim.FaultPartition: 1, sim.FaultDrop: 1,
+				sim.FaultDelay: 1, sim.FaultDuplicate: 1, sim.FaultReset: 1, sim.FaultSlowLink: 1,
+			}
+			s.Network = []host.NetworkOption{host.Latency(time.Millisecond, time.Millisecond)}
+
+			sim.Test(t, s)
+		})
+
+		t.Run("fails the case at the step whose history has no linearization", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.System = cs.system(func(env *host.Env) *cell {
+				c := openCell(env)
+				c.forgets = true
+				return c
+			})
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			sets := cs.runCase(r, s, scriptOf(opening(false), set(0, "a"), get(1, "a"), set(0, "b")))
+
+			failures := r.Failures()
+			assert.NotEmpty(t, failures, "the run fails")
+			inner, _ := failures[0].CaseFailure()
+			expect.Equal(t, inner.Contract, "the history of the calls of the clients is linearizable",
+				"the check of the history fails")
+			expect.Equal(t, sets[0], 1, "the case ends at the Get, before the second Set")
+		})
+
+		t.Run("ends the case at the step whose check of the history faults", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Spec = history.SpecFrom(func() history.Subject {
+				return func(string, []any) any {
+					runtime.Goexit()
+					return nil
+				}
+			})
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			sets := cs.runCase(r, s, scriptOf(opening(false), set(0, "a"), set(0, "b")))
+
+			faults := r.Faults()
+			assert.NotEmpty(t, faults, "the check of the history faults")
+			expect.ErrorIs(t, faults[0], history.ErrSpec, "the fault is the end of the goroutine of the spec")
+			expect.Equal(t, sets[0], 1, "the case ends at the first Set")
+		})
+
+		t.Run("runs the steps after a history that its checker cannot decide", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.History = []history.Option{history.Budget(1)}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			sets := cs.runCase(r, s, scriptOf(opening(false), set(0, "a"), set(1, "a"), set(0, "b")))
+
+			failures := r.Failures()
+			assert.NotEmpty(t, failures, "the check after the final phase fails undecided")
+			inner, _ := failures[0].CaseFailure()
+			expect.Equal(t, inner.Detail["outcome"], any(history.Undecided), "the final check is undecided")
+			expect.Equal(t, sets[0], 3, "each Set runs after the undecided check")
+		})
+
+		t.Run("cancels an open call of a component without the cancelled event of the anatomy", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			var first *sim.World[sim.None, sim.None]
+			var events []history.Event
+			s.Invariants = []sim.Invariant[sim.None, sim.None]{{
+				Statement: "the history of the first case is read",
+				Check: func(_ *sim.Check, w *sim.World[sim.None, sim.None]) {
+					if first == nil {
+						first = w
+					}
+					if w == first {
+						events = w.History().Events()
+					}
+				},
+			}}
+
+			cs.runCase(t, s, scriptOf(opening(false), parkAt(0), stepOf("cancel", drawn("client", 0))))
+
+			assert.Equal(t, completions(events), []completion{{kind: history.Unknown, err: sim.ErrCancelled}},
+				"the cancel ends the parked call")
+		})
+
+		t.Run("cancels the open calls of the components in the order of their clients", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			var first *sim.World[sim.None, sim.None]
+			var events []history.Event
+			s.Invariants = []sim.Invariant[sim.None, sim.None]{{
+				Statement: "the history of the first case is read",
+				Check: func(_ *sim.Check, w *sim.World[sim.None, sim.None]) {
+					if first == nil {
+						first = w
+					}
+					if w == first {
+						events = w.History().Events()
+					}
+				},
+			}}
+
+			cs.runCase(t, s, scriptOf(opening(false), parkAt(1), parkAt(0), stepOf("cancel", drawn("client", 0))))
+
+			cancelled := slices.IndexFunc(events, func(e history.Event) bool {
+				return errors.Is(e.Error, sim.ErrCancelled)
+			})
+			assert.True(t, cancelled >= 0, "the cancel ends a parked call")
+			expect.Equal(t, events[cancelled].Client, 0, "the first client in the order of the numbers is 0")
+		})
+
+		t.Run("cancels no call of a machine without the cancelled event of the anatomy", func(t *testing.T) {
+			t.Parallel()
+			s := simulation()
+			s.Anatomy.Cancelled = nil
+			system := s.System
+			s.System = func(w *sim.World[event, effect]) {
+				system(w)
+				// The goroutine of c waits for the end of its lifetime, so a bubble
+				// whose case ends without the crash of c ends in a deadlock.
+				sim.SpawnComponent(w, "c", func(env *host.Env) *cell {
+					env.Go(func() { env.Wait(func() bool { return env.Lifetime().Err() != nil }) })
+					return openCell(env)
+				})
+			}
+			s.Around, s.Rules = conform.Bubble, nil
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			runScript(r, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0), drawn("drift.c", 0)},
+				stepOf("park", drawn("client", 0), drawn("to b", false)), stepOf("cancel", drawn("client", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the cancel of the call of a machine")
+			assert.Empty(t, r.Failures(), "the end of the case crashes the component alone")
+		})
+
+		t.Run("strikes each fault on the processes of its kind in a world of machines and components",
+			func(t *testing.T) {
+				t.Parallel()
+				s := simulation()
+				s.System = func(w *sim.World[event, effect]) {
+					sim.SpawnComponent(w, "a", openCell)
+					w.Spawn("m", newStore)
+					sim.SpawnComponent(w, "b", openCell)
+				}
+				s.Around, s.Actions, s.Rules = conform.Bubble, nil, nil
+				s.Tolerate = map[sim.Fault]int{
+					sim.FaultCrash: 1, sim.FaultDiskReplacement: 1, sim.FaultClockStrobe: 1, sim.FaultReset: 1,
+				}
+				var first *sim.World[event, effect]
+				var faults [][]string
+				s.Invariants = []sim.Invariant[event, effect]{{
+					Statement: "the faults of the first case are read",
+					Check: func(_ *sim.Check, w *sim.World[event, effect]) {
+						if first == nil {
+							first = w
+						}
+						if w == first {
+							faults = append(faults, w.Faults())
+						}
+					},
+				}}
+				r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+				runScript(r, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.m", 0), drawn("drift.b", 0)},
+					stepOf("crash", drawn("process", 0), drawn("kill.a", 1)),
+					stepOf("disk-replacement", drawn("process", 0)),
+					stepOf("clock-strobe", drawn("process", 0), drawn("strobe.a", 0), drawn("strobe.b", 0),
+						drawn("strobe.steps", 1)),
+					stepOf("reset", drawn("link", 0))))
+
+				assert.False(t, r.Failed(), "the world takes each step")
+				assert.True(t, len(faults) > 3, "the run checks each step of the first case")
+				expect.Equal(t, faults[3], []string{"crash:a", "clock-strobe:m", "disk-replacement:b"},
+					"a crash strikes a process, a disk replacement a component and a strobe a machine")
+			})
+
+		refusals := []struct {
+			name         string
+			giveTolerate map[sim.Fault]int
+			giveStep     []entry
+		}{
+			{
+				name:     "takes no advance in a world of machines without a timer",
+				giveStep: stepOf("advance", drawn("advance", 1)),
+			},
+			{
+				name:         "resets no link in a world of machines",
+				giveTolerate: map[sim.Fault]int{sim.FaultReset: 1},
+				giveStep:     stepOf("reset", drawn("link", 0)),
+			},
+			{
+				name:         "replaces no disk in a world of machines",
+				giveTolerate: map[sim.Fault]int{sim.FaultDiskReplacement: 1},
+				giveStep:     stepOf("disk-replacement", drawn("process", 0)),
+			},
+		}
+		for _, tt := range refusals {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				s := simulation()
+				s.Tolerate = tt.giveTolerate
+				r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+				runScript(r, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0)}, tt.giveStep))
+
+				assert.Length(t, r.Faults(), 1, "the world refuses the step")
+			})
+		}
+
+		t.Run("advances a world of machines by the time until the next timer and the amount of the case",
+			func(t *testing.T) {
+				t.Parallel()
+				s := simulation()
+				s.System = func(w *sim.World[event, effect]) {
+					w.Spawn("a", newStore)
+					w.After(w.Process("a"), time.Second, ticked{token: 1})
+				}
+				s.Actions, s.Rules = nil, nil
+				var first *sim.World[event, effect]
+				var now []time.Time
+				s.Invariants = []sim.Invariant[event, effect]{{
+					Statement: "the clock of the first case is read",
+					Check: func(_ *sim.Check, w *sim.World[event, effect]) {
+						if first == nil {
+							first = w
+						}
+						if w == first {
+							now = append(now, w.Process("a").Clock().Now())
+						}
+					},
+				}}
+				r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+				runScript(r, s, scriptOf([]entry{drawn("drift.a", 0)}, stepOf("advance", drawn("advance", 0))))
+
+				assert.Empty(t, r.Faults(), "the world takes the advance")
+				assert.NotEmpty(t, now, "the run checks the advance")
+				expect.Equal(t, now[0], sim.Start.Add(time.Second), "the advance moves the clock to the timer alone")
+			})
+
+		t.Run("advances the clocks of the hosts under the task scheduler in Tasks mode", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Mode, s.Around = spec.ModeTasks, nil
+			s.Network = []host.NetworkOption{host.Latency(time.Millisecond, time.Millisecond)}
+
+			cs.runCase(t, s, scriptOf(opening(true), send("1"), stepOf("advance", drawn("advance", 2000))))
+
+			assert.Equal(t, cs.received[0], []string{"1"}, "the datagram arrives once the advance passes its latency")
+		})
+
+		t.Run("wakes each wait of a component after every step", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			var set, woke atomic.Bool
+			system := s.System
+			s.System = func(w *sim.World[sim.None, sim.None]) {
+				set.Store(false)
+				woke.Store(false)
+				system(w)
+				env := cs.a.Value().env
+				env.Go(func() {
+					env.Wait(func() bool { return set.Load() || env.Lifetime().Err() != nil })
+					woke.Store(set.Load())
+				})
+				synctest.Wait()
+			}
+			s.Actions = []sim.Action[sim.None, sim.None]{{
+				Name: "set",
+				Run:  func(*sim.World[sim.None, sim.None], int, any) { set.Store(true) },
+			}}
+			var first *sim.World[sim.None, sim.None]
+			var seen []bool
+			s.Invariants = []sim.Invariant[sim.None, sim.None]{{
+				Statement: "the wait of the first case is read",
+				Check: func(_ *sim.Check, w *sim.World[sim.None, sim.None]) {
+					if first == nil {
+						first = w
+					}
+					if w == first {
+						seen = append(seen, woke.Load())
+					}
+				},
+			}}
+
+			cs.runCase(t, s, scriptOf(opening(false), stepOf("set")))
+
+			assert.NotEmpty(t, seen, "the run checks the step of the first case")
+			assert.True(t, seen[0], "the step wakes the wait of the component")
+		})
+
+		t.Run("delays no datagram while one datagram is in flight to a component", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Blocking = true
+			s.Network = []host.NetworkOption{host.Latency(time.Millisecond, time.Millisecond)}
+			s.Tolerate = map[sim.Fault]int{sim.FaultDelay: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(true), send("1"), stepOf("delay", drawn("process", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the delay")
+		})
+
+		slowing := []struct {
+			name         string
+			giveBlocking bool
+			giveTolerate int
+			giveThird    bool
+			giveSteps    [][]entry
+		}{
+			{
+				name:         "slows no link in a world without the blocking faults",
+				giveTolerate: 1,
+				giveSteps:    [][]entry{slowLink(0)},
+			},
+			{
+				name:         "slows no link that is slow",
+				giveBlocking: true,
+				giveTolerate: 2,
+				giveSteps:    [][]entry{slowLink(0), slowLink(0)},
+			},
+			{
+				name:         "slows no more links at once than Tolerate bounds",
+				giveBlocking: true,
+				giveTolerate: 1,
+				giveThird:    true,
+				giveSteps:    [][]entry{slowLink(0), slowLink(0)},
+			},
+		}
+		for _, tt := range slowing {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var cs cellSet
+				s := cs.simulation()
+				s.Blocking, s.Tolerate = tt.giveBlocking, map[sim.Fault]int{sim.FaultSlowLink: tt.giveTolerate}
+				start := opening(tt.giveBlocking)
+				if tt.giveThird {
+					system := s.System
+					s.System = func(w *sim.World[sim.None, sim.None]) {
+						system(w)
+						sim.SpawnComponent(w, "c", openCell)
+					}
+					start = append(start, drawn("drift.c", 0), drawn("latency.a.c", 0.0), drawn("latency.b.c", 0.0))
+				}
+				r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+				cs.runCase(r, s, scriptOf(start, tt.giveSteps...))
+
+				assert.Length(t, r.Faults(), 1, "the world refuses the last slow link")
+			})
+		}
+
+		taken := []struct {
+			name      string
+			giveSteps [][]entry
+			giveMode  func(s *sim.Simulation[sim.None, sim.None, []history.Operation])
+		}{
+			{
+				name:      "advances a world of components while no machine has a timer",
+				giveSteps: [][]entry{stepOf("advance", drawn("advance", 1000))},
+			},
+			{
+				name:      "pauses a component in a world that strikes the blocking faults",
+				giveSteps: [][]entry{stepOf("pause", drawn("process", 0))},
+				giveMode: func(s *sim.Simulation[sim.None, sim.None, []history.Operation]) {
+					s.Blocking, s.Tolerate = true, map[sim.Fault]int{sim.FaultPause: 1}
+				},
+			},
+			{
+				name:      "resets the streams between two components",
+				giveSteps: [][]entry{stepOf("reset", drawn("link", 0))},
+				giveMode: func(s *sim.Simulation[sim.None, sim.None, []history.Operation]) {
+					s.Tolerate = map[sim.Fault]int{sim.FaultReset: 1}
+				},
+			},
+			{
+				name:      "replaces the disk of a component",
+				giveSteps: [][]entry{stepOf("disk-replacement", drawn("process", 0))},
+				giveMode: func(s *sim.Simulation[sim.None, sim.None, []history.Operation]) {
+					s.Tolerate = map[sim.Fault]int{sim.FaultDiskReplacement: 1}
+				},
+			},
+			{
+				name:      "slows a link between two components until restore-link",
+				giveSteps: [][]entry{slowLink(0), stepOf("restore-link", drawn("link", 0))},
+				giveMode: func(s *sim.Simulation[sim.None, sim.None, []history.Operation]) {
+					s.Blocking, s.Tolerate = true, map[sim.Fault]int{sim.FaultSlowLink: 1}
+				},
+			},
+		}
+		for _, tt := range taken {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var cs cellSet
+				s := cs.simulation()
+				if tt.giveMode != nil {
+					tt.giveMode(&s)
+				}
+				r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+				cs.runCase(r, s, scriptOf(opening(s.Blocking), tt.giveSteps...))
+
+				assert.False(t, r.Failed(), "the world takes the step")
+			})
+		}
+
+		t.Run("replaces no more disks at once than Tolerate bounds", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Tolerate = map[sim.Fault]int{sim.FaultDiskReplacement: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(false), stepOf("disk-replacement", drawn("process", 0)),
+				stepOf("disk-replacement", drawn("process", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the second replacement")
+		})
+
+		t.Run("pauses no component in a world without the blocking faults", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Tolerate = map[sim.Fault]int{sim.FaultPause: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(false), stepOf("pause", drawn("process", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the pause")
+		})
+
+		t.Run("strobes no component", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Tolerate = map[sim.Fault]int{sim.FaultClockStrobe: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(false), stepOf("clock-strobe", drawn("process", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the strobe")
+		})
+
+		t.Run("lists the slow links among the faults in force", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Blocking, s.Tolerate = true, map[sim.Fault]int{sim.FaultSlowLink: 1}
+			var faults [][]string
+			s.Invariants = []sim.Invariant[sim.None, sim.None]{{
+				Statement: "the faults are read", Check: func(_ *sim.Check, w *sim.World[sim.None, sim.None]) {
+					faults = append(faults, w.Faults())
+				},
+			}}
+
+			cs.runCase(t, s, scriptOf(opening(true), slowLink(0), stepOf("restore-link", drawn("link", 0))))
+
+			assert.Equal(t, faults[:2], [][]string{{"slow-link:a,b"}, nil},
+				"the slow link is in force until its restore")
+		})
+
+		datagrams := []struct {
+			name      string
+			giveFault []entry
+			want      []string
+		}{
+			{name: "drops the oldest datagram in flight to a component", giveFault: stepOf("drop",
+				drawn("process", 0)), want: []string{"2"}},
+			{name: "delays the oldest datagram in flight to a component", giveFault: stepOf("delay",
+				drawn("process", 0)), want: []string{"2", "1"}},
+			{name: "duplicates the oldest datagram in flight to a component", giveFault: stepOf("duplicate",
+				drawn("process", 0)), want: []string{"1", "1", "2"}},
+		}
+		for _, tt := range datagrams {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var cs cellSet
+				s := cs.simulation()
+				s.Blocking = true
+				s.Network = []host.NetworkOption{host.Latency(time.Millisecond, time.Millisecond)}
+				s.Tolerate = map[sim.Fault]int{sim.FaultDrop: 1, sim.FaultDelay: 1, sim.FaultDuplicate: 1}
+
+				cs.runCase(t, s, scriptOf(opening(true), send("1"), send("2"), tt.giveFault,
+					stepOf("advance", drawn("advance", 2000))))
+
+				assert.Equal(t, cs.received[0], tt.want, "the fault changes the datagrams that b receives")
+			})
+		}
 	})
 
 	t.Run("Test", func(t *testing.T) {
@@ -1151,4 +1675,28 @@ func FuzzRun(f *testing.F) {
 	}
 	f.Add([]byte{0})
 	sim.Fuzz(f, s)
+}
+
+// set returns the step of a Set of the cell on the idle client at the index
+// among the idle clients, get the step of a Get, parkAt the step of a call
+// that parks at a, and send the step of a datagram from a to b.
+func set(idle int, name string) []entry {
+	return stepOf("set", drawn("client", idle), drawn("cell", name))
+}
+
+func get(idle int, name string) []entry {
+	return stepOf("get", drawn("client", idle), drawn("cell", name))
+}
+
+func parkAt(idle int) []entry { return stepOf("park", drawn("client", idle)) }
+
+func send(datagram string) []entry { return stepOf("send", drawn("datagram", datagram)) }
+
+// unparked returns the actions of the cells without the call that parks at
+// a. A parked call ends as unknown alone, and each call of unknown outcome
+// widens the search of the check of the history.
+func unparked(actions []sim.Action[sim.None, sim.None]) []sim.Action[sim.None, sim.None] {
+	return slices.DeleteFunc(slices.Clone(actions), func(a sim.Action[sim.None, sim.None]) bool {
+		return a.Name == "park"
+	})
 }

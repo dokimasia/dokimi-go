@@ -9,10 +9,14 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"sync"
 	"time"
 
 	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
+	"go.dokimi.dev/assert/stateful"
+
+	"go.dokimi.dev/host"
 )
 
 // Machine is a sans-IO machine: it applies one event at a time and appends the
@@ -103,22 +107,41 @@ var ErrCancelled = errors.New("sim: the client stopped waiting for the call")
 // each process, the effects in flight, the faults, the timers, the log of its
 // steps and the history of the calls of its clients.
 type World[E, F any] struct {
-	c       *prop.Case
-	calls   map[uint64]inbound[E, F]
-	after   func()
-	plant   func(m Machine[E, F]) Machine[E, F]
-	a       Anatomy[E, F]
-	procs   []*Process[E, F]
-	log     []Entry[E, F]
-	timers  []timer[E, F]
-	waits   []wait[E, F]
-	deps    []*dependency[E, F]
-	sides   [][]string
+	c      *prop.Case
+	calls  map[uint64]inbound[E, F]
+	after  func()
+	plant  func(m Machine[E, F]) Machine[E, F]
+	a      Anatomy[E, F]
+	procs  []*Process[E, F]
+	log    []Entry[E, F]
+	timers []timer[E, F]
+	waits  []wait[E, F]
+	deps   []*dependency[E, F]
+	sides  [][]string
+
+	// network connects the hosts of the components, and is nil for a world
+	// without a component. sched is the task scheduler of Tasks mode, and
+	// nil in native mode. netOpts are the options of the network.
+	network *host.Network
+	sched   *stateful.Scheduler
+	netOpts []host.NetworkOption
+
+	// invoked are the open calls of the clients on the components, and slow
+	// the links between two components that a slow-link keeps slow.
+	invoked []*invocation
+	slow    [][2]string
+
 	crash   point
 	elapsed time.Duration
 	replies uint64
 	sum     uint64
 	steps   int
+
+	// mu guards invoked, which the goroutines of the components complete.
+	mu sync.Mutex
+
+	// blockingOpt reports the option Blocking.
+	blockingOpt bool
 }
 
 // point is a crash point of a scenario: the step whose process crashes and
@@ -176,10 +199,20 @@ func (w *World[E, F]) start(p *Process[E, F]) {
 }
 
 // Deliver queues ev for the process named to, in the current epoch of the
-// process. It fails the case for a name that no process has.
+// process. It fails the case for a name that no process has, and for a
+// component process, which takes no event.
 func (w *World[E, F]) Deliver(to string, ev E) {
-	p := w.named(to)
+	p := w.machineProcess(w.named(to))
 	p.queue = append(p.queue, queued[E]{ev: ev, epoch: p.epoch})
+}
+
+// machineProcess returns p, and fails the case for a component process, which
+// takes no event.
+func (w *World[E, F]) machineProcess(p *Process[E, F]) *Process[E, F] {
+	if p.comp != nil {
+		w.c.Fatalf("sim: the process %q is a component, which takes no event", p.name)
+	}
+	return p
 }
 
 // Call queues the inbound call that call builds from a new reply token for
@@ -188,9 +221,10 @@ func (w *World[E, F]) Deliver(to string, ev E) {
 // the same token completes the call. A call to a crashed process ends as
 // unknown with ErrCrashed, and a call to a stopped process as unknown with
 // ErrRunEnded, as a message to such a process does. It fails the case for a
-// name that no process has.
+// name that no process has, and for a component process, which takes no
+// event.
 func (w *World[E, F]) Call(client int, to, operation string, args, keys []any, call func(reply uint64) E) {
-	p := w.named(to)
+	p := w.machineProcess(w.named(to))
 	invoked := w.c.History().Invoke(client, operation, args, keys...)
 	switch p.state {
 	case crashed:
@@ -216,9 +250,21 @@ func (w *World[E, F]) Cancel(client int) bool {
 	return true
 }
 
-// abort ends the open call of client as unknown with ErrCancelled, and
-// queues its cancel for its process. The client has an open call.
+// abort ends the open call of client as unknown with ErrCancelled. It queues
+// the cancel of a call of a machine for its process, and ends the context of
+// a call of a component. The client has an open call.
 func (w *World[E, F]) abort(client int) {
+	w.mu.Lock()
+	at := slices.IndexFunc(w.invoked, func(in *invocation) bool { return in.client == client })
+	if at >= 0 {
+		in := w.invoked[at]
+		w.end(in)
+		in.call.Unknown(ErrCancelled)
+	}
+	w.mu.Unlock()
+	if at >= 0 {
+		return
+	}
 	token := w.tokens(func(in inbound[E, F]) bool { return in.call != nil && in.client == client })[0]
 	w.calls[token].call.Unknown(ErrCancelled)
 	w.cancel(token)
@@ -226,9 +272,10 @@ func (w *World[E, F]) abort(client int) {
 
 // After queues ev for the process p once the clock of p has advanced by d.
 // The timers that one advance makes due take their places in the order of
-// their calls. A jump or a strobe of the clock does not move the timer.
+// their calls. A jump or a strobe of the clock does not move the timer. It
+// fails the case for a component process, which takes no event.
 func (w *World[E, F]) After(p *Process[E, F], d time.Duration, ev E) {
-	epoch := p.epoch
+	epoch := w.machineProcess(p).epoch
 	w.at(p, d, func() { p.queue = append(p.queue, queued[E]{ev: ev, epoch: epoch}) })
 }
 
@@ -260,8 +307,8 @@ func (w *World[E, F]) runnable() []*Process[E, F] {
 	return out
 }
 
-// callers returns the clients with an open call, in the order of their
-// numbers.
+// callers returns the clients with an open call, of a machine or of a
+// component, in the order of their numbers.
 func (w *World[E, F]) callers() []int {
 	var out []int
 	for _, in := range w.calls {
@@ -269,6 +316,11 @@ func (w *World[E, F]) callers() []int {
 			out = append(out, in.client)
 		}
 	}
+	w.mu.Lock()
+	for _, in := range w.invoked {
+		out = append(out, in.client)
+	}
+	w.mu.Unlock()
 	slices.Sort(out)
 	return out
 }
@@ -408,9 +460,27 @@ func (w *World[E, F]) poll() {
 // call. The dependencies keep what they applied, and each medium.Memory among
 // them crashes: it loses each write that a sync did not cover. An event for
 // the process until its restart has the old epoch, so the restarted machine
-// never takes it. It fails the case for a name that no process has, and for a
-// process that does not run.
+// never takes it. A component process crashes its incarnation by a process
+// crash or by a power loss, which the case chooses and which shrinks to a
+// process crash. Its open calls end as unknown with medium.ErrCrashed. It
+// fails the case for a name that no process has, and for a process that does
+// not run.
 func (w *World[E, F]) Crash(name string) {
+	p := w.down(name)
+	if p.comp != nil {
+		w.crashComponent(p, w.c.Draw(prop.SampledFrom(host.ProcessCrash, host.PowerLoss), "kill."+p.name))
+	}
+	for _, m := range media(p) {
+		m.Crash()
+	}
+	w.forget(p, ErrCrashed)
+	w.strike(FaultCrash)
+}
+
+// down marks the process named name as crashed and returns it: the events
+// that wait for it, its pause and its strobe are gone. It fails the case for
+// a name that no process has, and for a process that does not run.
+func (w *World[E, F]) down(name string) *Process[E, F] {
 	p := w.named(name)
 	if p.state != running {
 		w.c.Fatalf("sim: the process %q does not run", name)
@@ -419,35 +489,46 @@ func (w *World[E, F]) Crash(name string) {
 	p.state = crashed
 	p.paused = false
 	p.strobe = strobe{}
-	for _, m := range media(p) {
-		m.Crash()
-	}
-	w.forget(p, ErrCrashed)
-	w.strike(FaultCrash)
+	return p
 }
 
 // Restart starts a new machine of the crashed process named name, in a new
-// epoch, and queues its start. It fails the case for a name that no process
-// has, and for a process that has not crashed.
+// epoch, and queues its start. A component process starts a new incarnation
+// and opens its value. It fails the case for a name that no process has, and
+// for a process that has not crashed.
 func (w *World[E, F]) Restart(name string) {
 	p := w.named(name)
 	if p.state != crashed {
 		w.c.Fatalf("sim: the process %q has not crashed", name)
 	}
-	w.start(p)
+	w.restart(p)
 	w.strike(FaultRestart)
 }
 
+// restart starts the crashed process p again: a machine through start, and a
+// component through startComponent.
+func (w *World[E, F]) restart(p *Process[E, F]) {
+	p.replaced = false
+	if p.comp != nil {
+		w.startComponent(p)
+		return
+	}
+	w.start(p)
+}
+
 // Pause pauses the process named name: it takes no event, and its clock does
-// not advance while the time of the run advances. It fails the case for a
-// name that no process has, and for a process that does not run or is
-// paused.
+// not advance while the time of the run advances. A component process pauses
+// its incarnation. It fails the case for a name that no process has, and for
+// a process that does not run or is paused.
 func (w *World[E, F]) Pause(name string) {
 	p := w.named(name)
 	if p.state != running || p.paused {
 		w.c.Fatalf("sim: the process %q does not run unpaused", name)
 	}
 	p.paused = true
+	if p.comp != nil {
+		p.comp.inc.Pause()
+	}
 	w.strike(FaultPause)
 }
 
@@ -458,11 +539,20 @@ func (w *World[E, F]) Resume(name string) {
 	if !p.paused {
 		w.c.Fatalf("sim: the process %q is not paused", name)
 	}
-	p.paused = false
+	resume(p)
 }
 
-// Advance advances the time of the run by d, and the clock of each process
-// that is not paused by d times its drift. It runs the function of each timer
+// resume ends the pause of the paused process p.
+func resume[E, F any](p *Process[E, F]) {
+	p.paused = false
+	if p.comp != nil {
+		p.comp.inc.Resume()
+	}
+}
+
+// Advance advances the time of the run by d, the clock of each process that
+// is not paused by d times its drift, and the monotonic clock of each host of
+// a component by d times its rate error. It runs the function of each timer
 // whose clock has advanced to the timer.
 func (w *World[E, F]) Advance(d time.Duration) {
 	w.elapsed += d
@@ -471,6 +561,7 @@ func (w *World[E, F]) Advance(d time.Duration) {
 			p.clock.advance(d)
 		}
 	}
+	w.advanceHosts(d)
 	var ready []timer[E, F]
 	w.timers = slices.DeleteFunc(w.timers, func(t timer[E, F]) bool {
 		if t.process.clock.advanced() < t.at {
@@ -501,10 +592,18 @@ func (w *World[E, F]) Next() (time.Duration, bool) {
 
 // Stop passes the stop event to each process that has not stopped or
 // crashed, performs the replies that it returns, and ends each open call of
-// the history as unknown with ErrRunEnded.
+// the history as unknown with ErrRunEnded. It ends the incarnation of each
+// component process that runs by a process crash, and fails the case for a
+// goroutine of the incarnation that is alive after quiescence.
 func (w *World[E, F]) Stop() {
 	for _, p := range w.procs {
-		if p.state == running {
+		switch {
+		case p.state != running:
+		case p.comp != nil:
+			w.endInvocations(func(in *invocation) bool { return in.process == p.name }, ErrRunEnded)
+			w.endComponent(p, host.ProcessCrash)
+			p.state = stopped
+		default:
 			w.stop(p)
 		}
 	}

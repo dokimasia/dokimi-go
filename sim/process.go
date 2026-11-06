@@ -10,11 +10,15 @@ import (
 )
 
 // Process is one process of a world: its name, its epoch, its clock, its
-// machine and its dependencies.
+// machine and its dependencies, or the component that it runs. The clock of a
+// component process is the clock of the run without a drift, and the code of
+// the component reads the clock of its host. replaced marks a component
+// process that a disk replacement crashed, until its restart.
 type Process[E, F any] struct {
 	machine    Machine[E, F]
 	clock      *Clock
 	newMachine func(clock *Clock) Machine[E, F]
+	comp       *component
 	name       string
 	queue      []queued[E]
 	deps       []any
@@ -23,6 +27,7 @@ type Process[E, F any] struct {
 	state      state
 	paused     bool
 	full       bool
+	replaced   bool
 }
 
 // queued is an event that waits for its process, with the epoch of the

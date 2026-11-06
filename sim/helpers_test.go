@@ -4,19 +4,175 @@
 package sim_test
 
 import (
+	"context"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
+	"hash/crc32"
 	"io"
+	"net"
 	"os"
 	"slices"
+	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.dokimi.dev/assert"
+	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/conform"
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/sim"
 	"go.dokimi.dev/spec"
 )
+
+// cell is the component of the specs: a value in the file cell of the disk of
+// its host, and a connection of datagrams on the port 9001 of its host. The
+// file cell contains the CRC-32 of the value in big-endian order, and then the
+// value. With parks set, each call waits until its context ends. With forgets
+// set, each Get returns the value w.
+type cell struct {
+	env     *host.Env
+	packets net.PacketConn
+	parks   bool
+	forgets bool
+}
+
+// errCorrupt is the error of a Get of a file cell whose CRC-32 does not match
+// its value.
+var errCorrupt = errors.New("cell: the checksum of the file cell does not match its value")
+
+// openCell returns the cell of an incarnation over env.
+func openCell(env *host.Env) *cell {
+	packets, _ := env.ListenPacket(9001)
+	return &cell{env: env, packets: packets}
+}
+
+// Set writes the value and its checksum to the file cell.tmp and syncs it. It
+// then renames the file to cell and syncs the directory, so a crash leaves the
+// old value or the new one.
+func (c *cell) Set(ctx context.Context, value string) error {
+	if c.parks {
+		return host.Park(ctx)
+	}
+	fsys := c.env.Disk()
+	f, err := fsys.OpenFile("cell.tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	record := binary.BigEndian.AppendUint32(nil, crc32.ChecksumIEEE([]byte(value)))
+	if _, err = f.Write(append(record, value...)); err == nil {
+		err = f.Sync()
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = fsys.Rename("cell.tmp", "cell")
+	}
+	if err != nil {
+		return err
+	}
+	return fsys.SyncDir(".")
+}
+
+// Get returns the value of the file cell, and an empty value without one. It
+// fails with errCorrupt for a file whose checksum does not match its value.
+func (c *cell) Get(ctx context.Context) (string, error) {
+	switch {
+	case c.parks:
+		return "", host.Park(ctx)
+	case c.forgets:
+		return "w", nil
+	}
+	f, err := c.env.Disk().OpenFile("cell", os.O_RDONLY, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	data, err := io.ReadAll(f)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	switch {
+	case err != nil:
+		return "", err
+	case len(data) < 4 || crc32.ChecksumIEEE(data[4:]) != binary.BigEndian.Uint32(data):
+		return "", errCorrupt
+	}
+	return string(data[4:]), nil
+}
+
+// cells returns a world of the case c with the component cells a and b.
+func cells(c *prop.Case) (*sim.World[event, effect], *sim.Component[*cell], *sim.Component[*cell]) {
+	w := sim.New(c, anatomy)
+	return w, sim.SpawnComponent(w, "a", openCell), sim.SpawnComponent(w, "b", openCell)
+}
+
+// inBubble runs body in the cases of a run of the property engine inside a
+// testing/synctest bubble. The first case decodes the entries draws, and first
+// is true for it alone. The later cases try the boundaries of each draw, so a
+// spec whose result depends on a draw reads the result of the first case.
+func inBubble(t *testing.T, draws string, body func(c *prop.Case, first bool)) {
+	t.Helper()
+
+	synctest.Test(t, func(t *testing.T) {
+		cases := 0
+		prop.ForAll(t, "the world runs in a case", func(c *prop.Case) {
+			cases++
+			body(c, cases == 1)
+		}, prop.Cases(1), prop.Draws(draws), prop.Store(""))
+	})
+}
+
+// failsInBubble runs body in one case of a property that fails, inside a
+// testing/synctest bubble, and returns the record of the failure of the case.
+func failsInBubble(t *testing.T, draws string, body func(c *prop.Case)) assert.Failure {
+	t.Helper()
+	var inner assert.Failure
+	synctest.Test(t, func(t *testing.T) {
+		got := assert.Rejects(t, "the world fails the case", func(tb assert.TB) {
+			prop.ForAll(tb, "the world fails the case", body, prop.Cases(1), prop.Draws(draws), prop.Hermetic(),
+				prop.Store(""), prop.Shrink(0))
+		})
+		assert.Length(t, got, 1, "the property fails once")
+		inner, _ = got[0].CaseFailure()
+	})
+	return inner
+}
+
+// still are the draws of a case of two components on hosts without drift, and
+// lone the draws of a case of the one component a.
+const (
+	still = `[{"label": "drift.a", "value": {"type": "int", "value": 0}},` +
+		`{"label": "drift.b", "value": {"type": "int", "value": 0}}]`
+	lone = `[{"label": "drift.a", "value": {"type": "int", "value": 0}}]`
+)
+
+// completions returns the kind, the error and the output of the completion of
+// each call of the events, in the order of the completions.
+func completions(events []history.Event) []completion {
+	var out []completion
+	for _, e := range events {
+		if e.Kind != history.Invoke {
+			out = append(out, completion{kind: e.Kind, err: e.Error, output: e.Output})
+		}
+	}
+	return out
+}
+
+// completion is the kind, the error and the output of the completion of a
+// call.
+type completion struct {
+	err    error
+	output any
+	kind   history.Kind
+}
 
 // mediumWith returns a medium in memory whose durable file f contains data,
 // beside the empty durable file e. A new medium refuses none of the calls, so
@@ -541,4 +697,206 @@ func drain(w *sim.World[event, effect]) {
 	for pending := w.Pending(); len(pending) > 0; pending = w.Pending() {
 		w.Step(pending[0])
 	}
+}
+
+// cellSet is the simulation of the cells a and b of the specs of a run. It
+// keeps the components of the case that runs, and for each case the count of
+// its Sets and the datagrams that b received.
+type cellSet struct {
+	a, b     *sim.Component[*cell]
+	sets     []int
+	received [][]string
+	mu       sync.Mutex
+}
+
+// system returns the system of the cells a and b, whose incarnations open
+// through open. b reads each datagram of its connection into the datagrams of
+// the case.
+func (cs *cellSet) system(open func(env *host.Env) *cell) sim.System[sim.None, sim.None] {
+	return func(w *sim.World[sim.None, sim.None]) {
+		cs.mu.Lock()
+		cs.sets, cs.received = append(cs.sets, 0), append(cs.received, nil)
+		at := len(cs.sets) - 1
+		cs.mu.Unlock()
+		cs.a = sim.SpawnComponent(w, "a", open)
+		cs.b = sim.SpawnComponent(w, "b", func(env *host.Env) *cell {
+			c := open(env)
+			env.Go(func() {
+				buf := make([]byte, 8)
+				for {
+					n, _, err := c.packets.ReadFrom(buf)
+					if err != nil {
+						return
+					}
+					cs.mu.Lock()
+					cs.received[at] = append(cs.received[at], string(buf[:n]))
+					cs.mu.Unlock()
+				}
+			})
+			return c
+		})
+	}
+}
+
+// simulation returns the simulation of the cells a and b inside conform.Bubble.
+// Its clients set and get the value of a cell and park a call at a, and the
+// action send sends a datagram from a to b while a runs. The spec of a cell is
+// a register.
+func (cs *cellSet) simulation() sim.Simulation[sim.None, sim.None, []history.Operation] {
+	name := func(c *prop.Case) any { return c.Draw(prop.SampledFrom("a", "b"), "cell") }
+	invoke := func(operation string, call func(ctx context.Context, c *cell) (any, error)) func(
+		w *sim.World[sim.None, sim.None], client int, n any,
+	) {
+		return func(w *sim.World[sim.None, sim.None], client int, n any) {
+			comp := cs.b
+			if n == "a" {
+				comp = cs.a
+			}
+			w.Invoke(client, n.(string), operation, []any{n}, []any{n}, func(ctx context.Context) (any, error) {
+				return call(ctx, comp.Value())
+			})
+		}
+	}
+	set := invoke("Set", func(ctx context.Context, c *cell) (any, error) { return nil, c.Set(ctx, "v") })
+	running := func(w *sim.World[sim.None, sim.None]) bool {
+		return !slices.Contains(w.Faults(), "crash:a") && !slices.Contains(w.Faults(), "disk-replacement:a")
+	}
+	return sim.Simulation[sim.None, sim.None, []history.Operation]{
+		System: cs.system(openCell),
+		Spec: history.SpecFrom(func() history.Subject {
+			values := map[string]string{}
+			return func(operation string, args []any) any {
+				switch operation {
+				case "Set":
+					values[args[0].(string)] = "v"
+				case "Get":
+					return values[args[0].(string)]
+				}
+				return nil
+			}
+		}),
+		Around:  conform.Bubble,
+		Clients: 2,
+		Actions: []sim.Action[sim.None, sim.None]{
+			{Name: "set", Call: true, Input: name, Run: func(w *sim.World[sim.None, sim.None], client int, n any) {
+				cs.mu.Lock()
+				cs.sets[len(cs.sets)-1]++
+				cs.mu.Unlock()
+				set(w, client, n)
+			}},
+			{Name: "get", Call: true, Input: name, Run: invoke("Get", func(ctx context.Context, c *cell) (any, error) {
+				return c.Get(ctx)
+			})},
+			{Name: "park", Call: true, Run: func(w *sim.World[sim.None, sim.None], client int, _ any) {
+				w.Invoke(client, "a", "Park", nil, []any{"a"}, func(ctx context.Context) (any, error) {
+					return nil, host.Park(ctx)
+				})
+			}},
+			{
+				Name:    "send",
+				Enabled: running,
+				Input:   func(c *prop.Case) any { return c.Draw(prop.SampledFrom("1", "2"), "datagram") },
+				Run: func(_ *sim.World[sim.None, sim.None], _ int, d any) {
+					c := cs.a.Value()
+					c.env.Go(func() { _, _ = c.packets.WriteTo([]byte(d.(string)), hostAddr("b:9001")) })
+				},
+			},
+		},
+	}
+}
+
+// opening returns the draws of a run of the cells before its first step:
+// hosts without drift, and a link at the lowest latency of a blocking network.
+func opening(blocking bool) []entry {
+	entries := []entry{drawn("drift.a", 0), drawn("drift.b", 0)}
+	if blocking {
+		entries = append(entries, drawn("latency.a.b", 0.0))
+	}
+	return entries
+}
+
+// runCase runs the case of the draws first, in a run of the property engine
+// of s on the seat, and returns the count of the Sets of each case.
+func (cs *cellSet) runCase(seat assert.TB, s sim.Simulation[sim.None, sim.None, []history.Operation],
+	draws string,
+) []int {
+	seat.Helper()
+	runScript(seat, s, draws)
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return slices.Clone(cs.sets)
+}
+
+// runScript runs the case of the draws first, in a run of the property engine
+// of s on the seat, inside the environment of s.
+func runScript[E, F, S any](seat assert.TB, s sim.Simulation[E, F, S], draws string) {
+	seat.Helper()
+	opts := []prop.Option{prop.Draws(draws), prop.Cases(1), prop.Store("")}
+	if s.Around != nil {
+		opts = append(opts, prop.Around(s.Around))
+	}
+	prop.ForAll(seat, "the simulation runs", func(c *prop.Case) { sim.Run(c, s) }, opts...)
+}
+
+// recorded is a recorder of the test t. Its method Unwrap returns t, so a run
+// inside an environment runs inside the environment of t.
+type recorded struct {
+	*assert.Recorder
+
+	t *testing.T
+}
+
+// Unwrap returns the test of the recorder.
+func (r *recorded) Unwrap() assert.TB { return r.t }
+
+// hostAddr is the address of a host of the network udp.
+type hostAddr string
+
+// Network returns udp.
+func (hostAddr) Network() string { return "udp" }
+
+// String returns the address.
+func (a hostAddr) String() string { return string(a) }
+
+// entry is an entry of the draws of a scripted case, a draw or a step, as
+// prop.Draws reads it.
+type entry map[string]any
+
+// drawn returns the entry of a draw of the value under the label, with the
+// typed literal of an int, a float64, a bool or a string.
+func drawn(label string, value any) entry {
+	literal := map[string]any{"type": "string", "value": value}
+	switch value.(type) {
+	case int:
+		literal["type"] = "int"
+	case float64:
+		literal["type"] = "float"
+	case bool:
+		literal["type"] = "bool"
+	}
+	return entry{"label": label, "value": literal}
+}
+
+// stepOf returns the entries of a step of the action with the draws of its
+// input.
+func stepOf(action string, draws ...entry) []entry {
+	return append([]entry{{"step": action}}, draws...)
+}
+
+// slowLink returns the step of a slow-link of the link at the index among the
+// links that are not slow, at a latency of one millisecond.
+func slowLink(link int) []entry {
+	return stepOf("slow-link", drawn("link", link), drawn("slow-link", 1_000_000))
+}
+
+// scriptOf returns the draws of a case that makes the draws of the opening
+// and then the steps.
+func scriptOf(start []entry, steps ...[]entry) string {
+	entries := slices.Clone(start)
+	for _, s := range steps {
+		entries = append(entries, s...)
+	}
+	// A marshal of maps of numbers and strings does not fail.
+	data, _ := json.Marshal(entries)
+	return string(data)
 }

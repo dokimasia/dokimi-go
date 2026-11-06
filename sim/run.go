@@ -17,6 +17,9 @@ import (
 	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
+
+	"go.dokimi.dev/host"
+	"go.dokimi.dev/spec"
 )
 
 // The bounds of a run.
@@ -43,7 +46,7 @@ const (
 var kinds = []Fault{
 	FaultCrash, FaultRestart, FaultPause, FaultPartition, FaultDrop, FaultDelay, FaultDuplicate,
 	FaultLoseBefore, FaultLoseAfter, FaultOutage, FaultSlow, FaultClockJump, FaultClockStrobe,
-	FaultTornWrite, FaultCorruption, FaultFullDisk,
+	FaultTornWrite, FaultCorruption, FaultFullDisk, FaultReset, FaultSlowLink, FaultDiskReplacement,
 }
 
 // Simulation is a system of sans-IO machines with its oracles. S is the
@@ -75,6 +78,20 @@ type Simulation[E, F, S any] struct {
 	Invariants []Invariant[E, F]
 	Converges  []Convergence[E, F]
 	Scenarios  []Scenario[E, F]
+	// History are the options of each check of the history against the
+	// spec, such as history.Budget.
+	History []history.Option
+
+	// Around runs each case inside an environment, such as conform.Bubble,
+	// which a world with a component in native mode needs.
+	Around func(t *testing.T, run func(*testing.T))
+	// Mode is the mode of the hosts of the components: spec.ModeTasks runs
+	// them under a task scheduler of the case, and spec.ModeNative on the
+	// goroutines of the bubble.
+	Mode spec.Mode
+	// Network are the options of the network of the hosts of the components.
+	Network []host.NetworkOption
+
 	// Clients is the number of clients that make calls, and 3 for 0.
 	Clients int
 	// Strategy chooses the next process. The zero Strategy is PCT(3).
@@ -82,6 +99,9 @@ type Simulation[E, F, S any] struct {
 	// Isolation is the isolation level of the transactions of the clients,
 	// and the zero Isolation checks none.
 	Isolation Isolation
+	// Blocking lets a world in native mode strike the blocking faults on its
+	// components. A world in Tasks mode strikes them without it.
+	Blocking bool
 }
 
 // Invariant is a safety property that the run checks after every step, with
@@ -140,12 +160,18 @@ const (
 
 // Run runs one case of s on a new world: the active phase of the actions and
 // the faults as the steps of a machine of the package stateful of the assert
-// library, then the recovery and the final phase. It checks the rules and the
-// invariants after every step. Once the final phase ends, it checks the
-// convergences, the whole history against the spec, partitioned by the keys
-// of the calls, and its isolation. The machine has no spec, so no check of
-// the history puts every call into one partition. Run passes the name of each
-// action that it takes to the case as a label.
+// library, then the recovery and the final phase. After every step it waits
+// for the quiescence of the components, checks the rules and the invariants,
+// and checks the history against the spec, partitioned by the keys of the
+// calls, continuing the searches of the check before it. A history that the
+// checker cannot decide within its budget ends the checks of the history
+// after the steps. Once the final phase ends, it checks the convergences, the
+// whole history against the spec and its isolation. The machine has no spec,
+// so no check of the history puts every call into one partition. Run passes
+// the name of each action that it takes to the case as a label. At the end of
+// the case, also after a failure, it crashes each component that runs by a
+// process crash. No goroutine of a component then runs after the end of its
+// case.
 func Run[E, F, S any](c *prop.Case, s Simulation[E, F, S]) {
 	r := begin(c, s)
 	stateful.Steps(c, stateful.Machine[struct{}]{
@@ -164,7 +190,7 @@ const confirmEvery = 16
 // replay observes another checksum of a step as flaky.
 func Test[E, F, S any](tb assert.TB, s Simulation[E, F, S]) {
 	tb.Helper()
-	opts := []prop.Option{prop.Confirm(confirmEvery)}
+	opts := append(s.around(), prop.Confirm(confirmEvery))
 	for _, kind := range kinds {
 		if share, required := s.Require[kind]; required {
 			opts = append(opts, prop.Require(string(kind), share))
@@ -230,7 +256,7 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 	seed := seedOf(check)
 	contract := fmt.Sprintf("the planted defect fails the check %s at the seed %d", check, seed)
 	got := assert.Rejects(tb, contract, func(tb assert.TB) {
-		opts := []prop.Option{prop.Hermetic(), prop.Seed(seed), prop.Store(""), prop.Shrink(0)}
+		opts := append(s.around(), prop.Hermetic(), prop.Seed(seed), prop.Store(""), prop.Shrink(0))
 		prop.ForAll(tb, statement, func(c *prop.Case) { Run(c, d) }, opts...)
 		for _, sc := range scenarios {
 			prop.ForAll(tb, statement, func(c *prop.Case) {
@@ -254,7 +280,16 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 // Fuzz registers the choices of a run of s as the input of the fuzz target f.
 func Fuzz[E, F, S any](f *testing.F, s Simulation[E, F, S]) {
 	f.Helper()
-	prop.Fuzz(f, "the simulation finds no failure", func(c *prop.Case) { Run(c, s) })
+	prop.Fuzz(f, "the simulation finds no failure", func(c *prop.Case) { Run(c, s) }, s.around()...)
+}
+
+// around returns the option that runs each case of s inside its environment,
+// and no option for s without one.
+func (s Simulation[E, F, S]) around() []prop.Option {
+	if s.Around == nil {
+		return nil
+	}
+	return []prop.Option{prop.Around(s.Around)}
 }
 
 // alone returns s without the spec of its calls and its oracles, for the
@@ -287,7 +322,7 @@ func scenario[E, F, S any](tb assert.TB, s Simulation[E, F, S], sc Scenario[E, F
 			history.Linearizable(c, r.w.History(), s.Spec, "the history of the calls of the clients is linearizable")
 		}
 		steps = r.w.steps
-	}, prop.Cases(1), prop.Store(""))
+	}, append(s.around(), prop.Cases(1), prop.Store(""))...)
 	return steps
 }
 
@@ -299,13 +334,70 @@ func seedOf(key string) uint64 {
 	return h.Sum64()
 }
 
-// run is one case of a simulation: its world and its strategy.
+// run is one case of a simulation: its world and its strategy, and the
+// searches of the last check of the history. undecided reports a check that
+// the checker could not decide, which ends the checks after the steps.
 type run[E, F, S any] struct {
-	c    *prop.Case
-	w    *World[E, F]
-	pick *picker[E, F]
-	s    Simulation[E, F, S]
+	c         *prop.Case
+	w         *World[E, F]
+	pick      *picker[E, F]
+	cp        history.Checkpoint[S]
+	s         Simulation[E, F, S]
+	undecided bool
 }
+
+// linearizable is the statement of the checks of the history of a run.
+const linearizable = "the history of the calls of the clients is linearizable"
+
+// stepped returns the action a, whose run the settle of the components, the
+// check of the rules and the invariants where check is set, and the check of
+// the history follow.
+func (r *run[E, F, S]) stepped(a stateful.Action[struct{}], check bool) stateful.Action[struct{}] {
+	run := a.Run
+	a.Run = func(c *prop.Case, client int, in any) {
+		run(c, client, in)
+		r.w.settle()
+		if check {
+			r.check()
+		}
+		r.checkHistory()
+	}
+	return a
+}
+
+// checkHistory checks the history of the case against the spec after a step,
+// continuing the searches of the check before it. A violation fails the case,
+// and a search that ends undecided ends the checks after the steps.
+func (r *run[E, F, S]) checkHistory() {
+	//dokimi:mutate-skip lcr-left: a check after an undecided one searches a longer history under the same budget and ends undecided too, so the flag saves its search alone
+	if r.s.Spec.Next == nil || r.undecided {
+		return
+	}
+	rec := assert.NewRecorder().WithContext(r.c.Context())
+	history.Linearizable(rec, r.w.History(), r.s.Spec, linearizable, r.checks()...)
+	if faults := rec.Faults(); len(faults) > 0 {
+		assert.Fault(r.c, faults[0])
+		return
+	}
+	for _, f := range rec.Failures() {
+		if f.Detail[outcomeField] == history.Undecided {
+			//dokimi:mutate-skip sbr-delete: a check after an undecided one searches a longer history under the same budget and ends undecided too, so the flag saves its search alone
+			r.undecided = true
+			return
+		}
+		r.c.Report(f, true)
+	}
+}
+
+// checks returns the options of a check of the history: the options of the
+// simulation, and the resumption of the searches of the check before it.
+func (r *run[E, F, S]) checks() []history.Option {
+	return append(slices.Clip(r.s.History), history.Resume(&r.cp))
+}
+
+// outcomeField is the field of the record of a check of history.Linearizable
+// that states how the check ended, as a history.Verdict.
+const outcomeField = "outcome"
 
 // input is the input of an action of the consumer: its client and its value.
 type input struct {
@@ -318,8 +410,13 @@ type input struct {
 func begin[E, F, S any](c *prop.Case, s Simulation[E, F, S]) *run[E, F, S] {
 	w := New(c, s.Anatomy)
 	w.plant = s.plant
+	w.netOpts, w.blockingOpt = s.Network, s.Blocking
+	if s.Mode == spec.ModeTasks {
+		w.sched = stateful.NewScheduler(c, stateful.Uniform())
+	}
 	r := &run[E, F, S]{c: c, w: w, pick: newPicker[E, F](c, s.Strategy, pickLimit), s: s}
 	w.after = r.check
+	c.Cleanup(w.shutdown)
 	c.Cleanup(r.report)
 	s.System(w)
 	return r
@@ -411,23 +508,35 @@ func fault[I any](
 // actions returns the actions of the active phase of the run: the delivery
 // and the advance of time, the cancel of a call, the faults within the
 // bounds of Tolerate and their ends, and the actions of the consumer that are
-// not final.
+// not final. The settle of the components and the checks follow each action,
+// and a delivery checks the rules and the invariants through its step. A
+// world with a component advances by 1 µs to 10 s while no machine has a
+// timer, and cancels a call of a component without the cancelled event of
+// the anatomy.
 func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 	w := r.w
 	out := []stateful.Action[struct{}]{
-		act("deliver", func() bool { return len(w.runnable()) > 0 },
+		r.stepped(act("deliver", func() bool { return len(w.runnable()) > 0 },
 			func(*prop.Case) string { return r.pick.pick(w.runnable()).name }, func(name string) { w.Step(name) }),
+			false),
 		act("advance", func() bool {
 			_, pending := w.Next()
-			return pending
+			return pending || w.network != nil
 		}, func(c *prop.Case) time.Duration {
-			gap, _ := w.Next()
-			return gap + c.Draw(prop.Duration(0, gap), "advance")
+			if gap, pending := w.Next(); pending {
+				return gap + c.Draw(prop.Duration(0, gap), "advance")
+			}
+			return time.Duration(c.Draw(prop.Integer(1, longestAdvance), "advance")) * time.Microsecond
 		}, w.Advance),
 	}
+	cancellable := w.invokers
 	if r.s.Anatomy.Cancelled != nil {
-		out = append(out, act("cancel", func() bool { return len(w.callers()) > 0 },
-			func(c *prop.Case) int { return choose(c, w.callers(), "client") }, w.abort))
+		cancellable = w.callers
+	}
+	//dokimi:mutate-skip ror-true,lcr-true: an action that no step enables changes only the choices of the swarm of a case
+	if r.s.Anatomy.Cancelled != nil || w.network != nil {
+		out = append(out, act("cancel", func() bool { return len(cancellable()) > 0 },
+			func(c *prop.Case) int { return choose(c, cancellable(), "client") }, w.abort))
 	}
 	out = append(out, r.faults()...)
 	for _, a := range r.s.Actions {
@@ -443,6 +552,9 @@ func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 				},
 			})
 		}
+	}
+	for i := 1; i < len(out); i++ {
+		out[i] = r.stepped(out[i], true)
 	}
 	return out
 }
@@ -537,7 +649,7 @@ func (r *run[E, F, S]) settle() {
 	r.check()
 	h := r.w.History()
 	if r.s.Spec.Next != nil {
-		history.Linearizable(r.c, h, r.s.Spec, "the history of the calls of the clients is linearizable")
+		history.Linearizable(r.c, h, r.s.Spec, linearizable, r.checks()...)
 	}
 	switch r.s.Isolation {
 	case Serializable:
@@ -577,7 +689,11 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 		return func() bool { return within(kind) && len(r.dependencies(match)) > 0 }
 	}
 	alive := func(p *Process[E, F]) bool { return p.state == running }
-	up := func(p *Process[E, F]) bool { return p.state == running && !p.paused }
+	up := func(p *Process[E, F]) bool {
+		return p.state == running && !p.paused && (p.comp == nil || w.blocking())
+	}
+	machine := func(p *Process[E, F]) bool { return p.comp == nil }
+	hosted := func(p *Process[E, F]) bool { return p.comp != nil && p.state == running }
 	down := func(p *Process[E, F]) bool { return p.state == crashed }
 	asleep := func(p *Process[E, F]) bool { return p.paused }
 	seen := func(*dependency[E, F]) bool { return true }
@@ -630,8 +746,8 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 			fault(string(FaultClockJump), spawned, r.jump, func(j jump) { w.Jump(j.name, j.d) }),
 		},
 		FaultClockStrobe: {
-			fault(string(FaultClockStrobe), func() bool { return within(FaultClockStrobe) && spawned() }, r.strobe,
-				func(s strobing) { w.Strobe(s.name, s.a, s.b, s.steps) }),
+			fault(string(FaultClockStrobe), func() bool { return within(FaultClockStrobe) && some(machine)() },
+				r.strobe, func(s strobing) { w.Strobe(s.name, s.a, s.b, s.steps) }),
 		},
 		FaultTornWrite: {
 			fault(string(FaultTornWrite), some(stored[E, F]), r.tear, func(t tearing) { w.Tear(t.name, t.n) }),
@@ -645,6 +761,26 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 				func(f filling) { w.Fill(f.name, f.n) }),
 			act("restore-disk", some(full[E, F]), process(full[E, F]), w.RestoreDisk),
 		},
+		FaultReset: {
+			fault(string(FaultReset), func() bool { return len(r.links()) > 0 },
+				func(c *prop.Case) [2]string { return choose(c, r.links(), "link") },
+				func(l [2]string) { w.Reset(l[0], l[1]) }),
+		},
+		FaultSlowLink: {
+			fault(
+				string(FaultSlowLink),
+				func() bool { return w.blocking() && within(FaultSlowLink) && len(r.fastLinks()) > 0 },
+				r.slowing,
+				func(s slowing) { w.SlowLink(s.link[0], s.link[1], s.latency) },
+			),
+			fault(string(FaultRestoreLink), func() bool { return len(w.slow) > 0 },
+				func(c *prop.Case) [2]string { return choose(c, w.slow, "link") },
+				func(l [2]string) { w.RestoreLink(l[0], l[1]) }),
+		},
+		FaultDiskReplacement: {
+			fault(string(FaultDiskReplacement), func() bool { return within(FaultDiskReplacement) && some(hosted)() },
+				process(hosted), w.ReplaceDisk),
+		},
 	}
 	var actions []stateful.Action[struct{}]
 	for _, kind := range kinds {
@@ -656,15 +792,51 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 }
 
 // The processes that the faults of media strike: stored runs over media in
-// memory, filed has a file with a byte on its media, roomy has media that are
-// not full, and full has full media.
-func stored[E, F any](p *Process[E, F]) bool { return p.state == running && len(media(p)) > 0 }
+// memory or on the disk of a host, filed has a file with a byte on its disks,
+// roomy has disks that are not full, and full has full disks.
+func stored[E, F any](p *Process[E, F]) bool { return p.state == running && len(disks(p)) > 0 }
 
 func filed[E, F any](p *Process[E, F]) bool { return len(filesOf(p)) > 0 }
 
-func roomy[E, F any](p *Process[E, F]) bool { return len(media(p)) > 0 && !p.full }
+func roomy[E, F any](p *Process[E, F]) bool { return len(disks(p)) > 0 && !p.full }
 
 func full[E, F any](p *Process[E, F]) bool { return p.full }
+
+// links returns the link between each two components, in the order of their
+// spawns, and fastLinks the links that no slow-link keeps slow.
+func (r *run[E, F, S]) links() [][2]string {
+	var comps []string
+	for _, p := range r.w.procs {
+		if p.comp != nil {
+			comps = append(comps, p.name)
+		}
+	}
+	var out [][2]string
+	for i, a := range comps {
+		for _, b := range comps[i+1:] {
+			out = append(out, [2]string{a, b})
+		}
+	}
+	return out
+}
+
+func (r *run[E, F, S]) fastLinks() [][2]string {
+	return slices.DeleteFunc(r.links(), func(l [2]string) bool { return slices.Contains(r.w.slow, l) })
+}
+
+// slowing is the input of a slow-link: a link and the latency that it takes.
+type slowing struct {
+	link    [2]string
+	latency time.Duration
+}
+
+// slowing returns the input of a slow-link that the case chooses: a link that
+// is not slow, and a latency of up to the bound of an open of a component.
+func (r *run[E, F, S]) slowing(c *prop.Case) slowing {
+	return slowing{
+		link: choose(c, r.fastLinks(), "link"), latency: c.Draw(prop.Duration(0, componentBound), "slow-link"),
+	}
+}
 
 // tearing is the input of a torn write: a process and the bytes that its
 // torn write keeps.
@@ -720,7 +892,7 @@ type file struct {
 // each medium down and in the order of the names in each directory.
 func filesOf[E, F any](p *Process[E, F]) []file {
 	var out []file
-	for _, m := range media(p) {
+	for _, m := range disks(p) {
 		for dirs := []string{"."}; len(dirs) > 0; dirs = dirs[1:] {
 			entries, _ := m.ReadDir(dirs[0])
 			for _, e := range entries {
@@ -761,7 +933,7 @@ func (r *run[E, F, S]) jump(c *prop.Case) jump {
 // offsets and the steps of the strobe.
 func (r *run[E, F, S]) strobe(c *prop.Case) strobing {
 	return strobing{
-		name:  choose(c, r.names(), "process"),
+		name:  choose(c, r.processes(func(p *Process[E, F]) bool { return p.comp == nil }), "process"),
 		a:     c.Draw(prop.Duration(-maxJump, maxJump), "strobe.a"),
 		b:     c.Draw(prop.Duration(-maxJump, maxJump), "strobe.b"),
 		steps: c.Draw(prop.Integer(1, maxStrobe), "strobe.steps"),

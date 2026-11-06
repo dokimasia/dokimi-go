@@ -5,14 +5,22 @@ package sim_test
 
 import (
 	"context"
+	"io"
+	"net"
+	"os"
+	"strings"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
+	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/host"
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/sim"
 )
 
@@ -97,6 +105,24 @@ func TestFault(t *testing.T) {
 				w.Partition([]string{"a", "b"})
 			})
 			expect.Equal(t, got.Contract, "sim: a partition is in force", "the failure names the partition")
+		})
+
+		t.Run("cuts the network of the components across the cut until the repair", func(t *testing.T) {
+			t.Parallel()
+			var cut, repaired error
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, b := cells(c)
+				_, err := a.Value().env.Listen(7000)
+				assert.NoError(c, err, "a listens")
+				w.Partition([]string{"a"}, []string{"b"})
+				cut = dial(c, b.Value().env, "a:7000")
+				w.Repair()
+				repaired = dial(c, b.Value().env, "a:7000")
+				w.Stop()
+			})
+
+			assert.ErrorIs(t, cut, syscall.ECONNREFUSED, "the network refuses a dial across the cut")
+			assert.NoError(t, repaired, "the network connects the components after the repair")
 		})
 	})
 
@@ -497,6 +523,21 @@ func TestFault(t *testing.T) {
 					"the timer is due once the clock has advanced by its gap")
 			})
 		})
+
+		t.Run("moves the wall clock of the host of a component", func(t *testing.T) {
+			t.Parallel()
+			var offset time.Duration
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				clock := a.Value().env.Clock()
+				before := clock.Wall()
+				w.Jump("a", -time.Hour)
+				offset = clock.Wall().Sub(before)
+				w.Stop()
+			})
+
+			assert.Equal(t, offset, -time.Hour, "the wall clock of the host moves back by the hour")
+		})
 	})
 
 	t.Run("Strobe", func(t *testing.T) {
@@ -522,6 +563,19 @@ func TestFault(t *testing.T) {
 				}, "the clock alternates for three steps and returns to its time")
 				expect.Empty(c, w.Faults(), "the strobe is not in force after its steps")
 			})
+		})
+
+		t.Run("fails the case for a component, which takes no step", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.Strobe("a", time.Second, -time.Second, 3)
+			})
+
+			assert.Equal(t, got.Contract,
+				`sim: the process "a" is a component, which takes no step that a strobe counts`,
+				"the failure names the component")
 		})
 	})
 
@@ -559,6 +613,31 @@ func TestFault(t *testing.T) {
 
 			got := failure(t, func(c *prop.Case) { single(c).Tear("store", 1) })
 			expect.Equal(t, got.Contract, `sim: the process "store" has no medium`, "the failure names the process")
+		})
+
+		t.Run("tears the next write to the disk of the host of a component", func(t *testing.T) {
+			t.Parallel()
+			var got string
+			draws := strings.TrimSuffix(still, "]") +
+				`,{"label": "kill.a", "value": {"type": "int", "value": 2}},` +
+				`{"label": "keep.cell", "value": {"type": "int", "value": 2}}]`
+			inBubble(t, draws, func(c *prop.Case, first bool) {
+				w, a, _ := cells(c)
+				assert.NoError(c, a.Value().Set(c.Context(), "x"), "the cell writes x")
+				w.Tear("a", 1)
+				f, err := a.Value().env.Disk().OpenFile("cell", os.O_WRONLY|os.O_TRUNC, 0)
+				assert.NoError(c, err, "the cell opens")
+				_, err = f.Write([]byte("abc"))
+				assert.NoError(c, err, "the cell writes abc without a sync")
+				w.Crash("a")
+				w.Restart("a")
+				if v := contents(c, a.Value().env, "cell"); first {
+					got = v
+				}
+				w.Stop()
+			})
+
+			assert.Equal(t, got, "a", "the power loss keeps the first byte of the torn write")
 		})
 	})
 
@@ -608,6 +687,20 @@ func TestFault(t *testing.T) {
 				expect.Equal(t, got.Contract, tt.want, "the failure names the process, the byte and the file")
 			})
 		}
+
+		t.Run("flips a bit of a file on the disk of the host of a component", func(t *testing.T) {
+			t.Parallel()
+			var got string
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				assert.NoError(c, a.Value().Set(c.Context(), "a"), "the cell writes a after its checksum")
+				w.Corrupt("a", "cell", 4)
+				got = contents(c, a.Value().env, "cell")[4:]
+				w.Stop()
+			})
+
+			assert.Equal(t, got, "`", "the lowest bit of the byte a flips")
+		})
 	})
 
 	t.Run("Fill", func(t *testing.T) {
@@ -645,6 +738,22 @@ func TestFault(t *testing.T) {
 			})
 			expect.Equal(t, got.Contract, `sim: the media of the process "store" are full`,
 				"the failure names the process")
+		})
+
+		t.Run("fills the disk of the host of a component until RestoreDisk", func(t *testing.T) {
+			t.Parallel()
+			var full, restored error
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				w.Fill("a", 0)
+				full = a.Value().Set(c.Context(), "x")
+				w.RestoreDisk("a")
+				restored = a.Value().Set(c.Context(), "x")
+				w.Stop()
+			})
+
+			assert.ErrorIs(t, full, syscall.ENOSPC, "the full disk refuses the write")
+			assert.NoError(t, restored, "the disk takes the write once its fill ends")
 		})
 	})
 
@@ -731,6 +840,37 @@ func TestFault(t *testing.T) {
 				expect.Equal(c, d, disk{"k": "v"}, "the recovery performs the slow commit")
 			})
 		})
+
+		t.Run("resumes a paused component and restarts a crashed one", func(t *testing.T) {
+			t.Parallel()
+			var numbers []int
+			var set error
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, b := cells(c)
+				w.Pause("a")
+				w.Crash("b")
+				w.Recover()
+				numbers = []int{a.Value().env.Incarnation(), b.Value().env.Incarnation()}
+				set = a.Value().Set(c.Context(), "x")
+				w.Stop()
+			})
+
+			assert.Equal(t, numbers, []int{1, 2}, "the recovery keeps a and restarts b")
+			assert.NoError(t, set, "the resumed component writes")
+		})
+
+		t.Run("ends each slow link of the network of the components", func(t *testing.T) {
+			t.Parallel()
+			var faults []string
+
+			got := slowThenSend(t, func(w *sim.World[sim.None, sim.None]) {
+				w.Recover()
+				faults = w.Faults()
+			})
+
+			assert.Equal(t, got, []string{"1"}, "the datagram arrives at the latency of the link before its slowness")
+			assert.Empty(t, faults, "no slow link is in force after the recovery")
+		})
 	})
 
 	t.Run("Faults", func(t *testing.T) {
@@ -805,5 +945,285 @@ func TestFault(t *testing.T) {
 				w.Fill("durable", 1)
 			}, opts...)
 		})
+
+		t.Run("classifies each fault of the network of the components that strikes by its kind", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Blocking = true
+			s.Tolerate = map[sim.Fault]int{sim.FaultReset: 1, sim.FaultSlowLink: 1}
+			script := scriptOf(opening(true), stepOf("reset", drawn("link", 0)), slowLink(0),
+				stepOf("restore-link", drawn("link", 0)))
+
+			prop.ForAll(t, "the faults of the network strike", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Around(s.Around), prop.Draws(script), prop.Cases(1), prop.Store(""),
+				prop.Require(string(sim.FaultReset), 0.01), prop.Require(string(sim.FaultSlowLink), 0.01),
+				prop.Require(string(sim.FaultRestoreLink), 0.01))
+		})
 	})
+
+	t.Run("ReplaceDisk", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("crashes a component until a restart that starts over an empty disk", func(t *testing.T) {
+			t.Parallel()
+			var faults [][]string
+			var got string
+			inBubble(t, still, func(c *prop.Case, first bool) {
+				w, a, _ := cells(c)
+				assert.NoError(c, a.Value().Set(c.Context(), "v"), "the cell writes")
+				w.ReplaceDisk("a")
+				replaced := w.Faults()
+				w.Restart("a")
+				v, err := a.Value().Get(c.Context())
+				assert.NoError(c, err, "the cell reads")
+				if first {
+					faults, got = [][]string{replaced, w.Faults()}, v
+				}
+				w.Stop()
+			})
+
+			assert.Equal(t, faults, [][]string{{"disk-replacement:a"}, nil},
+				"the replacement is in force until the restart")
+			assert.Equal(t, got, "", "the next incarnation starts over an empty disk")
+		})
+
+		t.Run("ends each open call of the component as unknown with medium.ErrCrashed", func(t *testing.T) {
+			t.Parallel()
+			var got []completion
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				parked := a.Value()
+				parked.parks = true
+				w.Invoke(0, "a", "Get", nil, nil, func(ctx context.Context) (any, error) { return parked.Get(ctx) })
+				w.ReplaceDisk("a")
+				got = completions(w.History().Events())
+				w.Stop()
+			})
+
+			assert.Equal(t, got, []completion{{kind: history.Unknown, err: medium.ErrCrashed}},
+				"the replacement ends the parked call")
+		})
+
+		t.Run("lists a later crash of the restarted component as a crash", func(t *testing.T) {
+			t.Parallel()
+			var faults []string
+			draws := strings.TrimSuffix(still, "]") + `,{"label": "kill.a", "value": {"type": "int", "value": 1}}]`
+			inBubble(t, draws, func(c *prop.Case, first bool) {
+				w, _, _ := cells(c)
+				w.ReplaceDisk("a")
+				w.Restart("a")
+				w.Crash("a")
+				if first {
+					faults = w.Faults()
+				}
+				w.Stop()
+			})
+
+			assert.Equal(t, faults, []string{"crash:a"}, "the restart ends the disk replacement")
+		})
+
+		t.Run("passes the kind disk-replacement to the case as a label", func(t *testing.T) {
+			t.Parallel()
+
+			synctest.Test(t, func(t *testing.T) {
+				prop.ForAll(t, "the replacement strikes in each case", func(c *prop.Case) {
+					w, _, _ := cells(c)
+					w.ReplaceDisk("a")
+					w.Stop()
+				}, prop.Cases(1), prop.Draws(still), prop.Store(""), prop.Require(string(sim.FaultDiskReplacement), 1))
+			})
+		})
+
+		t.Run("fails the case for a process that is no component", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) { single(c).ReplaceDisk("store") })
+			expect.Equal(t, got.Contract, `sim: the process "store" is no component`, "the failure names the process")
+		})
+
+		t.Run("fails the case for a component that does not run", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.Stop()
+				w.ReplaceDisk("a")
+			})
+
+			assert.Equal(t, got.Contract, `sim: the process "a" does not run`, "the failure names the process")
+		})
+	})
+
+	t.Run("Reset", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("fails each call on the streams between two components", func(t *testing.T) {
+			t.Parallel()
+			var readErr error
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, b := cells(c)
+				accepted := serve(c, a.Value().env, 7000)
+				env := b.Value().env
+				done := make(chan struct{})
+				env.Go(func() {
+					defer close(done)
+					conn, err := env.Dial(c.Context(), "a:7000")
+					assert.NoError(c, err, "b dials a")
+					<-accepted
+					w.Reset("a", "b")
+					_, readErr = conn.Read(make([]byte, 1))
+				})
+				<-done
+				w.Stop()
+			})
+
+			assert.ErrorIs(t, readErr, host.ErrReset, "the read of the reset stream fails")
+		})
+
+		t.Run("fails the case for a process that is no component", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, `[{"label": "drift.a", "value": {"type": "int", "value": 0}},`+
+				`{"label": "drift.m", "value": {"type": "int", "value": 0}}]`, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				sim.SpawnComponent(w, "a", openCell)
+				w.Spawn("m", newStore)
+				w.Reset("a", "m")
+			})
+
+			assert.Equal(t, got.Contract, `sim: the process "m" is no component`, "the failure names the process")
+		})
+	})
+
+	t.Run("SlowLink", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("fails the case for a world without the blocking faults", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.SlowLink("b", "a", time.Second)
+			})
+
+			assert.Equal(t, got.Contract, "host: Slow(b, a) of a network without blocking",
+				"the network refuses the slow link")
+		})
+
+		t.Run("fails the case for a link that is slow", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Blocking = true
+			s.Actions = []sim.Action[sim.None, sim.None]{{
+				Name: "slow twice",
+				Run: func(w *sim.World[sim.None, sim.None], _ int, _ any) {
+					w.SlowLink("a", "b", time.Second)
+					w.SlowLink("b", "a", time.Second)
+				},
+			}}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(true), stepOf("slow twice")))
+
+			failures := r.Failures()
+			assert.NotEmpty(t, failures, "the second slow link fails the case")
+			inner, _ := failures[0].CaseFailure()
+			assert.Equal(t, inner.Contract, `sim: the link between "b" and "a" is slow`, "the failure names the link")
+		})
+	})
+
+	t.Run("RestoreLink", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("fails the case for a link that is not slow", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.RestoreLink("a", "b")
+			})
+
+			assert.Equal(t, got.Contract, `sim: the link between "a" and "b" is not slow`, "the failure names the link")
+		})
+
+		t.Run("ends the slowness of the link on the network", func(t *testing.T) {
+			t.Parallel()
+
+			got := slowThenSend(t, func(w *sim.World[sim.None, sim.None]) { w.RestoreLink("a", "b") })
+
+			assert.Equal(t, got, []string{"1"}, "the datagram arrives at the latency of the link before its slowness")
+		})
+	})
+}
+
+// slowThenSend returns the datagrams that b receives in a run of the cells
+// whose one step slows the link between a and b, ends the slowness through
+// end, and sends a datagram from a to b.
+func slowThenSend(t *testing.T, end func(w *sim.World[sim.None, sim.None])) []string {
+	t.Helper()
+
+	var cs cellSet
+	s := cs.simulation()
+	s.Blocking = true
+	s.Actions = []sim.Action[sim.None, sim.None]{{
+		Name: "slow and send",
+		Run: func(w *sim.World[sim.None, sim.None], _ int, _ any) {
+			w.SlowLink("a", "b", time.Second)
+			end(w)
+			c := cs.a.Value()
+			c.env.Go(func() { _, _ = c.packets.WriteTo([]byte("1"), hostAddr("b:9001")) })
+		},
+	}}
+	cs.runCase(t, s, scriptOf(opening(true), stepOf("slow and send")))
+	return cs.received[0]
+}
+
+// serve listens on the port of env and accepts each stream on a goroutine of
+// its incarnation until the listener closes. accepted is closed once the
+// first stream is accepted.
+func serve(c *prop.Case, env *host.Env, port int) (accepted chan struct{}) {
+	l, err := env.Listen(port)
+	assert.NoError(c, err, "the component listens")
+	accepted = make(chan struct{})
+	env.Go(func() {
+		for first := true; ; first = false {
+			if _, err := l.Accept(); err != nil {
+				return
+			}
+			if first {
+				close(accepted)
+			}
+		}
+	})
+	return accepted
+}
+
+// contents returns the bytes of the file name on the disk of env.
+func contents(tb assert.TB, env *host.Env, name string) string {
+	tb.Helper()
+
+	f, err := env.Disk().OpenFile(name, os.O_RDONLY, 0)
+	assert.NoError(tb, err, "the disk opens "+name)
+	data, err := io.ReadAll(f)
+	assert.NoError(tb, err, "the disk reads "+name)
+	assert.NoError(tb, f.Close(), "the disk closes "+name)
+	return string(data)
+}
+
+// dial dials addr from env on a goroutine of its incarnation, and returns the
+// error of the dial.
+func dial(c *prop.Case, env *host.Env, addr string) error {
+	var err error
+	done := make(chan struct{})
+	env.Go(func() {
+		defer close(done)
+		var conn net.Conn
+		if conn, err = env.Dial(c.Context(), addr); err == nil {
+			_ = conn.Close()
+		}
+	})
+	<-done
+	return err
 }

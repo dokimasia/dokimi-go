@@ -11,6 +11,7 @@ import (
 
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 )
 
@@ -53,6 +54,15 @@ const (
 	FaultCorruption Fault = "corruption"
 	// FaultFullDisk fills the media of a process.
 	FaultFullDisk Fault = "full-disk"
+	// FaultReset resets the streams between two components.
+	FaultReset Fault = "reset"
+	// FaultSlowLink raises the latency of the link between two components.
+	FaultSlowLink Fault = "slow-link"
+	// FaultRestoreLink ends the slowness of a link.
+	FaultRestoreLink Fault = "restore-link"
+	// FaultDiskReplacement crashes a component until a restart that starts
+	// over a new empty disk.
+	FaultDiskReplacement Fault = "disk-replacement"
 )
 
 // ErrLost is the error of an effect that a fault of its dependency loses,
@@ -80,8 +90,9 @@ type stall[E, F any] struct {
 
 // Partition cuts the processes into sides. Two processes exchange messages
 // while one side contains both, so the sides of majorities-ring and bridge
-// overlap. A message across the cut does not arrive. It fails the case for a
-// name that no process has, and while a partition is in force.
+// overlap. A message across the cut does not arrive, and the network of the
+// components cuts the links across it. It fails the case for a name that no
+// process has, and while a partition is in force.
 func (w *World[E, F]) Partition(sides ...[]string) {
 	if w.sides != nil {
 		w.c.Fatalf("sim: a partition is in force")
@@ -92,6 +103,9 @@ func (w *World[E, F]) Partition(sides ...[]string) {
 		}
 	}
 	w.sides = sides
+	if w.network != nil {
+		w.network.Partition(sides...)
+	}
 	w.strike(FaultPartition)
 }
 
@@ -100,8 +114,16 @@ func (w *World[E, F]) Repair() {
 	if w.sides == nil {
 		w.c.Fatalf("sim: no partition is in force")
 	}
-	w.sides = nil
+	w.repair()
 	w.strike(FaultRepair)
+}
+
+// repair ends the partition in force.
+func (w *World[E, F]) repair() {
+	w.sides = nil
+	if w.network != nil {
+		w.network.Repair()
+	}
 }
 
 // Sides returns the sides of the partition in force, and nil without one.
@@ -126,11 +148,16 @@ func (w *World[E, F]) Drop(to string) bool {
 	return true
 }
 
-// drop drops the oldest message in flight to p, which has one.
+// drop drops the oldest message in flight to p, which has one: a message of a
+// machine, or a datagram to the host of a component.
 func (w *World[E, F]) drop(p *Process[E, F]) {
-	at := w.message(p)
-	delete(w.calls, p.queue[at].message)
-	p.queue = slices.Delete(p.queue, at, at+1)
+	if p.comp != nil {
+		w.network.Drop(p.name)
+	} else {
+		at := w.message(p)
+		delete(w.calls, p.queue[at].message)
+		p.queue = slices.Delete(p.queue, at, at+1)
+	}
 	w.strike(FaultDrop)
 }
 
@@ -147,10 +174,15 @@ func (w *World[E, F]) Delay(to string) bool {
 }
 
 // delay moves the oldest message in flight to p behind the next event of p,
-// which has one.
+// which has one. A component moves its oldest datagram in flight behind the
+// next one.
 func (w *World[E, F]) delay(p *Process[E, F]) {
-	at := w.message(p)
-	p.queue[at], p.queue[at+1] = p.queue[at+1], p.queue[at]
+	if p.comp != nil {
+		w.network.Delay(p.name)
+	} else {
+		at := w.message(p)
+		p.queue[at], p.queue[at+1] = p.queue[at+1], p.queue[at]
+	}
 	w.strike(FaultDelay)
 }
 
@@ -168,19 +200,33 @@ func (w *World[E, F]) Duplicate(to string) bool {
 }
 
 // duplicate queues the oldest message in flight to p once more, as a call
-// with a new reply token. p has a message in flight.
+// with a new reply token. p has a message in flight. A component receives its
+// oldest datagram in flight once more.
 func (w *World[E, F]) duplicate(p *Process[E, F]) {
-	in := w.calls[p.queue[w.message(p)].message]
-	w.request(p, in.build, in.await)
+	if p.comp != nil {
+		w.network.Duplicate(p.name)
+	} else {
+		in := w.calls[p.queue[w.message(p)].message]
+		w.request(p, in.build, in.await)
+	}
 	w.strike(FaultDuplicate)
 }
 
-// sent reports whether a message is in flight to p.
-func (w *World[E, F]) sent(p *Process[E, F]) bool { return w.message(p) >= 0 }
+// sent reports whether a message is in flight to p, or a datagram to the host
+// of a component.
+func (w *World[E, F]) sent(p *Process[E, F]) bool {
+	if p.comp != nil {
+		return w.network.InFlight(p.name) > 0
+	}
+	return w.message(p) >= 0
+}
 
 // behind reports whether a message is in flight to p with an event of p
-// behind it.
+// behind it, or two datagrams to the host of a component.
 func (w *World[E, F]) behind(p *Process[E, F]) bool {
+	if p.comp != nil {
+		return w.network.InFlight(p.name) > 1
+	}
 	at := w.message(p)
 	return at >= 0 && at < len(p.queue)-1
 }
@@ -248,25 +294,34 @@ func (w *World[E, F]) restore(d *dependency[E, F]) {
 }
 
 // Jump moves the clock of the process named name by d, backwards for a
-// negative d. It fails the case for a name that no process has.
+// negative d. A component process moves the wall clock of its host through
+// Host.Bump. It fails the case for a name that no process has.
 func (w *World[E, F]) Jump(name string, d time.Duration) {
-	w.named(name).clock.jumps += d
+	if p := w.named(name); p.comp != nil {
+		p.comp.host.Bump(d)
+	} else {
+		p.clock.jumps += d
+	}
 	w.strike(FaultClockJump)
 }
 
 // Strobe moves the clock of the process named name between the offsets a
 // and b at each of its next steps steps, from a. It fails the case for a name
-// that no process has.
+// that no process has, and for a component process, which takes no step.
 func (w *World[E, F]) Strobe(name string, a, b time.Duration, steps int) {
-	w.named(name).strobe = strobe{next: a, then: b, left: steps}
+	p := w.named(name)
+	if p.comp != nil {
+		w.c.Fatalf("sim: the process %q is a component, which takes no step that a strobe counts", name)
+	}
+	p.strobe = strobe{next: a, then: b, left: steps}
 	w.strike(FaultClockStrobe)
 }
 
 // Tear makes each medium.Memory among the dependencies of the process named
-// name keep only the first n bytes of its next write, where a crash follows
-// the write before a sync of its file. It fails the case for a name that no
-// process has, for a process that does not run, and for a process without a
-// medium.
+// name, or the disk of the host of a component, keep only the first n bytes
+// of its next write, where a crash follows the write before a sync of its
+// file. It fails the case for a name that no process has, for a process that
+// does not run, and for a process without a medium.
 func (w *World[E, F]) Tear(name string, n int) {
 	p := w.named(name)
 	if p.state != running {
@@ -312,10 +367,10 @@ func (w *World[E, F]) Fill(name string, n int64) {
 	w.strike(FaultFullDisk)
 }
 
-// mediaOf returns each medium.Memory among the dependencies of p, and fails
-// the case for a process without one.
+// mediaOf returns the disks of p, and fails the case for a process without
+// one.
 func (w *World[E, F]) mediaOf(p *Process[E, F]) []*medium.Memory {
-	out := media(p)
+	out := disks(p)
 	if len(out) == 0 {
 		w.c.Fatalf("sim: the process %q has no medium", p.name)
 	}
@@ -333,9 +388,9 @@ func (w *World[E, F]) RestoreDisk(name string) {
 	unfill(p)
 }
 
-// unfill lifts the fill of the media of p.
+// unfill lifts the fill of the disks of p.
 func unfill[E, F any](p *Process[E, F]) {
-	for _, m := range media(p) {
+	for _, m := range disks(p) {
 		m.Fill(-1)
 	}
 	p.full = false
@@ -356,33 +411,113 @@ func media[E, F any](p *Process[E, F]) []*medium.Memory {
 // Recover ends each fault in force and restarts each crashed process.
 func (w *World[E, F]) Recover() {
 	for _, p := range w.procs {
-		p.paused = false
+		if p.paused {
+			resume(p)
+		}
 		p.strobe = strobe{}
 		if p.full {
 			unfill(p)
 		}
 		if p.state == crashed {
-			w.start(p)
+			w.restart(p)
 		}
 	}
-	w.sides = nil
+	w.repair()
+	for _, l := range w.slow {
+		w.network.Restore(l[0], l[1])
+	}
+	w.slow = nil
 	for _, d := range w.deps {
 		d.armed = nil
 		w.restore(d)
 	}
 }
 
-// Faults returns the faults in force: the crash, the pause, the strobe and
-// the full media of each process in the order of their spawns, the
-// partition, and the outage, the slowness and the armed losses of each
-// dependency in the order in which the world first saw it. Each fault is its
-// kind and its target, such as pause:store, and the partition is its kind
+// ReplaceDisk crashes the component process named name by a disk
+// replacement. Its open calls end as unknown with medium.ErrCrashed, and its
+// next incarnation starts over a new empty disk of its host. A single
+// component loses every write, and a system that keeps a copy of each write
+// on another component keeps its data. It fails the case for a name that no
+// process has, for a process that is no component, and for a process that
+// does not run.
+func (w *World[E, F]) ReplaceDisk(name string) {
+	if w.named(name).comp == nil {
+		w.c.Fatalf("sim: the process %q is no component", name)
+	}
+	p := w.down(name)
+	p.replaced = true
+	w.crashComponent(p, host.DiskReplacement)
+	w.strike(FaultDiskReplacement)
+}
+
+// Reset resets each stream between the components named a and b. It fails
+// the case for a name that no component has.
+func (w *World[E, F]) Reset(a, b string) {
+	w.link(a, b)
+	w.network.Reset(a, b)
+	w.strike(FaultReset)
+}
+
+// SlowLink raises the latency of the link between the components named a and
+// b to latency until RestoreLink. It fails the case for a name that no
+// component has, for a link that is slow, and for a world without the
+// blocking faults, whose network refuses a slow link.
+func (w *World[E, F]) SlowLink(a, b string, latency time.Duration) {
+	l := w.link(a, b)
+	if slices.Contains(w.slow, l) {
+		w.c.Fatalf("sim: the link between %q and %q is slow", a, b)
+	}
+	w.network.Slow(a, b, latency)
+	w.slow = append(w.slow, l)
+	w.strike(FaultSlowLink)
+}
+
+// RestoreLink ends the slowness of the link between the components named a
+// and b. It fails the case for a link that is not slow.
+func (w *World[E, F]) RestoreLink(a, b string) {
+	at := slices.Index(w.slow, w.link(a, b))
+	if at < 0 {
+		w.c.Fatalf("sim: the link between %q and %q is not slow", a, b)
+	}
+	w.slow = slices.Delete(w.slow, at, at+1)
+	w.network.Restore(a, b)
+	w.strike(FaultRestoreLink)
+}
+
+// link returns the link between the components named a and b, its two names
+// in the order of their spawns, and fails the case for a name that no
+// component has.
+func (w *World[E, F]) link(a, b string) [2]string {
+	for _, name := range []string{a, b} {
+		if w.named(name).comp == nil {
+			w.c.Fatalf("sim: the process %q is no component", name)
+		}
+	}
+	spawned := func(name string) int {
+		return slices.IndexFunc(w.procs, func(p *Process[E, F]) bool { return p.name == name })
+	}
+	if spawned(b) < spawned(a) { //dokimi:mutate-skip ror-boundary: two equal names swap into the same link
+		a, b = b, a
+	}
+	return [2]string{a, b}
+}
+
+// Faults returns the faults in force: the crash or the disk replacement, the
+// pause, the strobe and the full media of each process in the order of their
+// spawns, the partition, the slow links in the order of their strikes, and
+// the outage, the slowness and the armed losses of each dependency in the
+// order in which the world first saw it. Each fault is its kind and its
+// target, such as pause:store or slow-link:a,b, and the partition is its kind
 // alone.
 func (w *World[E, F]) Faults() []string {
 	var out []string
 	for _, p := range w.procs {
 		if p.state == crashed {
-			out = append(out, string(FaultCrash)+":"+p.name)
+			kind := FaultCrash
+			if p.replaced {
+				kind = FaultDiskReplacement
+			}
+			out = append(out, string(kind)+":"+p.name)
 		}
 		if p.paused {
 			out = append(out, string(FaultPause)+":"+p.name)
@@ -396,6 +531,9 @@ func (w *World[E, F]) Faults() []string {
 	}
 	if w.sides != nil {
 		out = append(out, string(FaultPartition))
+	}
+	for _, l := range w.slow {
+		out = append(out, string(FaultSlowLink)+":"+l[0]+","+l[1])
 	}
 	for _, d := range w.deps {
 		if d.outage {

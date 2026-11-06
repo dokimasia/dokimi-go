@@ -1,7 +1,8 @@
 // Copyright Dokimasia B.V. 2026
 // SPDX-License-Identifier: MIT
 
-// Package sim is a deterministic simulation of a system of sans-IO machines.
+// Package sim is a deterministic simulation of a system of sans-IO machines
+// and of Go components on simulated hosts.
 //
 // A sans-IO machine applies one event at a time and returns the effects that
 // a runtime performs, such as a commit to a store or a reply to a caller. A
@@ -22,21 +23,30 @@
 // [World.Corrupt] and [World.Fill] strike the faults of the media of a
 // process: a torn write, a flipped bit at rest and a full disk.
 //
+// A component process runs a Go value on a host of go.dokimi.dev/host.
+// [SpawnComponent] starts it, and [World.Invoke] runs each call of a client
+// on a goroutine of its incarnation. The faults of a process strike a
+// component through its host, and the faults of the network strike the links
+// between the hosts of the components.
+//
 // # Determinism
 //
 // The world hashes each entry of its log into a checksum, which a replay of
 // the case compares. A machine or a performer that iterates a Go map, reads
 // the wall clock, takes the global source of math/rand or starts a goroutine
-// makes a replay differ.
+// makes a replay differ. A world with a component in Tasks mode repeats the
+// whole case. In native mode it repeats the choices of the case, and not the
+// order of the goroutines of its components.
 //
 // # Concurrency
 //
 // A world is not safe for concurrent use. Its machines, its performers and
-// the doubles of its dependencies run on the goroutine of the case.
+// the doubles of its dependencies run on the goroutine of the case. The
+// goroutines of a component complete its calls under a lock of the world.
 //
 // # Dependency position
 //
 // The package imports the standard library, the packages assert, history,
-// prop and stateful of go.dokimi.dev/assert, the medium of go.dokimi.dev/medium
-// and the spec of go.dokimi.dev/spec.
+// prop and stateful of go.dokimi.dev/assert, and the modules conform, host,
+// medium and spec of go.dokimi.dev.
 package sim

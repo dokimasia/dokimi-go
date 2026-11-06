@@ -4,9 +4,13 @@
 package sim_test
 
 import (
+	"context"
 	"errors"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"go.dokimi.dev/assert"
@@ -14,6 +18,7 @@ import (
 	"go.dokimi.dev/assert/history"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/sim"
 )
 
@@ -86,6 +91,18 @@ func TestWorld(t *testing.T) {
 			got := failure(t, func(c *prop.Case) { sim.New(c, anatomy).Deliver("missing", stopped{}) })
 			expect.Equal(t, got.Contract, `sim: no process of the world is named "missing"`,
 				"the failure names the process")
+		})
+
+		t.Run("fails the case for a component, which takes no event", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.Deliver("a", stopped{})
+			})
+
+			assert.Equal(t, got.Contract, `sim: the process "a" is a component, which takes no event`,
+				"the failure names the component")
 		})
 	})
 
@@ -371,6 +388,18 @@ func TestWorld(t *testing.T) {
 				expect.ErrorIs(c, got[1].Error, sim.ErrRunEnded, "the call ends with the end of the run")
 			})
 		})
+
+		t.Run("fails the case for a component, which takes no event", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.Call(0, "a", "Put", nil, nil, func(r uint64) event { return put{key: "k", value: "v", reply: r} })
+			})
+
+			assert.Equal(t, got.Contract, `sim: the process "a" is a component, which takes no event`,
+				"the failure names the component")
+		})
 	})
 
 	t.Run("Cancel", func(t *testing.T) {
@@ -432,6 +461,76 @@ func TestWorld(t *testing.T) {
 				expect.NotContains(c, events(w, "store"), event(cancelled{reply: 2}), "the store takes no cancel")
 			})
 		})
+
+		t.Run("ends the open call of a component as unknown and ends its context", func(t *testing.T) {
+			t.Parallel()
+			var got []completion
+			var ended bool
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				parked := a.Value()
+				parked.parks = true
+				returned := make(chan struct{})
+				w.Invoke(4, "a", "Get", nil, nil, func(ctx context.Context) (any, error) {
+					defer close(returned)
+					return parked.Get(ctx)
+				})
+				assert.True(c, w.Cancel(4), "the client has an open call of a component")
+				synctest.Wait()
+				got = completions(w.History().Events())
+				select {
+				case <-returned:
+					ended = true
+				default:
+				}
+				w.Stop()
+			})
+
+			assert.Equal(t, got, []completion{{kind: history.Unknown, err: sim.ErrCancelled}},
+				"the cancel ends the call of the client")
+			assert.True(t, ended, "the cancel ends the context of the call before the stop")
+		})
+
+		t.Run("ends the open call of its client alone among the calls of the components", func(t *testing.T) {
+			t.Parallel()
+			var got []history.Event
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				parked := a.Value()
+				parked.parks = true
+				for _, client := range []int{4, 5} {
+					w.Invoke(client, "a", "Get", nil, nil, func(ctx context.Context) (any, error) {
+						return parked.Get(ctx)
+					})
+				}
+				w.Cancel(5)
+				synctest.Wait()
+				got = w.History().Events()
+				w.Stop()
+			})
+
+			assert.Length(t, got, 3, "the history has two invocations and one completion")
+			expect.Equal(t, got[2].Client, 5, "the cancel ends the call of the client 5")
+		})
+	})
+
+	t.Run("Advance", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("advances the monotonic clock of the host of each component", func(t *testing.T) {
+			t.Parallel()
+			var got []time.Duration
+			inBubble(t, still, func(c *prop.Case, first bool) {
+				w, a, b := cells(c)
+				w.Advance(time.Second)
+				if first {
+					got = []time.Duration{a.Value().env.Clock().Monotonic(), b.Value().env.Clock().Monotonic()}
+				}
+				w.Stop()
+			})
+
+			assert.Equal(t, got, []time.Duration{time.Second, time.Second}, "each host advances by the second")
+		})
 	})
 
 	t.Run("After", func(t *testing.T) {
@@ -469,6 +568,18 @@ func TestWorld(t *testing.T) {
 				w.Advance(time.Hour)
 				expect.Empty(c, w.Pending(), "a timer that is due once queues its event once")
 			})
+		})
+
+		t.Run("fails the case for a component, which takes no event", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.After(w.Process("a"), time.Second, ticked{token: 1})
+			})
+
+			assert.Equal(t, got.Contract, `sim: the process "a" is a component, which takes no event`,
+				"the failure names the component")
 		})
 	})
 
@@ -639,6 +750,73 @@ func TestWorld(t *testing.T) {
 				assert.Length(c, w.History().Events(), 2, "the reply leaves the call that the crash ended alone")
 			})
 		})
+
+		tests := []struct {
+			name     string
+			giveKill int
+		}{
+			{name: "crashes a component by a process crash, which keeps its disk", giveKill: 1},
+			{name: "crashes a component by a power loss, which keeps the synced writes", giveKill: 2},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var got string
+				draws := strings.TrimSuffix(still, "]") +
+					`,{"label": "kill.a", "value": {"type": "int", "value": ` + strconv.Itoa(tt.giveKill) + `}}]`
+				inBubble(t, draws, func(c *prop.Case, first bool) {
+					w, a, _ := cells(c)
+					assert.NoError(c, a.Value().Set(c.Context(), "v"), "the cell writes")
+					w.Crash("a")
+					w.Restart("a")
+					v, err := a.Value().Get(c.Context())
+					assert.NoError(c, err, "the cell reads")
+					if first {
+						got = v
+					}
+					w.Stop()
+				})
+
+				assert.Equal(t, got, "v", "the next incarnation reads the value that the cell synced")
+			})
+		}
+
+		t.Run("ends the open calls of the crashed component alone", func(t *testing.T) {
+			t.Parallel()
+			var got []history.Event
+			draws := strings.TrimSuffix(still, "]") + `,{"label": "kill.a", "value": {"type": "int", "value": 1}}]`
+			inBubble(t, draws, func(c *prop.Case, first bool) {
+				w, a, b := cells(c)
+				for client, comp := range []*sim.Component[*cell]{a, b} {
+					v := comp.Value()
+					v.parks = true
+					w.Invoke(client, v.env.Name(), "Get", nil, nil, func(ctx context.Context) (any, error) {
+						return v.Get(ctx)
+					})
+				}
+				w.Crash("a")
+				if first {
+					got = w.History().Events()
+				}
+				w.Stop()
+			})
+
+			assert.Length(t, got, 3, "the crash completes one of the two calls")
+			expect.Equal(t, got[2].Client, 0, "the crash ends the call on the component a")
+		})
+
+		t.Run("fails the case for a goroutine of a crashed component that ignores its lifetime", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, lone, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				sim.SpawnComponent(w, "a", leakyCell(c))
+				w.Crash("a")
+			})
+
+			assert.Contains(t, got.Contract, "sim: a goroutine of the incarnation 1 of a is alive after its crash",
+				"the failure states the goroutine that ignored its lifetime")
+		})
 	})
 
 	t.Run("Restart", func(t *testing.T) {
@@ -672,6 +850,22 @@ func TestWorld(t *testing.T) {
 				w.Restart("store")
 			})
 			expect.Equal(t, got.Contract, `sim: the process "store" has not crashed`, "the failure names the process")
+		})
+
+		t.Run("opens a new incarnation of a crashed component in a new epoch", func(t *testing.T) {
+			t.Parallel()
+			var number int
+			var epoch uint64
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				w.Crash("a")
+				w.Restart("a")
+				number, epoch = a.Value().env.Incarnation(), w.Process("a").Epoch()
+				w.Stop()
+			})
+
+			assert.Equal(t, number, 2, "the restart opens the second incarnation")
+			assert.Equal(t, epoch, uint64(2), "the restart raises the epoch of the process")
 		})
 	})
 
@@ -715,6 +909,28 @@ func TestWorld(t *testing.T) {
 			})
 			expect.Equal(t, got.Contract, `sim: the process "store" does not run unpaused`,
 				"the failure names the process")
+		})
+
+		t.Run("blocks each call of the environment of a component until Resume", func(t *testing.T) {
+			t.Parallel()
+			var during, after []completion
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, a, _ := cells(c)
+				v := a.Value()
+				w.Pause("a")
+				w.Invoke(0, "a", "Set", nil, nil, func(ctx context.Context) (any, error) {
+					return nil, v.Set(ctx, "v")
+				})
+				synctest.Wait()
+				during = completions(w.History().Events())
+				w.Resume("a")
+				synctest.Wait()
+				after = completions(w.History().Events())
+				w.Stop()
+			})
+
+			assert.Empty(t, during, "the call waits while the component is paused")
+			assert.Equal(t, after, []completion{{kind: history.OK}}, "the call completes once the pause ends")
 		})
 	})
 
@@ -801,5 +1017,51 @@ func TestWorld(t *testing.T) {
 				assert.Length(c, w.Log(), 1, "a crashed process takes no stop event")
 			})
 		})
+
+		t.Run("ends the open calls of each component in the order of the components", func(t *testing.T) {
+			t.Parallel()
+			var clients []int
+			inBubble(t, still, func(c *prop.Case, first bool) {
+				w, a, b := cells(c)
+				for client, comp := range []*sim.Component[*cell]{b, a} {
+					v := comp.Value()
+					v.parks = true
+					w.Invoke(client, v.env.Name(), "Get", nil, nil, func(ctx context.Context) (any, error) {
+						return v.Get(ctx)
+					})
+				}
+				w.Stop()
+				for _, e := range w.History().Events()[2:] {
+					if first {
+						clients = append(clients, e.Client)
+					}
+				}
+			})
+
+			assert.Equal(t, clients, []int{1, 0}, "the stop ends the call on a before the call on b")
+		})
+
+		t.Run("fails the case for a goroutine of a component that ignores its lifetime", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, lone, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				sim.SpawnComponent(w, "a", leakyCell(c))
+				w.Stop()
+			})
+
+			assert.Contains(t, got.Contract, "sim: a goroutine of the incarnation 1 of a is alive after its crash",
+				"the stop ends the incarnation and finds the goroutine")
+		})
 	})
+}
+
+// leakyCell returns the open of a cell that starts a goroutine of its
+// incarnation, which waits for the end of the case c alone, so it ignores the
+// lifetime of the incarnation.
+func leakyCell(c *prop.Case) func(env *host.Env) *cell {
+	return func(env *host.Env) *cell {
+		env.Go(func() { <-c.Context().Done() })
+		return openCell(env)
+	}
 }
