@@ -7,5 +7,5 @@ go 1.27.2
 
 require (
 	github.com/google/jsonschema-go v0.4.3
-	go.dokimi.dev/assert v0.17.0
+	go.dokimi.dev/assert v0.18.0
 )
