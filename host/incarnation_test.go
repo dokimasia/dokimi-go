@@ -322,24 +322,27 @@ func TestIncarnation(t *testing.T) {
 			assert.Empty(t, leaked, "the timer of the deadline is no goroutine of the incarnation")
 		})
 
-		t.Run("leaves out the timer of a read deadline that is pending at a crash under a scheduler", func(t *testing.T) {
-			t.Parallel()
-			var leaked []string
-			scheduled(t, targets, func(c *prop.Case, s *stateful.Scheduler, first bool) {
-				h := host.New(c, "node-1", host.NewNetwork(c, false), s)
-				i, env := h.Start()
-				packets := deadlined(c, env, s.Clock().Now().Add(time.Hour))
-				i.Go(func() { _, _, _ = packets.ReadFrom(make([]byte, 1)) })
-				s.Run()
-				i.Crash(host.ProcessCrash)
-				s.Run()
-				if first {
-					leaked = i.Leaked()
-				}
-			})
+		t.Run(
+			"leaves out the timer of a read deadline that is pending at a crash under a scheduler",
+			func(t *testing.T) {
+				t.Parallel()
+				var leaked []string
+				scheduled(t, targets, func(c *prop.Case, s *stateful.Scheduler, first bool) {
+					h := host.New(c, "node-1", host.NewNetwork(c, false), s)
+					i, env := h.Start()
+					packets := deadlined(c, env, s.Clock().Now().Add(time.Hour))
+					i.Go(func() { _, _, _ = packets.ReadFrom(make([]byte, 1)) })
+					s.Run()
+					i.Crash(host.ProcessCrash)
+					s.Run()
+					if first {
+						leaked = i.Leaked()
+					}
+				})
 
-			assert.Empty(t, leaked, "the timer of the deadline is no task of the incarnation")
-		})
+				assert.Empty(t, leaked, "the timer of the deadline is no task of the incarnation")
+			},
+		)
 
 		t.Run("leaves out the timer of a sleep that a crash ended under a scheduler", func(t *testing.T) {
 			t.Parallel()
