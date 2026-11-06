@@ -1,5 +1,27 @@
 # go.dokimi.dev/sim
 
+## 0.2.0
+
+### Minor Changes
+
+- e9bca72: Add `sim.SpawnComponent`, `sim.Component` and `World.Invoke` to run Go components on simulated hosts beside the machine processes.
+- e9bca72: Add the fault `disk-replacement` and `World.ReplaceDisk` to crash a component until a restart over a new empty disk.
+- e9bca72: Check the history of the calls of the clients after every step of `sim.Run`, so a violation ends its case at its step.
+- e9bca72: Add `Simulation.History` for the options of each check of the history against the spec.
+- e9bca72: Add `Simulation.Around`, `Simulation.Mode`, `Simulation.Network` and `Simulation.Blocking` for the hosts of the components of a simulation.
+- e9bca72: Add the faults `reset`, `slow-link` and `restore-link` of the network of the components, with `World.Reset`, `World.SlowLink` and `World.RestoreLink`.
+- e9bca72: Add `sim.None`, the type of the events and the effects of a world without machine processes.
+
+### Patch Changes
+
+- 1cbb662: Require `go.dokimi.dev/assert` v0.18.0.
+- Updated dependencies [984587a, e7c7771, 531155e, 2831344, 1cbb662, e49374f]
+  - go.dokimi.dev/conform@0.14.0
+  - go.dokimi.dev/medium@0.2.0
+  - go.dokimi.dev/host@0.1.0
+  - go.dokimi.dev/fault@0.2.3
+  - go.dokimi.dev/spec@0.5.0
+
 ## 0.1.3
 
 ### Patch Changes

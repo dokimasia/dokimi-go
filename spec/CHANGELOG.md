@@ -1,5 +1,16 @@
 # go.dokimi.dev/spec
 
+## 0.5.0
+
+### Minor Changes
+
+- e49374f: Copy spec 2.1.0, with the machinery `quiescence`, the claims `linearizable-under-faults` and `completes-after-recovery`, and the input kind `spec.KindWorld`.
+- e49374f: Add `spec.WorldRecord`, `spec.WorldFaults` and `spec.Mode` for the field `world` of the record of a check.
+
+### Patch Changes
+
+- 1cbb662: Require `go.dokimi.dev/assert` v0.18.0.
+
 ## 0.4.1
 
 ### Patch Changes
