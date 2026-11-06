@@ -1,0 +1,6 @@
+go.dokimi.dev/assert v0.18.0 h1:WCA/PvWa2t0XKK8H4dDTv/KwutK0kM4whprFKTdaC/I=
+go.dokimi.dev/assert v0.18.0/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
+go.dokimi.dev/fault v0.2.2 h1:e0heO3obX8HkiCOmD+0GTYK1CdBj837EjX8z/RLzggk=
+go.dokimi.dev/fault v0.2.2/go.mod h1:903y2jMIYIcb/amUb64CqSGDGvQxAMgiNKsKStwLC50=
+go.dokimi.dev/medium v0.1.1 h1:wOfI4nCDWDHFp6ku586aEVduhwx/Vxj7AxMzE8mhyjk=
+go.dokimi.dev/medium v0.1.1/go.mod h1:OkEQ86M1sdviJ2DYyaKv2LDDPmVt9iSy/ex4RwPqFBw=
