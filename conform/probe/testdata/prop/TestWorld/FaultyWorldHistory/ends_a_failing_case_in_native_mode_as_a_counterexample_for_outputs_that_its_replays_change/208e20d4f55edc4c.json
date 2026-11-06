@@ -1,0 +1,115 @@
+{
+  "store": 1,
+  "definition": "16.0.0",
+  "property": "the world of the store holds",
+  "identity": {
+    "assertion": "linearizable",
+    "file": "world.go",
+    "line": 781
+  },
+  "choices": "prop1:AAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAIAAAAA",
+  "counterexample": [
+    {
+      "label": "drift.subject",
+      "value": {
+        "type": "int",
+        "value": 0
+      }
+    },
+    {
+      "label": "keys",
+      "value": {
+        "type": "list",
+        "of": "string",
+        "value": [
+          "a"
+        ]
+      }
+    },
+    {
+      "label": "keys.hot",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.fail-before",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.fail-after",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.fail-part",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.tear",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.fill",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.fail-next",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.fail-until-healed",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.bump",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "faults.strobe",
+      "value": {
+        "type": "bool",
+        "value": false
+      }
+    },
+    {
+      "label": "client",
+      "value": {
+        "type": "int",
+        "value": 0
+      }
+    },
+    {
+      "label": "get.key",
+      "value": {
+        "type": "int",
+        "value": 0
+      }
+    }
+  ],
+  "found": "2026-11-05"
+}

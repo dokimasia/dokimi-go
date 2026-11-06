@@ -23,4 +23,11 @@
 // It judges the calls that the history of the case records after each step.
 // It calls a partner through an [Apply] and a reference through a
 // [Reference].
+//
+// A probe of a world runs the operations of a [World] on a subject that a
+// host of the package host runs. The case chooses concurrent calls, crashes
+// and restarts, faults of the disk, the dependencies and the clock, and
+// advances of the clock. The operations pick their keys from a [Pool]. The
+// check of a world runs each case inside a bubble of conform.Bubble, under
+// the options that [WorldOptions] returns.
 package probe

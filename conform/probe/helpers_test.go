@@ -16,10 +16,13 @@ import (
 	"go.dokimi.dev/spec"
 )
 
-// errMiss and errOther are the errors that the cells of the specs return.
+// errMiss and errOther are the errors that the cells of the specs return, and
+// errCorrupt the error of a get of a value whose checksum differs from the
+// checksum of the value.
 var (
-	errMiss  = errors.New("probe_test: the cell has no value")
-	errOther = errors.New("probe_test: the cell fails")
+	errMiss    = errors.New("probe_test: the cell has no value")
+	errOther   = errors.New("probe_test: the cell fails")
+	errCorrupt = errors.New("probe_test: the value of the key is corrupt")
 )
 
 // cell is the subject of the specs. answer decides the value and the error of

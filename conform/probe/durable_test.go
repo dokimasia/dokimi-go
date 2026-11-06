@@ -24,12 +24,8 @@ import (
 	"go.dokimi.dev/spec"
 )
 
-// errAbsent is the error of a get of a key without a value, and errCorrupt the
-// error of a get of a value whose checksum byte differs from its sum.
-var (
-	errAbsent  = errors.New("probe_test: the shelf has no value of the key")
-	errCorrupt = errors.New("probe_test: the value of the key is corrupt")
-)
+// errAbsent is the error of a get of a key without a value.
+var errAbsent = errors.New("probe_test: the shelf has no value of the key")
 
 // shelf is the durable subject of the specs of the durable probes. It keeps
 // the value of each key in a file that the key names, with a checksum byte
