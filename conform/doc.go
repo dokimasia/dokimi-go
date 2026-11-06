@@ -42,6 +42,19 @@
 // supplies the same machinery to its planted defect, and its field Options
 // states the options of its property run in an application.
 //
+// A world check runs its subject on a [host.Host]. The option
+// [Hosted] states the door that opens a subject over the environment of an
+// incarnation of the host, and [Handle.Host] opens it. The option [Tasks]
+// states that a subject blocks only through its host, so its world runs under
+// the task scheduler of the case. The option [Blocking] states that no
+// goroutine of a subject waits durably while it has locked a mutex that
+// another goroutine waits for. Its world then strikes the blocking faults in a
+// testing/synctest bubble too. [Bubble] runs each case of a world check in
+// such a bubble, and its watchdog ends the test binary at a stall. A world
+// counts its steps for the watchdog through [RecordStep].
+// [Handle.RecordWorld] adds the record of the world of a case to the record of
+// its check.
+//
 // The calls of a suite contain the call generator and the budget of each
 // callable. [RunBudgets] applies the allocation ceilings of the budgets to a
 // subject, and [FalsifyAllocs] applies each of them to its planted defect.
@@ -90,6 +103,7 @@
 //
 // The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,
 // go.dokimi.dev/assert/history, go.dokimi.dev/assert/prop,
-// go.dokimi.dev/fault, go.dokimi.dev/medium and the Go stdlib, testing among
+// go.dokimi.dev/assert/stateful, go.dokimi.dev/fault, go.dokimi.dev/host,
+// go.dokimi.dev/medium, go.dokimi.dev/spec and the Go stdlib, testing among
 // it.
 package conform

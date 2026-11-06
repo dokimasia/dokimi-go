@@ -659,21 +659,22 @@ type record struct {
 	Subject     string `json:"subject"`
 	Ended       string `json:"ended"`
 	Checks      []struct {
-		Failure        map[string]any   `json:"failure"`
-		Identity       string           `json:"identity"`
-		Key            string           `json:"key"`
-		Claim          string           `json:"claim"`
-		Law            string           `json:"law"`
-		Result         string           `json:"result"`
-		Other          string           `json:"other"`
-		Why            string           `json:"why"`
-		Seed           string           `json:"seed"`
-		Reason         string           `json:"reason"`
-		Counterexample []map[string]any `json:"counterexample"`
-		Cases          int              `json:"cases"`
-		Points         int              `json:"points"`
-		Shallow        bool             `json:"shallow"`
-		Authored       bool             `json:"authored"`
+		Failure        map[string]any    `json:"failure"`
+		Identity       string            `json:"identity"`
+		Key            string            `json:"key"`
+		Claim          string            `json:"claim"`
+		Law            string            `json:"law"`
+		Result         string            `json:"result"`
+		Other          string            `json:"other"`
+		Why            string            `json:"why"`
+		Seed           string            `json:"seed"`
+		Reason         string            `json:"reason"`
+		Counterexample []map[string]any  `json:"counterexample"`
+		Cases          int               `json:"cases"`
+		Points         int               `json:"points"`
+		Shallow        bool              `json:"shallow"`
+		Authored       bool              `json:"authored"`
+		World          *spec.WorldRecord `json:"world"`
 	} `json:"checks"`
 	Refusals  []map[string]string `json:"refusals"`
 	Unclaimed []map[string]string `json:"unclaimed"`

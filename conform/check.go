@@ -197,8 +197,63 @@ type firsts struct {
 	reason  atomic.Pointer[spec.ReasonID]
 	skip    atomic.Pointer[string]
 	result  atomic.Pointer[prop.Result]
+
+	// world is the sum of the records of the worlds of the cases of the
+	// check, and nil before the first. worldMu guards it.
+	world *spec.WorldRecord
+
 	points  atomic.Int64
 	engaged atomic.Bool
+	worldMu sync.Mutex
+}
+
+// addWorld adds the record w of the world of one case, of the mode, to the
+// sum of the worlds of the check.
+func (f *firsts) addWorld(w *spec.WorldRecord, mode spec.Mode) {
+	f.worldMu.Lock()
+	defer f.worldMu.Unlock()
+	if f.world == nil {
+		f.world = &spec.WorldRecord{}
+	}
+	sum := f.world
+	sum.Mode = mode
+	sum.Steps += w.Steps
+	sum.Undecided += w.Undecided
+	sum.Crashes = added(sum.Crashes, w.Crashes)
+	sum.Faults.Struck = added(sum.Faults.Struck, w.Faults.Struck)
+	sum.Faults.Vacuous = append(sum.Faults.Vacuous, w.Faults.Vacuous...)
+	sum.Leaked = append(sum.Leaked, w.Leaked...)
+}
+
+// worldRecord returns a copy of the sum of the worlds of the check, whose
+// vacuous faults are the faults that a case recorded as vacuous and no case
+// struck, each once in order, and nil for a check without a world.
+func (f *firsts) worldRecord() *spec.WorldRecord {
+	f.worldMu.Lock()
+	defer f.worldMu.Unlock()
+	if f.world == nil {
+		return nil
+	}
+	w := *f.world
+	var vacuous []string
+	for _, fault := range slices.Sorted(slices.Values(w.Faults.Vacuous)) {
+		if _, struck := w.Faults.Struck[fault]; !struck && !slices.Contains(vacuous, fault) {
+			vacuous = append(vacuous, fault)
+		}
+	}
+	w.Faults.Vacuous = vacuous
+	return &w
+}
+
+// added returns the counts of sum with the counts of more added, by key.
+func added(sum, more map[string]int) map[string]int {
+	if sum == nil {
+		sum = map[string]int{}
+	}
+	for key, n := range more {
+		sum[key] += n
+	}
+	return sum
 }
 
 // run applies the check on tb to a subject of source, under the settings of

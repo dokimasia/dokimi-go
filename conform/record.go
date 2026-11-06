@@ -61,6 +61,10 @@ type verdict struct {
 	// failure of its smallest failing case.
 	failure *assert.Failure
 
+	// world is the record of the worlds of the cases of the check, and nil for
+	// a check without a world.
+	world *spec.WorldRecord
+
 	result string
 
 	// other is the identity of the other check of a result not-isolated,
@@ -96,12 +100,15 @@ func (v *verdict) set(result string, kept *firsts) {
 // counterexample, and the failure of the smallest failing case in place of
 // the first failure.
 func (v *verdict) keep(kept *firsts) {
-	v.failure, v.points = kept.failure.Load(), int(kept.points.Load())
+	v.failure, v.points, v.world = kept.failure.Load(), int(kept.points.Load()), kept.worldRecord()
 	if r := kept.reason.Load(); r != nil {
 		v.reason = *r
 	}
 	if r := kept.result.Load(); r != nil {
 		v.cases, v.counterexample, v.failure = r.Cases, r.Counterexample, r.Failure
+		if v.world != nil {
+			v.world.Replays, v.world.Reproduced = r.Replays, r.Reproduced
+		}
 	}
 }
 
@@ -165,6 +172,7 @@ type recordTool struct {
 // checkRecord is the result of one check in a record. The counterexample has
 // the JSON form of the counterexample of a run of assert-spec.
 type checkRecord struct {
+	World          *spec.WorldRecord  `json:"world,omitempty"`
 	Failure        *assert.Failure    `json:"failure,omitempty"`
 	Identity       string             `json:"identity"`
 	Key            string             `json:"key"`
@@ -320,7 +328,7 @@ func (a *application[S]) add(i int, kind string, c *Check[S], v *verdict, seed u
 		Identity: string(c.ID), Key: spec.Key(string(c.ID)), Claim: c.Claim, Law: c.law(),
 		Machineries: c.Machineries, Shallow: c.Shallow, Authored: c.Claim == "" && !c.ceiling,
 		Result: v.result, Other: v.other, Why: v.why, Reason: v.reason, Failure: v.failure,
-		Cases: v.cases, Points: v.points, Counterexample: v.counterexample,
+		Cases: v.cases, Points: v.points, Counterexample: v.counterexample, World: v.world,
 	}
 	if c.Property != nil {
 		r.Seed = hex(seed)

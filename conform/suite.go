@@ -18,6 +18,7 @@ import (
 	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/prop"
 
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
@@ -259,6 +260,34 @@ func Durable[S any](open func(h *Handle[S], m medium.FS) S) Option[S] {
 	}}
 }
 
+// Hosted sets the door Host of an application to open, which opens a subject
+// over the environment of an incarnation of a host: its lifetime, its disk,
+// its clock, its network and its dependencies. [Handle.Host] returns the
+// subject that open returns, and [Handle.FreshHost] returns it also on a
+// planted defect. The world of a check opens each incarnation of the subject
+// through the door, and opens a subject without it over the disk of the
+// incarnation through the door Open of [Durable].
+func Hosted[S any](open func(h *Handle[S], env *host.Env) S) Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.doors.Host, c.host = open, open }}
+}
+
+// Tasks states that each subject of an application blocks only through its
+// host: its goroutines, its sleeps, its timers, its waits, its disk, its
+// network and its dependencies. The world of a check then runs the host under
+// a task scheduler of the case, and a replay of a case repeats the whole case.
+func Tasks[S any]() Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.mode = spec.ModeTasks }}
+}
+
+// Blocking states that no goroutine of a subject of an application waits on a
+// channel, on a sleep, on the disk or on the network while it has locked a
+// mutex that another goroutine waits for. The world of a check then strikes the
+// faults that make a goroutine wait for a later step of the world, such as a
+// hold of the disk, without a mode of tasks.
+func Blocking[S any]() Option[S] {
+	return Option[S]{set: func(c *config[S]) { c.blocking = true }}
+}
+
 // Faultable supplies the subjects of an application whose dependencies fail
 // on demand. A handle builds each subject of a check of the machinery
 // call-that-fails-on-demand from newFaulty, with the injector of the handle.
@@ -320,6 +349,10 @@ type config[S any] struct {
 	// calls also on a planted defect, and nil without the option.
 	open func(h *Handle[S], m medium.FS) S
 
+	// host is the door Host of the option Hosted, which [Handle.FreshHost]
+	// calls also on a planted defect, and nil without the option.
+	host func(h *Handle[S], env *host.Env) S
+
 	// cases is the number of valid cases of the option Cases, and nil
 	// without the option.
 	cases *int
@@ -344,6 +377,10 @@ type config[S any] struct {
 	// options.
 	ceilings []stated[S]
 
+	// mode is the execution mode of the worlds of the application: tasks
+	// under the option Tasks, and native otherwise.
+	mode spec.Mode
+
 	// using are the overrides of the suite, followed by the generators of the
 	// option Using in the order of the options.
 	using []prop.Option
@@ -363,8 +400,8 @@ type config[S any] struct {
 	// Crashable set the doors Restart and Crash.
 	restartable, crashable bool
 
-	// isolate reports the option Isolate.
-	isolate bool
+	// isolate reports the option Isolate, and blocking the option Blocking.
+	isolate, blocking bool
 }
 
 // onDefect returns a copy of c for the handles on a planted defect with the

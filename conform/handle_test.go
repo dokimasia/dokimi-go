@@ -23,6 +23,7 @@ import (
 	"go.dokimi.dev/assert/stateful"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
@@ -124,6 +125,25 @@ func TestHandle(t *testing.T) {
 		wantMessage string
 		wantDefect  string
 	}{
+		{
+			name:     "Host",
+			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Host(nil), nil },
+			giveDoor: func(door Store) conform.Doors[Store] {
+				return conform.Doors[Store]{Host: func(*conform.Handle[Store], *host.Env) Store { return door }}
+			},
+			giveOption: func(door Store) conform.Option[Store] {
+				return conform.Hosted(func(*conform.Handle[Store], *host.Env) Store { return door })
+			},
+			wantMessage: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Host without the option conform.Hosted. " +
+				"Pass the option to the application:\n" +
+				"\tconform.Hosted(func(h *conform.Handle[conform_test.Store], env *host.Env) conform_test.Store { … })",
+			wantDefect: "conform: the handle lacks the door: " +
+				"Store.Get/keeps-the-value calls Host on its planted defect, and the check has no door " +
+				"Host. Give the check the door:\n" +
+				"\tconform.Doors[conform_test.Store]{Host: " +
+				"func(h *conform.Handle[conform_test.Store], env *host.Env) conform_test.Store { … }}",
+		},
 		{
 			name:     "Reference",
 			giveCall: func(h *conform.Handle[Store]) (got, want Store) { return h.Reference(), nil },
@@ -336,6 +356,102 @@ func TestHandle(t *testing.T) {
 		})
 	}
 
+	t.Run("Hostable", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			give []conform.Option[Store]
+			want bool
+		}{
+			{
+				name: "reports true for an application with the option Hosted",
+				give: []conform.Option[Store]{conform.Hosted(func(*conform.Handle[Store], *host.Env) Store {
+					return newMemory()
+				})},
+				want: true,
+			},
+			{name: "reports false for an application without the option Hosted", want: false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var got bool
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					got = h.Hostable()
+					apply(h)
+				}
+				c.Run(t, newStore, tt.give...)
+				assert.Equal(t, got, tt.want, "the handle has the door Host")
+			})
+		}
+	})
+
+	t.Run("Mode", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			give []conform.Option[Store]
+			want spec.Mode
+		}{
+			{
+				name: "returns the mode tasks for an application with the option Tasks",
+				give: []conform.Option[Store]{conform.Tasks[Store]()}, want: spec.ModeTasks,
+			},
+			{name: "returns the mode native for an application without the option Tasks", want: spec.ModeNative},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var got spec.Mode
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					got = h.Mode()
+					apply(h)
+				}
+				c.Run(t, newStore, tt.give...)
+				assert.Equal(t, got, tt.want, "the mode of the world of the check")
+			})
+		}
+	})
+
+	t.Run("Blocking", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name string
+			give []conform.Option[Store]
+			want bool
+		}{
+			{
+				name: "reports true for an application with the option Blocking",
+				give: []conform.Option[Store]{conform.Blocking[Store]()}, want: true,
+			},
+			{name: "reports false for an application without the option Blocking", want: false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var got bool
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					got = h.Blocking()
+					apply(h)
+				}
+				c.Run(t, newStore, tt.give...)
+				assert.Equal(t, got, tt.want, "the application states the option Blocking")
+			})
+		}
+	})
+
 	t.Run("FreshOpen", func(t *testing.T) {
 		t.Parallel()
 
@@ -369,6 +485,60 @@ func TestHandle(t *testing.T) {
 				"calls FreshOpen without the option conform.Durable. A planted defect over a subject of a medium "+
 				"proves its check in an application, which has the option", "the fault names the option")
 			expect.False(t, continued.Load(), "the check ends at FreshOpen")
+		})
+	})
+
+	t.Run("FreshHost", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("opens a subject through the door Host of the application on a planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			hosted := Store(newMemory())
+			c := keeps()
+			apply := c.Apply
+			c.Doors = conform.Doors[Store]{Host: func(*conform.Handle[Store], *host.Env) Store { return forgetful{} }}
+			c.Apply = func(h *conform.Handle[Store]) {
+				assert.True(h, h.FreshHost(nil) == hosted, "the defect opens the subject of the application")
+				apply(h)
+			}
+			c.Falsify(t, conform.Hosted(func(*conform.Handle[Store], *host.Env) Store { return hosted }))
+		})
+
+		t.Run("opens a subject over the disk of the environment without the option Hosted", func(t *testing.T) {
+			t.Parallel()
+
+			c := conform.Check[Store]{
+				ID:        storeGet.Check("opens-over-the-disk"),
+				Statement: "the door Open opens the subject over the disk of the incarnation",
+				Around:    conform.Bubble,
+				Property: func(h *conform.Handle[Store], pc *prop.Case) {
+					_, env := host.New(pc, "node-1", nil, nil).Start()
+					opened, _ := h.FreshHost(env).(*disk)
+					assert.True(h, opened != nil && opened.m == env.Disk(), h.Statement())
+				},
+				Defect: func(*conform.Handle[Store]) Store { return forgetful{} },
+			}
+			c.Run(t, newStore, conform.Cases[Store](1), conform.Durable(openDisk))
+		})
+
+		t.Run("ends the check with a fault without the options Hosted and Durable", func(t *testing.T) {
+			t.Parallel()
+
+			var continued atomic.Bool
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.FreshHost(nil)
+				continued.Store(true)
+			}
+			faults := recorded(func(tb assert.TB) { c.Falsify(tb) }).Faults()
+			assert.Length(t, faults, 1, "FreshHost ends the check with one fault")
+			expect.ErrorIs(t, faults[0], conform.ErrOption, "the fault is the fault of a door")
+			expect.Equal(t, faults[0].Error(), "conform: the handle lacks the door: Store.Get/keeps-the-value "+
+				"calls FreshHost without the option conform.Hosted or conform.Durable. A planted defect over a "+
+				"subject of a host proves its check in an application, which has one of the options",
+				"the fault names the options")
+			expect.False(t, continued.Load(), "the check ends at FreshHost")
 		})
 	})
 

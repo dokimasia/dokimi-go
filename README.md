@@ -20,6 +20,8 @@ calls through stub.
 | [`go.dokimi.dev/fault`](https://pkg.go.dev/go.dokimi.dev/fault) | The strategies that select the calls of a double that fail |
 | [`go.dokimi.dev/sim`](https://pkg.go.dev/go.dokimi.dev/sim) | The runtime of the deterministic simulations: the world of a system of sans-IO machines, its faults, the scheduling strategies, the rules of a runtime and the run of a simulation |
 | [`go.dokimi.dev/medium`](https://pkg.go.dev/go.dokimi.dev/medium) | The storage of a durable subject: a filesystem with an explicit sync over the operating system, and in memory with crashes, torn writes, flipped bits and a full disk |
+| [`go.dokimi.dev/host`](https://pkg.go.dev/go.dokimi.dev/host) | The simulated machine of a component: the incarnations of its process, its disk, its clocks, its network and its dependencies |
+| [`go.dokimi.dev/spec`](https://pkg.go.dev/go.dokimi.dev/spec) | The runtime contract of the conformance spec of dokimi: the laws, the claims, the probes, the reason codes, the defect forms and the suite record |
 
 The tags of the releases of each module start with the directory of the module, such as
 `conform/v0.7.0`.
@@ -57,6 +59,9 @@ The options of an application change what it runs:
 | `conform.Using[S](g)` | Adds the generator of a type, such as a value that only a registry builds |
 | `conform.Reference`, `conform.Second`, `conform.Restartable` and `conform.Crashable` | Supply the reference implementation, the second subject, the restart and the crash that a check needs and that only you can build |
 | `conform.Durable(open)` | Opens each subject over a new `medium.Memory`, so the checks of the mixin `durable` crash, tear, corrupt and fill its medium |
+| `conform.Hosted(open)` | Opens each incarnation of the subject of a world check over the environment of a host: its lifetime, its disk, its clock, its network and its dependencies |
+| `conform.Tasks[S]()` | States that the subject blocks only through its host, so each world check runs under the task scheduler of the case and replays a whole case |
+| `conform.Blocking[S]()` | States that no goroutine of the subject waits durably while it has locked a mutex that another goroutine waits for, so each world check also strikes the faults that make a goroutine wait |
 
 A check fails the test of its suite when it passes on its planted defect. It has to fail there at
 the assertion whose message is its statement.
@@ -86,7 +91,7 @@ the error contains the name of the function.
 ## Development
 
 The repository uses [ergon](https://github.com/dokimasia/ergon) for its checks and its releases.
-`go.work` lists the three modules. [CONTRIBUTING.md](CONTRIBUTING.md) describes how to propose a
+`go.work` lists the modules. [CONTRIBUTING.md](CONTRIBUTING.md) describes how to propose a
 change. The project follows the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
 
 ```sh

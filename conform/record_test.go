@@ -415,6 +415,68 @@ func TestRecord(t *testing.T) {
 			assert.Equal(t, judged.Checks[0].Points, 7, "the record has the sum of the points of the check")
 		})
 
+		t.Run("records the world of each case of a check", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					h.RecordWorld(&spec.WorldRecord{
+						Steps: 3, Crashes: map[string]int{"power-loss": 1}, Undecided: 1,
+						Faults: spec.WorldFaults{Struck: map[string]int{"hold": 1}, Vacuous: []string{"bump", "hold"}},
+					})
+					h.RecordWorld(&spec.WorldRecord{
+						Steps: 4, Crashes: map[string]int{"power-loss": 2}, Leaked: []string{"goroutine 7"},
+						Faults: spec.WorldFaults{Vacuous: []string{"bump"}},
+					})
+					apply(h)
+				}
+				conform.Run(t, suiteOf(c), newStore, conform.Tasks[Store]())
+				return
+			}
+			judged := recordsOf(t, childOutput(t))[1]
+
+			assert.Equal(t, judged.Checks[0].World, &spec.WorldRecord{
+				Mode: spec.ModeTasks, Steps: 7, Crashes: map[string]int{"power-loss": 3}, Undecided: 1,
+				Leaked: []string{"goroutine 7"},
+				Faults: spec.WorldFaults{Struck: map[string]int{"hold": 1}, Vacuous: []string{"bump"}},
+			}, "the record sums the worlds, and a fault that a case struck is not vacuous")
+		})
+
+		t.Run("records no world for a check without one", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				conform.Run(t, suiteOf(keeps()), newStore)
+				return
+			}
+			judged := recordsOf(t, childOutput(t))[1]
+
+			assert.Nil(t, judged.Checks[0].World, "the check has no world")
+		})
+
+		t.Run("records the replays of a failing case in the world of a property check", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				below := keepsEvery()
+				below.ID, below.Statement = storeGet.Check("draws-a-small-number"), "the number is below 10"
+				below.Options = func(*conform.Handle[Store]) []prop.Option { return []prop.Option{prop.Replays(3)} }
+				below.Property = func(h *conform.Handle[Store], c *prop.Case) {
+					h.RecordWorld(&spec.WorldRecord{Steps: 1})
+					assert.InRange(h, c.Draw(prop.Integer(0, 1000), "n"), 0, 9, h.Statement())
+				}
+				conform.Run(t, suiteOf(below), newStore)
+				return
+			}
+			world := recordsOf(t, childOutputWith(t, "DOKIMI_SEED=1"))[1].Checks[0].World
+
+			assert.NotNil(t, world, "the property check has a world")
+			expect.Equal(t, world.Replays, 3, "the world states the three replays of the failing case")
+			expect.Equal(t, world.Reproduced, 3, "the world states that each replay reproduced the failure")
+		})
+
 		t.Run("records the counterexample and the failure of the smallest failing case", func(t *testing.T) {
 			t.Parallel()
 

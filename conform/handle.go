@@ -20,6 +20,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 	"go.dokimi.dev/assert/stateful"
 
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
@@ -84,6 +85,10 @@ type Doors[S any] struct {
 	// Open returns a subject over the medium m, which [Handle.Open] returns.
 	Open func(h *Handle[S], m medium.FS) S
 
+	// Host returns a subject over the environment env of an incarnation,
+	// which [Handle.Host] returns.
+	Host func(h *Handle[S], env *host.Env) S
+
 	// Values are the doors of values, one for each type, each from [Supply].
 	// [Open] returns the value of the door of its type.
 	Values []Supplied[S]
@@ -116,6 +121,9 @@ func (d Doors[S]) over(fallback Doors[S]) Doors[S] {
 	}
 	if d.Open == nil {
 		d.Open = fallback.Open
+	}
+	if d.Host == nil {
+		d.Host = fallback.Host
 	}
 	return d
 }
@@ -359,6 +367,72 @@ func (h *Handle[S]) FreshOpen(m medium.FS) S {
 		return zero
 	}
 	return h.withMedium(m, h.build(func(h *Handle[S]) S { return h.config.open(h, m) }))
+}
+
+// FreshHost returns a subject over the environment env of an incarnation of a
+// host through the door Host of the option [Hosted], also on a planted
+// defect, as [Handle.FreshOpen] returns a subject over a medium. Without the
+// option it opens the subject over the disk of env through the door Open of
+// the option [Durable], as the world of a check opens such a subject. Without
+// either option it ends the check with a fault that wraps [ErrOption], and it
+// returns the zero value to a seat that takes the fault and goes on.
+func (h *Handle[S]) FreshHost(env *host.Env) S {
+	h.Helper()
+	switch {
+	case h.config.host != nil:
+		return h.build(func(h *Handle[S]) S { return h.config.host(h, env) })
+	case h.config.open != nil:
+		return h.FreshOpen(env.Disk())
+	}
+	assert.Fault(h, fmt.Errorf("%w: %s calls FreshHost without the option conform.Hosted or conform.Durable. A "+
+		"planted defect over a subject of a host proves its check in an application, which has one of the options",
+		ErrOption, h.check.ID))
+	var zero S
+	return zero
+}
+
+// Host returns a subject over the environment env of an incarnation of a
+// host, through the option [Hosted] or the door Host of a planted defect.
+// Without the door it ends the check with a fault that wraps [ErrOption], and
+// it returns the zero value to a seat that takes the fault and goes on.
+func (h *Handle[S]) Host(env *host.Env) S {
+	h.Helper()
+	if h.config.doors.Host == nil {
+		h.lacks("calls Host", "Host", "conform.Hosted", "func(h *conform.Handle[%[1]v], env *host.Env) %[1]v { … }")
+		var zero S
+		return zero
+	}
+	return h.build(func(h *Handle[S]) S { return h.config.doors.Host(h, env) })
+}
+
+// Hostable reports whether the handle has the door Host, from the option
+// [Hosted] or from the doors of a planted defect.
+func (h *Handle[S]) Hostable() bool {
+	return h.config.doors.Host != nil
+}
+
+// Mode returns the execution mode of the world of a check: spec.ModeTasks
+// for an application with the option [Tasks], and spec.ModeNative otherwise.
+func (h *Handle[S]) Mode() spec.Mode {
+	if h.config.mode == spec.ModeTasks {
+		return spec.ModeTasks
+	}
+	return spec.ModeNative
+}
+
+// Blocking reports whether the application states the option [Blocking].
+func (h *Handle[S]) Blocking() bool {
+	return h.config.blocking
+}
+
+// RecordWorld adds the record w of the world of one case to the record of the
+// check. The steps, the crashes, the faults, the undecided partitions and the
+// leaked goroutines of the cases add up. A fault is vacuous for the check
+// when a case recorded it as vacuous and no case struck it. The record of the
+// check states the mode of the handle, and the replays of a failing case of
+// the run. RecordWorld does not keep w.
+func (h *Handle[S]) RecordWorld(w *spec.WorldRecord) {
+	h.kept.addWorld(w, h.Mode())
 }
 
 // AddPoints adds n to the points of the medium that the check enumerated: the
