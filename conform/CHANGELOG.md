@@ -1,5 +1,28 @@
 # go.dokimi.dev/conform
 
+## 0.14.0
+
+### Minor Changes
+
+- 984587a: Add `conform.Bubble` to run each case of a world check in a `testing/synctest` bubble whose watchdog ends the test binary at a stall.
+- 984587a: Add `conform.Handle.FreshHost` to open the subject of an application over the environment of an incarnation on a planted defect.
+- 984587a: Add the option `conform.Hosted`, the door `Doors.Host`, `Handle.Host` and `Handle.Hostable` to open a subject over the environment of an incarnation of a host.
+- 984587a: Move `Injector`, `Dependency`, `DependencyCall`, `ErrInjected` and `FaultOf` to `go.dokimi.dev/host`, and keep each in `conform` under its name.
+- 2831344: Add `probe.Pool`, a pool of the keys that the operations of a world pick.
+- 984587a: Add `conform.RecordStep` to count the steps of a world for the watchdog of `conform.Bubble`.
+- 984587a: Add `Handle.RecordWorld` to add the world of each case to the field `world` of the record of its check.
+- 984587a: Add the options `conform.Tasks` and `conform.Blocking`, `Handle.Mode` and `Handle.Blocking` for the execution mode of the world of a subject.
+- 2831344: Add the probes `probe.FaultyWorldHistory` and `probe.WorldRecovery` of the world of a subject, with `probe.World`, `probe.Operation`, `probe.WorldOptions` and `probe.Amnesiac`.
+
+### Patch Changes
+
+- 1cbb662: Require `go.dokimi.dev/assert` v0.18.0.
+- Updated dependencies [e7c7771, 531155e, 1cbb662, e49374f]
+  - go.dokimi.dev/medium@0.2.0
+  - go.dokimi.dev/host@0.1.0
+  - go.dokimi.dev/fault@0.2.3
+  - go.dokimi.dev/spec@0.5.0
+
 ## 0.13.1
 
 ### Patch Changes

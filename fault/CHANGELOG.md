@@ -1,5 +1,11 @@
 # go.dokimi.dev/fault
 
+## 0.2.3
+
+### Patch Changes
+
+- 1cbb662: Require `go.dokimi.dev/assert` v0.18.0.
+
 ## 0.2.2
 
 ### Patch Changes
