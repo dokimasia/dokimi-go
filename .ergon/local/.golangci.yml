@@ -5,6 +5,12 @@
 
 linters:
   settings:
+    # A view of a medium, such as the disk of a host, returns the error of the medium as the
+    # medium returns it. A caller matches medium.ErrCrashed with errors.Is, and a reader compares
+    # io.EOF with ==, so a call into the medium needs no wrap.
+    wrapcheck:
+      ignore-package-globs:
+        - go.dokimi.dev/medium
     gosec:
       excludes:
         # A fault of a double takes its random numbers from a seeded source that the test passes,

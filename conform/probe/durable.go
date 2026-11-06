@@ -286,7 +286,6 @@ func openWith(
 ) (medium.File, error) {
 	f, err := m.OpenFile(name, flag, perm)
 	if err != nil {
-		//nolint:wrapcheck // the subject matches the error of the medium with errors.Is as m returns it
 		return nil, err
 	}
 	return wrap(f), nil

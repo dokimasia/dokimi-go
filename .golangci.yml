@@ -209,6 +209,8 @@ linters:
         - context\.Cause\(
         - (fs|filepath)\.WalkDir\(
         - filepath\.Walk\(
+      ignore-package-globs:
+        - go.dokimi.dev/medium
     gosec:
       excludes:
         # A fault of a double takes its random numbers from a seeded source that the test passes,

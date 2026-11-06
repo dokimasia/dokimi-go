@@ -45,7 +45,7 @@ func (v *view) OpenFile(name string, flag int, perm fs.FileMode) (medium.File, e
 	}
 	f, err := v.fs.OpenFile(name, flag, perm)
 	if err != nil {
-		return nil, err //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+		return nil, err
 	}
 	return &viewFile{f: f, gate: v.gate, name: name}, nil
 }
@@ -55,7 +55,7 @@ func (v *view) Remove(name string) error {
 	if err := pass(v.gate, "remove", name); err != nil {
 		return err
 	}
-	return v.fs.Remove(name) //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return v.fs.Remove(name)
 }
 
 // Rename moves oldName to newName on the disk.
@@ -63,7 +63,6 @@ func (v *view) Rename(oldName, newName string) error {
 	if err := pass(v.gate, "rename", oldName); err != nil {
 		return err
 	}
-	//nolint:wrapcheck // the view returns the error of the disk as the disk returns it
 	return v.fs.Rename(oldName, newName)
 }
 
@@ -73,7 +72,7 @@ func (v *view) MkdirAll(name string, perm fs.FileMode) error {
 	if err := pass(v.gate, "mkdir", name); err != nil {
 		return err
 	}
-	return v.fs.MkdirAll(name, perm) //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return v.fs.MkdirAll(name, perm)
 }
 
 // ReadDir returns the entries of the directory name of the disk.
@@ -81,7 +80,7 @@ func (v *view) ReadDir(name string) ([]fs.DirEntry, error) {
 	if err := pass(v.gate, "readdir", name); err != nil {
 		return nil, err
 	}
-	return v.fs.ReadDir(name) //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return v.fs.ReadDir(name)
 }
 
 // Stat returns the information of the entry name of the disk.
@@ -89,7 +88,7 @@ func (v *view) Stat(name string) (fs.FileInfo, error) {
 	if err := pass(v.gate, "stat", name); err != nil {
 		return nil, err
 	}
-	return v.fs.Stat(name) //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return v.fs.Stat(name)
 }
 
 // SyncDir makes the entries of the directory name of the disk durable.
@@ -97,7 +96,7 @@ func (v *view) SyncDir(name string) error {
 	if err := pass(v.gate, "syncdir", name); err != nil {
 		return err
 	}
-	return v.fs.SyncDir(name) //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return v.fs.SyncDir(name)
 }
 
 // viewFile is a file that a view opened. Each call passes the gate of its
@@ -159,7 +158,7 @@ func (f *viewFile) Sync() error {
 	if err := pass(f.gate, "sync", f.name); err != nil {
 		return err
 	}
-	return f.f.Sync() //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return f.f.Sync()
 }
 
 // Truncate sets the size of the file to size.
@@ -168,7 +167,7 @@ func (f *viewFile) Truncate(size int64) error {
 	if err := pass(f.gate, "truncate", f.name); err != nil {
 		return err
 	}
-	return f.f.Truncate(size) //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return f.f.Truncate(size)
 }
 
 // Stat returns the information of the file.
@@ -177,7 +176,7 @@ func (f *viewFile) Stat() (fs.FileInfo, error) {
 	if err := pass(f.gate, "stat", f.name); err != nil {
 		return nil, err
 	}
-	return f.f.Stat() //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return f.f.Stat()
 }
 
 // Close closes the file.
@@ -186,5 +185,5 @@ func (f *viewFile) Close() error {
 	if err := pass(f.gate, "close", f.name); err != nil {
 		return err
 	}
-	return f.f.Close() //nolint:wrapcheck // the view returns the error of the disk as the disk returns it
+	return f.f.Close()
 }
