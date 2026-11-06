@@ -119,6 +119,62 @@ func TestComponent(t *testing.T) {
 		})
 	})
 
+	t.Run("ComponentOf", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the component that SpawnComponent returned for the name", func(t *testing.T) {
+			t.Parallel()
+			var same bool
+			inBubble(t, still, func(c *prop.Case, _ bool) {
+				w, _, b := cells(c)
+				same = sim.ComponentOf[*cell](w, "b") == b
+				w.Stop()
+			})
+
+			assert.True(t, same, "the world returns the component b")
+		})
+
+		t.Run("fails the case for a name that no process has", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				sim.ComponentOf[*cell](w, "c")
+			})
+
+			assert.Equal(t, got.Contract, `sim: no process of the world is named "c"`, "the failure names the name")
+		})
+
+		t.Run("fails the case for a process that is no component", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, `[{"label": "drift.m", "value": {"type": "int", "value": 0}}]`,
+				func(c *prop.Case) {
+					w := sim.New(c, anatomy)
+					w.Spawn("m", newStore)
+					sim.ComponentOf[*cell](w, "m")
+				})
+
+			assert.Equal(t, got.Contract, `sim: the process "m" is no component`, "the failure names the process")
+		})
+
+		t.Run("fails the case for a component whose values have another type", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				sim.ComponentOf[string](w, "a")
+			})
+
+			assert.Equal(
+				t,
+				got.Contract,
+				`sim: the component "a" is a *sim.Component[*go.dokimi.dev/sim_test.cell], not a *sim.Component[string]`,
+				"the failure names both types of the component",
+			)
+		})
+	})
+
 	t.Run("Invoke", func(t *testing.T) {
 		t.Parallel()
 

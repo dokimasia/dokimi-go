@@ -39,15 +39,16 @@ type Component[T any] struct {
 }
 
 // component is the host of a component process, the incarnation of the
-// process that runs with its environment and its value, and the open of each
-// incarnation.
+// process that runs with its environment and its value, the open of each
+// incarnation, and the *Component[T] that SpawnComponent returned for it.
 type component struct {
-	c     *prop.Case
-	host  *host.Host
-	inc   *host.Incarnation
-	env   *host.Env
-	value any
-	open  func(env *host.Env) any
+	c      *prop.Case
+	host   *host.Host
+	inc    *host.Incarnation
+	env    *host.Env
+	value  any
+	open   func(env *host.Env) any
+	handle any
 }
 
 // invocation is an open call of a client on a component: its call of the
@@ -76,10 +77,30 @@ func SpawnComponent[T, E, F any](w *World[E, F], name string, open func(env *hos
 		c: w.c, host: host.New(w.c, name, w.network, w.sched),
 		open: func(env *host.Env) any { return open(env) },
 	}
+	handle := &Component[T]{c: c, name: name}
+	c.handle = handle
 	p := &Process[E, F]{name: name, clock: newClock(0), comp: c}
 	w.procs = append(w.procs, p)
 	w.startComponent(p)
-	return &Component[T]{c: c, name: name}
+	return handle
+}
+
+// ComponentOf returns the component process named name of w, whose values
+// have the type T, as SpawnComponent returned it. A function of a
+// simulation, such as an action or an invariant, gets the components of its
+// world from it. ComponentOf fails the case of w for a name that no process
+// has, a process that is no component and a component whose values have
+// another type.
+func ComponentOf[T, E, F any](w *World[E, F], name string) *Component[T] {
+	p := w.named(name)
+	if p.comp == nil {
+		w.c.Fatalf("sim: the process %q is no component", name)
+	}
+	c, typed := p.comp.handle.(*Component[T])
+	if !typed {
+		w.c.Fatalf("sim: the component %q is a %T, not a %T", name, p.comp.handle, c)
+	}
+	return c
 }
 
 // Value returns the value of the incarnation that runs. It fails the case of

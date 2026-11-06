@@ -24,8 +24,9 @@
 // process: a torn write, a flipped bit at rest and a full disk.
 //
 // A component process runs a Go value on a host of go.dokimi.dev/host.
-// [SpawnComponent] starts it, and [World.Invoke] runs each call of a client
-// on a goroutine of its incarnation. The faults of a process strike a
+// [SpawnComponent] starts it, and [ComponentOf] returns it by its name to a
+// function of the simulation. [World.Invoke] runs each call of a client on a
+// goroutine of its incarnation. The faults of a process strike a
 // component through its host, and the faults of the network strike the links
 // between the hosts of the components.
 //
