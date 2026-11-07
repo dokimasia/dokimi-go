@@ -1,5 +1,11 @@
 # go.dokimi.dev/conform
 
+## 0.15.0
+
+### Minor Changes
+
+- 84491b7: Add the options of an application to `conform.Falsify` and `conform.FalsifyAllocs`.
+
 ## 0.14.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # go.dokimi.dev/sim
 
+## 0.4.1
+
+### Patch Changes
+
+- c315378: Fix the checks of the whole history and of a scenario to end a case whose history the checker cannot decide without a failure, under the label `undecided`.
+- Updated dependencies [84491b7]
+  - go.dokimi.dev/conform@0.15.0
+
 ## 0.4.0
 
 ### Minor Changes
