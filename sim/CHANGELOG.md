@@ -1,5 +1,17 @@
 # go.dokimi.dev/sim
 
+## 0.5.0
+
+### Minor Changes
+
+- c2e9099: **Breaking:** Change a run with a component to choose the client of a call, the target of a fault of the datagrams and the byte of a corruption among all clients and processes.
+
+### Patch Changes
+
+- Updated dependencies [ae3dfa7, 6131ab9]
+  - go.dokimi.dev/host@0.2.0
+  - go.dokimi.dev/conform@0.16.0
+
 ## 0.4.1
 
 ### Patch Changes

@@ -4,12 +4,12 @@ github.com/google/jsonschema-go v0.4.3 h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+
 github.com/google/jsonschema-go v0.4.3/go.mod h1:r5quNTdLOYEz95Ru18zA0ydNbBuYoo9tgaYcxEYhJVE=
 go.dokimi.dev/assert v0.18.0 h1:WCA/PvWa2t0XKK8H4dDTv/KwutK0kM4whprFKTdaC/I=
 go.dokimi.dev/assert v0.18.0/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
-go.dokimi.dev/conform v0.15.0 h1:t2favs6vkL3UsV9py3CVfLbNSqd5+7HLKiQctNB35v4=
-go.dokimi.dev/conform v0.15.0/go.mod h1:cdzv9eUVH0niQotaffSpr1JnZkSdlYPy4110MqCs8ew=
+go.dokimi.dev/conform v0.16.0 h1:K3xfmn0rHrdFi8j06CSA8E2h5GOw8gNLlU7vZqcXeQ8=
+go.dokimi.dev/conform v0.16.0/go.mod h1:wq3sbogmVu4oGyJT48DjauiY9JI/V77iPWPHW0ODs5s=
 go.dokimi.dev/fault v0.2.3 h1:pQkqofp3ehoOzpTkCbZbF8ZobxtOPUNLqmfE/Ycw0ow=
 go.dokimi.dev/fault v0.2.3/go.mod h1:cVhHtEZKGbCtWkm2YvCJ4NwKxkUBz2RI26gVHl3x8r4=
-go.dokimi.dev/host v0.1.0 h1:2eNNpJ62W6Q10/vWesHdxwGJv8JgLlmTqp3BqR9Ea40=
-go.dokimi.dev/host v0.1.0/go.mod h1:Ga52eaWIrynsFtMVooGSwbH8bX/lvQjxH3YcvDwEbec=
+go.dokimi.dev/host v0.2.0 h1:da6PwB6Izw7a1pjX5KBQDVUhnUUWUVFG/GRC0EtJTv8=
+go.dokimi.dev/host v0.2.0/go.mod h1:Ga52eaWIrynsFtMVooGSwbH8bX/lvQjxH3YcvDwEbec=
 go.dokimi.dev/medium v0.2.0 h1:E9RqP4g7LEpnZ/vYvGczszsadrzcFG0melendnwA3GM=
 go.dokimi.dev/medium v0.2.0/go.mod h1:KfZ8gI/8N/qguNqNtHGrfhW54wnlDlYwvIum7fkmAeo=
 go.dokimi.dev/spec v0.5.0 h1:vJxe+7mIJ1EC/z7gGgAIVT5MtH4fbQuHL7Tvu7hCG4A=
