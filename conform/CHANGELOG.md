@@ -1,5 +1,18 @@
 # go.dokimi.dev/conform
 
+## 0.16.0
+
+### Minor Changes
+
+- 6131ab9: **Breaking:** Change a call and a cancel of a world to take the first client without an open call or with one from a client that the case chooses among all clients.
+- 6131ab9: **Breaking:** Change a world to strike the faults of the dependencies and of the clock before their first use, and to record the faults of a resource that the subject never uses as vacuous.
+- 6131ab9: **Breaking:** Change a flip of a world and `probe.Pool.Pick` to take the file, the byte and the key at a share that the case chooses.
+
+### Patch Changes
+
+- Updated dependencies [ae3dfa7]
+  - go.dokimi.dev/host@0.2.0
+
 ## 0.15.0
 
 ### Minor Changes
