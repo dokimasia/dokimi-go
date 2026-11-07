@@ -34,13 +34,21 @@ const sectionMean = 16
 // of h, with a concurrent section on the clients 0 to clients that the
 // schedule of h runs. Each case keeps every action, so each case can show a
 // race between two actions. After the last step it checks the history of c
-// once with history.Linearizable and opts, against the spec that
-// history.SpecFrom builds over fresh references of h through reference. The
-// check splits the history by the keys of its calls. It fails when the calls
-// have no order in which the reference returns the same results. A history
-// without a call, and a history that the checker cannot decide within its
-// budget, do not engage h. A fault of the checker, such as a reference that
-// panics, ends the check with that fault.
+// once with history.Linearizable and opts, against fresh references of h
+// through reference. The check splits the history by the keys of its calls.
+// It fails when the calls have no order in which the reference returns the
+// same results. A history without a call, and a history that the checker
+// cannot decide within its budget, do not engage h. A fault of the checker,
+// such as a reference that panics, ends the check with that fault.
+//
+// For a subject of an interface or a pointer type, a state of the check is a
+// reference after the calls of an order, and the check compares two states as
+// assert.Equal compares them. The search then takes two orders that leave
+// equal references as one. So a reference has its whole state in its value:
+// two references that compare equal return the same outputs for the same
+// calls. A reference that is no pointer is a value of an interface type, and
+// the check takes a pointer to a copy of it. For a subject of any other type,
+// a state is the list of the calls of an order, as history.SpecFrom states it.
 func LinearizableHistory[S any](
 	h *conform.Handle[S], c *prop.Case, actions Actions[S], reference Reference[S], clients int,
 	opts ...history.Option,
@@ -48,12 +56,8 @@ func LinearizableHistory[S any](
 	h.Helper()
 	stateful.Steps(c, stateful.Machine[struct{}]{Actions: actions(c, h.Subject)}, stateful.Clients(clients),
 		h.Schedule(c), stateful.Swarm(false))
-	sequential := history.SpecFrom(func() history.Subject {
-		apply := reference(h.Reference())
-		return func(operation string, args []any) any { return apply(h.Context(), operation, args) }
-	})
 	r := assert.NewRecorder().WithContext(h.Context())
-	history.Linearizable(r, c.History(), sequential, h.Statement(), opts...)
+	newLinearizability(h, reference, opts).check(r, c.History(), h.Statement())
 	if faults := r.Faults(); len(faults) > 0 {
 		assert.Fault(h, faults[0])
 		return

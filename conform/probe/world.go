@@ -158,28 +158,29 @@ func erase(m medium.FS) {
 // FaultyWorldHistory runs the world w over the subject of h in the case c:
 // concurrent calls of the operations on the clients of w, crashes and
 // restarts of the subject, faults of its disk, its dependencies and its
-// clock, and advances of its clock. It checks the history of the calls after
-// every step with history.Linearizable and opts, against the spec that
-// history.SpecFrom builds over fresh references of h. It fails when a
-// partition of the history has no order of its calls that respects their
-// real-time order and that the reference accepts. A partition whose search
-// ends undecided ends the checks of the case, and a history without a call
-// does not engage h. A fault of the checker, such as a reference that panics,
-// ends the check with that fault. The world fails the check for a goroutine
-// of a crashed incarnation that is alive after quiescence, because it ignored
-// its lifetime.
+// clock, and advances of its clock. It checks the history of the calls with
+// history.Linearizable and opts after every step at which no client has an
+// open call, and once more after the last step while a client has one. Each
+// check continues the searches of the check before it. The checks judge the
+// history against fresh references of h, as LinearizableHistory judges it. A
+// check fails when a partition of the history has no order of its calls that
+// respects their real-time order and that the reference accepts. A partition
+// whose search ends undecided ends the checks of the case, and a history
+// without a call does not engage h. A fault of the checker, such as a
+// reference that panics, ends the check with that fault. The world fails the
+// check for a goroutine of a crashed incarnation that is alive after
+// quiescence, because it ignored its lifetime.
 func FaultyWorldHistory[S any](h *conform.Handle[S], c *prop.Case, w World[S], opts ...history.Option) {
 	h.Helper()
 	wd := newWorld(h, c, w)
 	defer wd.finish()
 	wd.checking = true
-	wd.sequential = history.SpecFrom(func() history.Subject {
-		apply := w.Reference(h.Reference())
-		return func(operation string, args []any) any { return apply(h.Context(), operation, args) }
-	})
-	wd.opts = append(slices.Clip(opts), history.Resume(&wd.cp))
+	wd.checks = newLinearizability(h, w.Reference, opts)
 	wd.start()
 	stateful.Steps(c, wd.machine(), stateful.Max(worldSteps), stateful.Swarm(false))
+	if !wd.quiet() {
+		wd.check()
+	}
 }
 
 // WorldRecovery runs the world w over the subject of h in the case c, as
@@ -200,8 +201,9 @@ func WorldRecovery[S any](h *conform.Handle[S], c *prop.Case, w World[S]) {
 // world is the run of a World in one case: the host of its subject, the open
 // call of each client and the fault in force.
 type world[S any] struct {
-	// sequential is the spec of the checks of the history.
-	sequential history.Spec[[]history.Operation]
+	// checks judges the history, and each of its checks continues the
+	// searches of the check before it.
+	checks linearizability
 
 	subject S
 	h       *conform.Handle[S]
@@ -220,12 +222,7 @@ type world[S any] struct {
 	fault string
 
 	def World[S]
-
-	// cp keeps the searches of the last check of the history, and opts are
-	// the options of each check, which resume from cp.
-	cp   history.Checkpoint[[]history.Operation]
-	ops  []Operation[S]
-	opts []history.Option
+	ops []Operation[S]
 
 	// open is the open call of each client, nil for an idle client, and
 	// done the outputs of the calls that returned without an error since the
@@ -316,8 +313,8 @@ func (w *world[S]) keptOf(kinds ...string) []string {
 }
 
 // machine returns the machine of the steps of the world. Each step settles
-// after its run, and the machine checks the history after each step for a
-// world that checks it.
+// after its run. For a world that checks its history, the machine checks it
+// after each step at which no client has an open call.
 func (w *world[S]) machine() stateful.Machine[struct{}] {
 	actions := make([]stateful.Action[struct{}], 0, len(w.ops)+9)
 	for i := range w.ops {
@@ -334,9 +331,20 @@ func (w *world[S]) machine() stateful.Machine[struct{}] {
 	}
 	m := stateful.Machine[struct{}]{Actions: actions}
 	if w.checking {
-		m.Invariant = func(*prop.Case, struct{}) { w.check() }
+		m.Invariant = func(*prop.Case, struct{}) {
+			if w.quiet() {
+				w.check()
+			}
+		}
 	}
 	return m
+}
+
+// quiet reports whether no client has an open call.
+func (w *world[S]) quiet() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return !slices.ContainsFunc(w.open, func(wc *worldCall) bool { return wc != nil })
 }
 
 // callAction returns the step that calls op on a running subject. The case
@@ -814,7 +822,7 @@ func (w *world[S]) check() {
 		return
 	}
 	r := assert.NewRecorder().WithContext(w.h.Context())
-	history.Linearizable(r, w.c.History(), w.sequential, w.h.Statement(), w.opts...)
+	w.checks.check(r, w.c.History(), w.h.Statement())
 	if faults := r.Faults(); len(faults) > 0 {
 		assert.Fault(w.h, faults[0])
 		return

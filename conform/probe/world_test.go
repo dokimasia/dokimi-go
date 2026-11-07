@@ -973,6 +973,61 @@ func TestWorld(t *testing.T) {
 				}, "the end of the case completes the parked Put")
 			})
 
+		t.Run("checks the history once no client has an open call", func(t *testing.T) {
+			t.Parallel()
+			r := &onTest{Recorder: assert.NewRecorder(), t: t}
+			inventing := func(h *conform.Handle[*kv], env *host.Env) *kv {
+				s := openHosted(h, env)
+				s.invents = true
+				return s
+			}
+
+			events := runCase(r, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
+				worldOpening(blockingFaults, "dependency-hold"), dependency("dependency-hold"), put(1, "x"), get(0),
+				end, get(0),
+			), conform.Hosted(inventing), conform.Blocking[*kv]())
+
+			assert.NotEmpty(t, r.Failures(), "the invented value fails the case")
+			expect.Equal(t, outcomesOf(events), []outcome{
+				{op: "Put", kind: history.OK, client: 1},
+				{op: "Get", kind: history.OK, values: []any{"z"}},
+			}, "the check after the Get waits for the held Put, and the check after the end of the hold fails")
+		})
+
+		t.Run("checks the history after its last step while a client has an open call", func(t *testing.T) {
+			t.Parallel()
+			r := &onTest{Recorder: assert.NewRecorder(), t: t}
+			inventing := func(h *conform.Handle[*kv], env *host.Env) *kv {
+				s := openHosted(h, env)
+				s.invents = true
+				return s
+			}
+
+			events := runCase(r, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
+				worldOpening(blockingFaults, "dependency-hold"), dependency("dependency-hold"), put(1, "x"), get(0),
+			), conform.Hosted(inventing), conform.Blocking[*kv]())
+
+			assert.NotEmpty(t, r.Failures(), "the invented value fails the case")
+			expect.Equal(t, outcomesOf(events), []outcome{
+				{op: "Put", kind: history.Unknown, cause: medium.ErrCrashed, client: 1},
+				{op: "Get", kind: history.OK, values: []any{"z"}},
+			}, "the check after the last step fails, and the end of the case completes the held Put")
+		})
+
+		t.Run("states the reference of the frontier of a violation", func(t *testing.T) {
+			t.Parallel()
+			r := &onTest{Recorder: assert.NewRecorder(), t: t}
+
+			draws := script(worldOpening(instantFaults), get(0))
+			runCase(r, spec.FaultyWorldHistory, linearizableOver(storeWorld), draws, conform.Durable(inventive.Open))
+
+			failures := r.Failures()
+			assert.NotEmpty(t, failures, "the invented value fails the case")
+			inner, _ := failures[0].CaseFailure()
+			states, _ := inner.Detail["states"].([]*kv)
+			expect.Length(t, states, 1, "the frontier has the reference without a call as its state")
+		})
+
 		t.Run("fails a case without steps for a goroutine that ignores its lifetime", func(t *testing.T) {
 			t.Parallel()
 			r := &onTest{Recorder: assert.NewRecorder(), t: t}
