@@ -108,13 +108,14 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 }
 
 // FalsifyAllocs applies the allocation ceiling of each call of the suite, and
-// each check of the suite that counts allocations, to its planted defect. The
-// defect of a ceiling is the subject that Over of the call returns, whose
-// callable allocates one time more per call than the ceiling admits. A
-// generated suite runs it in Test<Declaration>SuiteAllocs.
+// each check of the suite or of opts that counts allocations, to its planted
+// defect. The defect of a ceiling is the subject that Over of the call
+// returns, whose callable allocates one time more per call than the ceiling
+// admits. A generated suite runs it in Test<Declaration>SuiteAllocs.
+// FalsifyAllocs takes the options of an application, as [Falsify] takes them.
 //
-// FalsifyAllocs reports every problem of the checks, the calls and the seed on
-// t, as [Falsify] does, and stops t when it finds one. Otherwise it runs each
+// FalsifyAllocs reports every problem of the checks, the calls, the options
+// and the seed on t, as [Falsify] does, and stops t when it finds one. Otherwise it runs each
 // ceiling as a test of t, then each check of the suite that counts
 // allocations. The tests do not run in parallel, because a count of
 // allocations covers the whole process. The test of a ceiling fails unless
@@ -124,34 +125,36 @@ func RunBudgets[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opt
 // each test skips with the reason of [assert.AllocsChecked]. Once every test
 // has ended, FalsifyAllocs writes the falsification record of the application,
 // as [Falsify] does.
-func FalsifyAllocs[S any](t T, suite Suite[S]) {
+func FalsifyAllocs[S any](t T, suite Suite[S], opts ...Option[S]) {
 	t.Helper()
-	cfg := configure[S](suite.overrides(t), nil, nil)
+	cfg := configure(suite.overrides(t), suite.Checks, opts)
 	name := suite.Declaration + "Suite"
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification)
-	app.begin(t, slices.Concat(problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil)),
-		budgetProblems(name, suite.Calls, nil), faults))
+	app.begin(t, append(validate(name, suite, cfg), faults...))
 	ceilings := allocationCeilings(suite.Calls, nil)
 	for i, c := range ceilings {
 		t.Run(c.check.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			falsified := app.track(t, i, falsification, &c.check, cfg, seedOf(string(c.check.ID)))
+			cfg.skipExcused(t, c.check.ID)
 			skipUncounted(t, falsified)
 			//dokimi:mutate-skip all: an instrumented test binary skips each ceiling
 			c.check.falsify(t, cfg, nil, falsified)
 		})
 	}
-	for i, c := range suite.Checks {
+	checks := append(slices.Clip(suite.Checks), cfg.checks...)
+	for i, c := range checks {
 		if !c.Counted {
 			continue
 		}
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			falsified := app.track(t, len(ceilings)+i, falsification, &c, cfg, seedOf(string(c.ID)))
+			cfg.skipExcused(t, c.ID)
 			skipUncounted(t, falsified)
 			//dokimi:mutate-skip all: an instrumented test binary skips each check that counts allocations
-			c.falsify(t, cfg, suite.Checks, falsified)
+			c.falsify(t, cfg, checks, falsified)
 		})
 	}
 }

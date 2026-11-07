@@ -252,6 +252,92 @@ func TestFalsify(t *testing.T) {
 			})
 		})
 
+		t.Run("builds the reference of the options for a planted defect without the door", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			t.Cleanup(func() {
+				assert.True(t, built.Load() > 0, "the planted defect wraps the reference of the option Reference")
+			})
+			c := keeps()
+			defect := c.Defect
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				_ = h.Reference()
+				return defect(h)
+			}
+			conform.Falsify(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}},
+				conform.Reference(func(*conform.Handle[Store]) Store {
+					built.Add(1)
+					return newMemory()
+				}))
+		})
+
+		t.Run("opens the value of the options for a planted defect without the door", func(t *testing.T) {
+			t.Parallel()
+
+			var opened atomic.Bool
+			t.Cleanup(func() {
+				assert.True(t, opened.Load(), "the planted defect opens the value of the option Supplies")
+			})
+			c := keeps()
+			defect := c.Defect
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				s := defect(h)
+				opened.Store(conform.Open[time.Duration](h, s) == time.Second)
+				return s
+			}
+			second := conform.Supply(func(*conform.Handle[Store], Store) time.Duration { return time.Second })
+			conform.Falsify(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}},
+				conform.Supplies(second))
+		})
+
+		t.Run("runs each check that the options add after the checks of the suite", func(t *testing.T) {
+			t.Parallel()
+
+			kept := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keeps()}}
+			a := application(func(t conform.T) { conform.Falsify(t, kept, conform.With(misses())) })
+			assert.Empty(t, a.errors, "the falsification reports no problem")
+			assert.Equal(t, a.tests, []string{"Get/keeps-the-value", "Get/misses-unknown-keys"},
+				"the falsification runs the check of the suite, then the check of the option With")
+		})
+
+		t.Run("skips a check that the options excuse", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				conform.Falsify(t, broken(func(c *conform.Check[Store]) { c.Defect = newStore }),
+					conform.Excuse(storeGet.Check("keeps-the-value"), "the planted defect is the subject"))
+				return
+			}
+			expect.Contains(t, childOutput(t), "--- SKIP: "+t.Name()+"/Get/keeps-the-value",
+				"the test of the excused check skips")
+		})
+
+		t.Run("skips a ceiling of a benchmark that the options excuse", func(t *testing.T) {
+			t.Parallel()
+
+			if os.Getenv(childEnv) == t.Name() {
+				waits := unspending()
+				waits.Calls[0].Budget = conform.Budget{Latency: time.Hour}
+				conform.Falsify(t, waits, conform.Excuse(storeGet.Check("latency-budget"), "Get waits on a disk"))
+				return
+			}
+			expect.Contains(t, childOutput(t), "--- SKIP: "+t.Name()+"/Get/latency-budget",
+				"the test of the excused ceiling skips")
+		})
+
+		t.Run("reports an excusal of the options that matches no check", func(t *testing.T) {
+			t.Parallel()
+
+			kept := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{keeps()}}
+			a := application(func(t conform.T) {
+				conform.Falsify(t, kept, conform.Excuse(storeGet.Check("ghost"), "a ghost has no value"))
+			})
+			assert.Equal(t, a.errors, []string{"the excusal of Store.Get/ghost matches no check of StoreSuite. " +
+				"The checks of StoreSuite are:\n\tStore.Get/keeps-the-value"}, "the falsification reports the excusal")
+			assert.Empty(t, a.tests, "the falsification runs no check")
+		})
+
 		t.Run("restarts a planted defect with the door of its check", func(t *testing.T) {
 			t.Parallel()
 

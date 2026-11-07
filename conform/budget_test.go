@@ -290,6 +290,30 @@ func TestBudget(t *testing.T) {
 				"--- SKIP: "+t.Name()+"/Get/keeps-every-value", "the test of the check skips")
 		})
 
+		t.Run("runs each counting check of the options after the checks of the suite", func(t *testing.T) {
+			t.Parallel()
+
+			suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+			added := misses()
+			added.Counted = true
+			a := application(func(t conform.T) { conform.FalsifyAllocs(t, suite, conform.With(added)) })
+			assert.Empty(t, a.errors, "the falsification reports no problem")
+			assert.Equal(t, a.tests, []string{"Get/keeps-every-value", "Get/misses-unknown-keys"},
+				"the falsification runs the check of the suite, then the check of the option With")
+		})
+
+		t.Run("reports an excusal of the options that matches no check", func(t *testing.T) {
+			t.Parallel()
+
+			suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{countedEvery()}}
+			a := application(func(t conform.T) {
+				conform.FalsifyAllocs(t, suite, conform.Excuse(storeGet.Check("ghost"), "a ghost has no value"))
+			})
+			assert.Equal(t, a.errors, []string{"the excusal of Store.Get/ghost matches no check of StoreSuite. " +
+				"The checks of StoreSuite are:\n\tStore.Get/keeps-every-value"}, "the falsification reports the excusal")
+			assert.Empty(t, a.tests, "the falsification runs no check")
+		})
+
 		tests := []struct {
 			name       string
 			giveSuite  conform.Suite[Store]
@@ -474,6 +498,49 @@ func TestBudgetAllocs(t *testing.T) {
 	t.Run("FalsifyAllocs", func(t *testing.T) {
 		t.Run("falsifies the allocation ceiling of each callable on its planted defect", func(t *testing.T) {
 			conform.FalsifyAllocs(t, budgeted(conform.Budget{Allocs: new(uint64(2))}))
+		})
+
+		t.Run("builds the reference of the options for a planted defect without the door", func(t *testing.T) {
+			skipUnchecked(t)
+			var built atomic.Int32
+			c := countedEvery()
+			defect := c.Defect
+			c.Defect = func(h *conform.Handle[Store]) Store {
+				_ = h.Reference()
+				return defect(h)
+			}
+			conform.FalsifyAllocs(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}},
+				conform.Reference(func(*conform.Handle[Store]) Store {
+					built.Add(1)
+					return newMemory()
+				}))
+			assert.True(t, built.Load() > 0, "the planted defect wraps the reference of the option Reference")
+		})
+
+		t.Run("skips an allocation ceiling that the options excuse", func(t *testing.T) {
+			skipUnchecked(t)
+			if os.Getenv(childEnv) == t.Name() {
+				suite := budgeted(conform.Budget{Allocs: new(uint64(0))})
+				suite.Calls[0].Over = func(*conform.Handle[Store], func()) Store { return newMemory() }
+				conform.FalsifyAllocs(t, suite,
+					conform.Excuse(storeGet.Check("allocation-budget"), "Get copies the key"))
+				return
+			}
+			expect.Contains(t, childOutput(t), "--- SKIP: "+t.Name()+"/Get/allocation-budget",
+				"the test of the excused ceiling skips")
+		})
+
+		t.Run("skips a check that counts allocations that the options excuse", func(t *testing.T) {
+			skipUnchecked(t)
+			if os.Getenv(childEnv) == t.Name() {
+				c := countedEvery()
+				c.Defect = newStore
+				conform.FalsifyAllocs(t, conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}},
+					conform.Excuse(storeGet.Check("keeps-every-value"), "the planted defect is the subject"))
+				return
+			}
+			expect.Contains(t, childOutput(t), "--- SKIP: "+t.Name()+"/Get/keeps-every-value",
+				"the test of the excused check skips")
 		})
 
 		t.Run("passes the overrides of the suite to each property run", func(t *testing.T) {

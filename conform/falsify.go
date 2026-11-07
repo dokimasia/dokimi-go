@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// Falsify applies each check of the suite to its planted defect. A generated
-// suite runs it in the spec of its file, under the level of the function that
-// returns the suite:
+// Falsify applies each check of the suite, and each check that opts add, to
+// its planted defect. A generated suite runs it in the spec of its file, under
+// the level of the function that returns the suite:
 //
 //	func TestStoreSuite(t *testing.T) {
 //		t.Parallel()
@@ -22,8 +22,16 @@ import (
 //		})
 //	}
 //
-// Falsify reports every problem of the checks, the calls and the seed on t, and
-// stops t when it finds one. Otherwise it runs each check as a parallel test of t,
+// Falsify takes the options of an application, as [Run] takes them. Each
+// planted defect takes the doors of its check first and each other door from
+// opts, so a planted defect can wrap a reference or open a value that the
+// caller of the suite builds, such as the reference of [Reference] or a value
+// of [Supplies]. The test of a check or a ceiling that opts excuse skips with
+// the reason of the excusal, and the generators of [Using] apply to each
+// property run.
+//
+// Falsify reports every problem of the checks, the calls, the options and the
+// seed on t, and stops t when it finds one. Otherwise it runs each check as a parallel test of t,
 // which has the identity of the check without the name of the declaration, as
 // [Run] names it. The test of a check fails unless the planted defect fails
 // the check at the assertion whose message is the statement of the check. A
@@ -47,15 +55,14 @@ import (
 // Once every test has ended, Falsify writes the falsification record of the
 // application into the output of a t that is an [assert.TB], such as
 // *testing.T, as [Run] writes its records.
-func Falsify[S any](t T, suite Suite[S]) {
+func Falsify[S any](t T, suite Suite[S], opts ...Option[S]) {
 	t.Helper()
-	cfg := configure[S](suite.overrides(t), nil, nil)
+	cfg := configure(suite.overrides(t), suite.Checks, opts)
 	name := suite.Declaration + "Suite"
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification)
-	app.begin(t, slices.Concat(problems(name, suite.Checks, nil, ceilingIDs(suite.Calls, nil)),
-		budgetProblems(name, suite.Calls, nil), faults))
-	parallel := uncounted(suite.Checks)
+	app.begin(t, append(validate(name, suite, cfg), faults...))
+	parallel := uncounted(append(slices.Clip(suite.Checks), cfg.checks...))
 	for i, c := range parallel {
 		if c.Claim != "" {
 			continue
@@ -63,7 +70,9 @@ func Falsify[S any](t T, suite Suite[S]) {
 		t.Run(c.ID.subtest(), func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
-			c.falsify(t, cfg, parallel, app.track(t, i, falsification, &c, cfg, seedOf(string(c.ID))))
+			falsified := app.track(t, i, falsification, &c, cfg, seedOf(string(c.ID)))
+			cfg.skipExcused(t, c.ID)
+			c.falsify(t, cfg, parallel, falsified)
 		})
 	}
 	at := len(parallel)
@@ -80,6 +89,7 @@ func Falsify[S any](t T, suite Suite[S]) {
 				t.Helper()
 				t.Parallel()
 				falsified := app.track(t, position, falsification, &ceiling, cfg, 0)
+				cfg.skipExcused(t, ceiling.ID)
 				if l.budget.counted() {
 					skipUncounted(t, falsified)
 				}
