@@ -39,6 +39,13 @@
 // whole case. In native mode it repeats the choices of the case, and not the
 // order of the goroutines of its components.
 //
+// A run with a component takes the bounds of each request from the choices of
+// the case and from the state that its steps set, so a replay requests the
+// bounds of the case in both modes. A call goes to the first client without an
+// open call from the client that the case chooses, and a cancel, a fault of
+// the datagrams and a corruption take no effect without a target. An action of
+// the consumer in such a run takes its bounds from the case alone.
+//
 // # Concurrency
 //
 // A world is not safe for concurrent use. Its machines, its performers and

@@ -543,8 +543,13 @@ func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 	}
 	//dokimi:mutate-skip ror-true,lcr-true: an action that no step enables changes only the choices of the swarm of a case
 	if r.s.Anatomy.Cancelled != nil || w.network != nil {
-		out = append(out, act("cancel", func() bool { return len(cancellable()) > 0 },
-			func(c *prop.Case) int { return choose(c, cancellable(), "client") }, w.abort))
+		out = append(out, fault("cancel", func() bool { return w.network != nil || len(cancellable()) > 0 },
+			func(c *prop.Case) int { return r.client(c, cancellable()) }, func(from int) {
+				if client, open := r.nextOf(from, cancellable()); open {
+					r.c.Classify("cancel")
+					w.abort(client)
+				}
+			}))
 	}
 	out = append(out, r.faults()...)
 	for _, a := range r.s.Actions {
@@ -554,8 +559,15 @@ func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 				Enabled: func(struct{}) bool { return r.available(a) },
 				Input:   func(c *prop.Case, _ struct{}) any { return r.input(c, a) },
 				Run: func(c *prop.Case, _ int, x any) {
-					c.Classify(a.Name)
 					in, _ := x.(input)
+					if a.Call {
+						client, idle := r.nextOf(in.client, r.idle())
+						if !idle {
+							return
+						}
+						in.client = client
+					}
+					c.Classify(a.Name)
 					a.Run(r.w, in.client, in.value)
 				},
 			})
@@ -567,21 +579,22 @@ func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 	return out
 }
 
-// available reports whether the run may take the action a of the consumer: a
-// call needs a client without an open call.
+// available reports whether the run may take the action a of the consumer. A
+// call in a run without a component needs a client without an open call.
 func (r *run[E, F, S]) available(a Action[E, F]) bool {
-	if a.Call && len(r.idle()) == 0 {
+	if a.Call && r.w.network == nil && len(r.idle()) == 0 {
 		return false
 	}
 	return a.Enabled == nil || a.Enabled(r.w)
 }
 
 // input requests the input of the action a of the consumer from the case c:
-// a client without an open call for a call, and the value of the input of a.
+// a client for a call, and the value of the input of a. The call goes to the
+// first client without an open call from that client on.
 func (r *run[E, F, S]) input(c *prop.Case, a Action[E, F]) input {
 	var in input
 	if a.Call {
-		in.client = choose(c, r.idle(), "client")
+		in.client = r.client(c, r.idle())
 	}
 	if a.Input != nil {
 		in.value = a.Input(c)
@@ -669,12 +682,38 @@ func (r *run[E, F, S]) settle() {
 func (r *run[E, F, S]) idle() []int {
 	busy := r.w.callers()
 	var out []int
-	for client := range cmp.Or(r.s.Clients, defaultClients) {
+	for client := range r.clients() {
 		if !slices.Contains(busy, client) {
 			out = append(out, client)
 		}
 	}
 	return out
+}
+
+// clients returns the number of the clients of the run.
+func (r *run[E, F, S]) clients() int {
+	return cmp.Or(r.s.Clients, defaultClients)
+}
+
+// client returns a client that the case chooses for a step: one of live in a
+// run without a component, and one of all clients in a run with one, whose
+// open calls depend on the order of the goroutines of its components.
+func (r *run[E, F, S]) client(c *prop.Case, live []int) int {
+	if r.w.network == nil {
+		return choose(c, live, "client")
+	}
+	return c.Draw(prop.Integer(0, r.clients()-1), "client")
+}
+
+// nextOf returns the first client of live from the client from on, in the
+// order of the clients and around. It reports false for an empty live.
+func (r *run[E, F, S]) nextOf(from int, live []int) (int, bool) {
+	for i := range r.clients() {
+		if client := (from + i) % r.clients(); slices.Contains(live, client) {
+			return client, true
+		}
+	}
+	return 0, false
 }
 
 // faults returns the action of each fault that Tolerate names, and the end
@@ -708,6 +747,20 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	out := func(d *dependency[E, F]) bool { return d.outage }
 	slow := func(d *dependency[E, F]) bool { return d.slow }
 	spawned := func() bool { return len(w.procs) > 0 }
+	// struck returns the condition and the input of a fault that strikes a
+	// process that matches. A run without a component chooses among the
+	// processes that match. A run with a component chooses among all
+	// processes, because what matches depends on the order of the goroutines
+	// of its components, and the fault takes no effect on a process that does
+	// not match when it strikes.
+	struck := func(match func(p *Process[E, F]) bool) (func() bool, func(c *prop.Case) string) {
+		if w.network == nil {
+			return some(match), process(match)
+		}
+		return spawned, process(func(*Process[E, F]) bool { return true })
+	}
+	sentOn, sentTo := struck(w.sent)
+	behindOn, behindTo := struck(w.behind)
 	byKind := map[Fault][]stateful.Action[struct{}]{
 		FaultCrash: {
 			fault(string(FaultCrash), func() bool { return within(FaultCrash) && some(alive)() }, process(alive),
@@ -725,14 +778,25 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 				func(any) { w.Repair() }),
 		},
 		FaultDrop: {
-			fault(string(FaultDrop), some(w.sent), process(w.sent), func(to string) { w.drop(w.named(to)) }),
+			fault(string(FaultDrop), sentOn, sentTo, func(to string) {
+				if p := w.named(to); w.sent(p) {
+					w.drop(p)
+				}
+			}),
 		},
 		FaultDelay: {
-			fault(string(FaultDelay), some(w.behind), process(w.behind), func(to string) { w.delay(w.named(to)) }),
+			fault(string(FaultDelay), behindOn, behindTo, func(to string) {
+				if p := w.named(to); w.behind(p) {
+					w.delay(p)
+				}
+			}),
 		},
 		FaultDuplicate: {
-			fault(string(FaultDuplicate), some(w.sent), process(w.sent),
-				func(to string) { w.duplicate(w.named(to)) }),
+			fault(string(FaultDuplicate), sentOn, sentTo, func(to string) {
+				if p := w.named(to); w.sent(p) {
+					w.duplicate(p)
+				}
+			}),
 		},
 		FaultLoseBefore: {
 			fault(string(FaultLoseBefore), tolerated(FaultLoseBefore, seen), target(seen), w.LoseBefore),
@@ -758,10 +822,7 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 		FaultTornWrite: {
 			fault(string(FaultTornWrite), some(stored[E, F]), r.tear, func(t tearing) { w.Tear(t.name, t.n) }),
 		},
-		FaultCorruption: {
-			fault(string(FaultCorruption), some(filed[E, F]), r.corruption,
-				func(k corrupting) { w.Corrupt(k.name, k.file, k.offset) }),
-		},
+		FaultCorruption: {r.corruptionAction()},
 		FaultFullDisk: {
 			fault(string(FaultFullDisk), func() bool { return within(FaultFullDisk) && some(roomy[E, F])() }, r.fill,
 				func(f filling) { w.Fill(f.name, f.n) }),
@@ -870,6 +931,52 @@ func (r *run[E, F, S]) corruption(c *prop.Case) corrupting {
 	name := choose(c, r.processes(filed[E, F]), "process")
 	f := choose(c, filesOf(r.w.named(name)), "file")
 	return corrupting{name: name, file: f.name, offset: c.Draw(prop.Integer(0, f.size-1), "offset")}
+}
+
+// sharedCorrupting is the input of a corruption in a run with a component: a
+// process with media, the share of its files with data and the share of the
+// size of the file that locate the byte whose bit flips.
+type sharedCorrupting struct {
+	name         string
+	file, offset float64
+}
+
+// corruptionAction returns the action of a corruption. A run without a
+// component chooses a process with a file on its media, the file and an
+// offset in it. A run with a component chooses a process with media and the
+// shares that locate the byte, because the files of a component depend on
+// the order of its goroutines. Such a corruption takes no effect where the
+// media of the process have no file with data when it strikes.
+func (r *run[E, F, S]) corruptionAction() stateful.Action[struct{}] {
+	w := r.w
+	if w.network == nil {
+		return fault(string(FaultCorruption), func() bool { return len(r.processes(filed[E, F])) > 0 }, r.corruption,
+			func(k corrupting) { w.Corrupt(k.name, k.file, k.offset) })
+	}
+	// A component has the disk of its host, so a run with a component has a
+	// process with media.
+	disked := func(p *Process[E, F]) bool { return len(disks(p)) > 0 }
+	return fault(string(FaultCorruption), func() bool { return true },
+		func(c *prop.Case) sharedCorrupting {
+			return sharedCorrupting{
+				name: choose(c, r.processes(disked), "process"), file: c.Draw(prop.Float(0.0, 1.0), "file"),
+				offset: c.Draw(prop.Float(0.0, 1.0), "offset"),
+			}
+		},
+		func(k sharedCorrupting) {
+			files := filesOf(w.named(k.name))
+			if len(files) == 0 {
+				return
+			}
+			f := files[shareOf(k.file, len(files))]
+			w.Corrupt(k.name, f.name, shareOf(k.offset, f.size))
+		})
+}
+
+// shareOf returns the index at the share in [0, 1] of n items, at most the
+// last index. n is at least 1.
+func shareOf[N int | int64](share float64, n N) N {
+	return min(N(share*float64(n)), n-1)
 }
 
 // filling is the input of a fill: a process, and the bytes that its media

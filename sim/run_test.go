@@ -1041,6 +1041,202 @@ func TestRun(t *testing.T) {
 			expect.Equal(t, events[cancelled].Client, 0, "the first client in the order of the numbers is 0")
 		})
 
+		t.Run("calls the first client without an open call from the client that the case picks in a world of "+
+			"components", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			events := firstEvents(&s)
+
+			cs.runCase(t, s, scriptOf(opening(false), parkAt(1), parkAt(1)))
+
+			assert.Equal(t, invokersOf(*events), []int{1, 0}, "the second park of client 1 goes to client 0")
+		})
+
+		t.Run("takes no effect for a call while every client has an open call in a world of components",
+			func(t *testing.T) {
+				t.Parallel()
+				var cs cellSet
+				s := cs.simulation()
+				events := firstEvents(&s)
+
+				cs.runCase(t, s, scriptOf(opening(false), parkAt(0), parkAt(0), parkAt(0)))
+
+				assert.Equal(t, invokersOf(*events), []int{0, 1}, "the third park finds no client without an open call")
+			})
+
+		t.Run("takes no effect for a cancel without an open call in a world of components", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			events := firstEvents(&s)
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(false), set(0, "a"), stepOf("cancel", drawn("client", 0))))
+
+			assert.False(t, r.Failed(), "the world takes the cancel")
+			assert.Equal(t, completions(*events), []completion{{kind: history.OK}},
+				"the Set completes, and the cancel finds no open call")
+		})
+
+		t.Run("flips a byte at the shares of the files of a component", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			events := firstEvents(&s)
+
+			cs.runCase(t, s, scriptOf(opening(false), set(0, "a"),
+				stepOf("corruption", drawn("process", 0), drawn("file", 0.0), drawn("offset", 0.9)), get(0, "a")))
+
+			assert.Equal(t, completions(*events), []completion{
+				{kind: history.OK}, {kind: history.Fail, err: errCorrupt},
+			}, "the Get reads the flipped byte of the value of a")
+		})
+
+		t.Run("takes no effect for a corruption of a component without a file with data", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			events := firstEvents(&s)
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(false),
+				stepOf("corruption", drawn("process", 0), drawn("file", 0.0), drawn("offset", 0.0)), get(0, "a")))
+
+			assert.False(t, r.Failed(), "the world takes the corruption")
+			assert.Equal(t, completions(*events), []completion{{kind: history.OK, output: ""}},
+				"the corruption finds no file, and the Get of a returns no value")
+		})
+
+		t.Run("flips the byte at the share of the size of a file of a component", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			read := firstContents(&s, func() *sim.Component[*cell] { return cs.a }, "cell")
+
+			cs.runCase(t, s, scriptOf(opening(false), set(0, "a"),
+				stepOf("corruption", drawn("process", 0), drawn("file", 0.0), drawn("offset", 0.9))))
+
+			assert.Length(t, *read, 2, "the run reads the file after the Set and after the corruption")
+			want := []byte((*read)[0])
+			want[len(want)-1] ^= 1
+			assert.Equal(t, (*read)[1], string(want), "the share of nine tenths flips the last of the five bytes")
+		})
+
+		t.Run("flips a byte of the file at the share of the files of a component", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.System = cs.system(func(env *host.Env) *cell {
+				f, _ := env.Disk().OpenFile("z", os.O_CREATE|os.O_WRONLY, 0o644)
+				_, _ = f.Write([]byte("data"))
+				_ = f.Sync()
+				_ = f.Close()
+				_ = env.Disk().SyncDir(".")
+				return openCell(env)
+			})
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			read := firstContents(&s, func() *sim.Component[*cell] { return cs.a }, "z")
+
+			cs.runCase(t, s, scriptOf(opening(false), set(0, "a"),
+				stepOf("corruption", drawn("process", 0), drawn("file", 0.75), drawn("offset", 0.0))))
+
+			assert.Equal(t, (*read)[len(*read)-1], "eata",
+				"the share of three quarters takes z, the second of the files cell and z")
+		})
+
+		t.Run("calls no client past the clients of a world of components", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			cs.runCase(r, s, scriptOf(opening(false), set(2, "a")))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the client 2 of two clients")
+		})
+
+		t.Run("corrupts no machine without media in a world of components", func(t *testing.T) {
+			t.Parallel()
+			s := simulation()
+			s.System = func(w *sim.World[event, effect]) {
+				sim.SpawnComponent(w, "c", openCell)
+				w.Spawn("m", newStore)
+			}
+			s.Around, s.Actions, s.Rules = conform.Bubble, nil, nil
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			runScript(r, s, scriptOf([]entry{drawn("drift.c", 0), drawn("drift.m", 0)},
+				stepOf("corruption", drawn("process", 1), drawn("file", 0.0), drawn("offset", 0.0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the machine m, which has no medium")
+		})
+
+		t.Run("calls the client at the index among the clients without an open call in a world of machines",
+			func(t *testing.T) {
+				t.Parallel()
+				s := simulation()
+				s.Rules = nil
+				events := firstEvents(&s)
+
+				runScript(t, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0)},
+					machinePark(0), machinePark(1)))
+
+				assert.Equal(t, invokersOf(*events), []int{0, 2},
+					"the second park takes the second of the clients 1 and 2")
+			})
+
+		t.Run("corrupts no medium without a file with data in a world of machines", func(t *testing.T) {
+			t.Parallel()
+			s := simulation()
+			s.System = func(w *sim.World[event, effect]) {
+				w.Spawn("a", newStore, medium.NewMemory())
+				w.Spawn("b", newStore)
+			}
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			runScript(r, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0)},
+				stepOf("corruption", drawn("process", 0), drawn("file", 0), drawn("offset", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the corruption")
+		})
+
+		t.Run("corrupts the byte that the case chooses in a file of the media of a machine", func(t *testing.T) {
+			t.Parallel()
+			s := simulation()
+			var m *medium.Memory
+			s.System = func(w *sim.World[event, effect]) {
+				m = mediumWith("data")
+				w.Spawn("a", newStore, m)
+				w.Spawn("b", newStore)
+			}
+			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
+			var first *sim.World[event, effect]
+			var firstMedium *medium.Memory
+			var got string
+			s.Invariants = []sim.Invariant[event, effect]{{
+				Statement: "the medium of the first case is read",
+				Check: func(check *sim.Check, w *sim.World[event, effect]) {
+					if first == nil {
+						first, firstMedium = w, m
+					}
+					if w == first {
+						got = contentOf(check, firstMedium)
+					}
+				},
+			}}
+
+			runScript(t, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0)},
+				stepOf("corruption", drawn("process", 0), drawn("file", 0), drawn("offset", 1))))
+
+			assert.Equal(t, got, "d`ta", "the corruption flips the lowest bit of the second byte of f")
+		})
+
 		t.Run("cancels no call of a machine without the cancelled event of the anatomy", func(t *testing.T) {
 			t.Parallel()
 			s := simulation()
@@ -1056,13 +1252,28 @@ func TestRun(t *testing.T) {
 				})
 			}
 			s.Around, s.Rules = conform.Bubble, nil
+			var first *sim.World[event, effect]
+			var events []history.Event
+			s.Invariants = []sim.Invariant[event, effect]{{
+				Statement: "the history of the first case is read",
+				Check: func(_ *sim.Check, w *sim.World[event, effect]) {
+					if first == nil {
+						first = w
+					}
+					if w == first {
+						events = w.History().Events()
+					}
+				},
+			}}
 			r := &recorded{Recorder: assert.NewRecorder(), t: t}
 
 			runScript(r, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0), drawn("drift.c", 0)},
 				stepOf("park", drawn("client", 0), drawn("to b", false)), stepOf("cancel", drawn("client", 0))))
 
-			assert.Length(t, r.Faults(), 1, "the world refuses the cancel of the call of a machine")
-			assert.Empty(t, r.Failures(), "the end of the case crashes the component alone")
+			assert.False(t, r.Failed(), "the world takes the cancel, and the end of the case crashes the component")
+			assert.False(t, slices.ContainsFunc(events, func(e history.Event) bool {
+				return errors.Is(e.Error, sim.ErrCancelled)
+			}), "the cancel ends no call of a machine")
 		})
 
 		t.Run("strikes each fault on the processes of its kind in a world of machines and components",
@@ -1232,9 +1443,11 @@ func TestRun(t *testing.T) {
 			s.Tolerate = map[sim.Fault]int{sim.FaultDelay: 1}
 			r := &recorded{Recorder: assert.NewRecorder(), t: t}
 
-			cs.runCase(r, s, scriptOf(opening(true), send("1"), stepOf("delay", drawn("process", 0))))
+			cs.runCase(r, s, scriptOf(opening(true), send("1"), stepOf("delay", drawn("process", 1)),
+				stepOf("advance", drawn("advance", 2000))))
 
-			assert.Length(t, r.Faults(), 1, "the world refuses the delay")
+			assert.False(t, r.Failed(), "the world takes the delay")
+			assert.Equal(t, cs.received[0], []string{"1"}, "the one datagram arrives once, without a delay")
 		})
 
 		slowing := []struct {
@@ -1401,11 +1614,13 @@ func TestRun(t *testing.T) {
 			want      []string
 		}{
 			{name: "drops the oldest datagram in flight to a component", giveFault: stepOf("drop",
-				drawn("process", 0)), want: []string{"2"}},
+				drawn("process", 1)), want: []string{"2"}},
 			{name: "delays the oldest datagram in flight to a component", giveFault: stepOf("delay",
-				drawn("process", 0)), want: []string{"2", "1"}},
+				drawn("process", 1)), want: []string{"2", "1"}},
 			{name: "duplicates the oldest datagram in flight to a component", giveFault: stepOf("duplicate",
-				drawn("process", 0)), want: []string{"1", "1", "2"}},
+				drawn("process", 1)), want: []string{"1", "1", "2"}},
+			{name: "drops no datagram of a component without a datagram in flight", giveFault: stepOf("drop",
+				drawn("process", 0)), want: []string{"1", "2"}},
 		}
 		for _, tt := range datagrams {
 			t.Run(tt.name, func(t *testing.T) {
@@ -1697,18 +1912,81 @@ func FuzzRun(f *testing.F) {
 	sim.Fuzz(f, s)
 }
 
-// set returns the step of a Set of the cell on the idle client at the index
-// among the idle clients, get the step of a Get, parkAt the step of a call
-// that parks at a, and send the step of a datagram from a to b.
-func set(idle int, name string) []entry {
-	return stepOf("set", drawn("client", idle), drawn("cell", name))
+// set returns the step of a Set of the cell on the client at the index or on
+// the first client without an open call after it, get the step of a Get,
+// parkAt the step of a call that parks at a, and send the step of a datagram
+// from a to b.
+func set(client int, name string) []entry {
+	return stepOf("set", drawn("client", client), drawn("cell", name))
 }
 
-func get(idle int, name string) []entry {
-	return stepOf("get", drawn("client", idle), drawn("cell", name))
+func get(client int, name string) []entry {
+	return stepOf("get", drawn("client", client), drawn("cell", name))
 }
 
-func parkAt(idle int) []entry { return stepOf("park", drawn("client", idle)) }
+func parkAt(client int) []entry { return stepOf("park", drawn("client", client)) }
+
+// firstEvents adds to s the invariant that reads the history of the first
+// case after each step, and returns the events that it read last.
+func firstEvents[E, F, S any](s *sim.Simulation[E, F, S]) *[]history.Event {
+	var first *sim.World[E, F]
+	events := new([]history.Event)
+	s.Invariants = append(s.Invariants, sim.Invariant[E, F]{
+		Statement: "the history of the first case is read",
+		Check: func(_ *sim.Check, w *sim.World[E, F]) {
+			if first == nil {
+				first = w
+			}
+			if w == first {
+				*events = w.History().Events()
+			}
+		},
+	})
+	return events
+}
+
+// firstContents adds to s the invariant that reads the file name of the disk
+// of the host of the component that comp returns in the first case after each
+// step that leaves the file, and returns the content after each such step.
+func firstContents(
+	s *sim.Simulation[sim.None, sim.None, []history.Operation], comp func() *sim.Component[*cell], name string,
+) *[]string {
+	var first *sim.World[sim.None, sim.None]
+	read := new([]string)
+	s.Invariants = append(s.Invariants, sim.Invariant[sim.None, sim.None]{
+		Statement: "the file of the first case is read",
+		Check: func(check *sim.Check, w *sim.World[sim.None, sim.None]) {
+			if first == nil {
+				first = w
+			}
+			if w != first || !comp().Running() {
+				return
+			}
+			env := comp().Value().env
+			if _, err := env.Disk().Stat(name); err == nil {
+				*read = append(*read, contents(check, env, name))
+			}
+		},
+	})
+	return read
+}
+
+// machinePark returns the step of a park of a store machine on the client at
+// the index among the clients without an open call.
+func machinePark(client int) []entry {
+	return stepOf("park", drawn("client", client), drawn("to b", false))
+}
+
+// invokersOf returns the client of each invocation of the events, in order.
+func invokersOf(events []history.Event) []int {
+	var out []int
+	for _, e := range events {
+		if e.Kind == history.Invoke {
+			out = append(out, e.Client)
+		}
+	}
+	return out
+}
 
 func send(datagram string) []entry { return stepOf("send", drawn("datagram", datagram)) }
 

@@ -108,6 +108,18 @@ func (c *cell) Get(ctx context.Context) (string, error) {
 	return string(data[4:]), nil
 }
 
+// contents returns the bytes of the file name on the disk of env.
+func contents(tb assert.TB, env *host.Env, name string) string {
+	tb.Helper()
+
+	f, err := env.Disk().OpenFile(name, os.O_RDONLY, 0)
+	assert.NoError(tb, err, "the disk opens "+name)
+	data, err := io.ReadAll(f)
+	assert.NoError(tb, err, "the disk reads "+name)
+	assert.NoError(tb, f.Close(), "the disk closes "+name)
+	return string(data)
+}
+
 // cells returns a world of the case c with the component cells a and b.
 func cells(c *prop.Case) (*sim.World[event, effect], *sim.Component[*cell], *sim.Component[*cell]) {
 	w := sim.New(c, anatomy)

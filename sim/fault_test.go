@@ -5,7 +5,6 @@ package sim_test
 
 import (
 	"context"
-	"io"
 	"net"
 	"os"
 	"strings"
@@ -620,7 +619,7 @@ func TestFault(t *testing.T) {
 			var got string
 			draws := strings.TrimSuffix(still, "]") +
 				`,{"label": "kill.a", "value": {"type": "int", "value": 2}},` +
-				`{"label": "keep.cell", "value": {"type": "int", "value": 2}}]`
+				`{"label": "keep", "value": {"type": "list", "of": "float", "value": [1.0]}}]`
 			inBubble(t, draws, func(c *prop.Case, first bool) {
 				w, a, _ := cells(c)
 				assert.NoError(c, a.Value().Set(c.Context(), "x"), "the cell writes x")
@@ -1198,18 +1197,6 @@ func serve(c *prop.Case, env *host.Env, port int) (accepted chan struct{}) {
 		}
 	})
 	return accepted
-}
-
-// contents returns the bytes of the file name on the disk of env.
-func contents(tb assert.TB, env *host.Env, name string) string {
-	tb.Helper()
-
-	f, err := env.Disk().OpenFile(name, os.O_RDONLY, 0)
-	assert.NoError(tb, err, "the disk opens "+name)
-	data, err := io.ReadAll(f)
-	assert.NoError(tb, err, "the disk reads "+name)
-	assert.NoError(tb, f.Close(), "the disk closes "+name)
-	return string(data)
 }
 
 // dial dials addr from env on a goroutine of its incarnation, and returns the
