@@ -1,5 +1,24 @@
 # go.dokimi.dev/sim
 
+## 0.6.0
+
+### Minor Changes
+
+- 820257d: Add `sim.Host`, `World.AddHost` and `Host.Spawn` to run machine processes on one host, whose faults strike each of them.
+- 820257d: Add `Outcome.Launch` and `Outcome.Stop` to start and stop a machine on the host of the process of an effect.
+- 820257d: Add `World.Now` to return the time of the run, which no drift and no fault of a host moves.
+- 820257d: Change `World.Outage` to end each wait of the dependency with the event of the failure of its effect.
+- 820257d: **Breaking:** Change `sim.Outcome` to take the type arguments `[E, F]`, so `sim.Perform` returns `sim.Outcome[E, F]`.
+- 820257d: **Breaking:** Change `sim.System` to take the case, so a system takes its inputs from the case before the first step.
+
+### Patch Changes
+
+- d14d1ac: Fix `sim.Run` to check the history after each step without an open call.
+- 820257d: Fix `sim.Run` to check the rules against each step of a machine before the world performs the effects of the step.
+- 820257d: Fix `sim.Test` and `Simulation.Prove` to run each scenario on the simplest case alone, without the edge cases of the property engine.
+- Updated dependencies [41eb868]
+  - go.dokimi.dev/conform@0.16.1
+
 ## 0.5.0
 
 ### Minor Changes
