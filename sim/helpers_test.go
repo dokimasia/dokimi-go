@@ -523,26 +523,43 @@ var anatomy = sim.Anatomy[event, effect]{
 			return 0
 		}
 	},
-	Perform: func(w *sim.World[event, effect], p *sim.Process[event, effect], f effect) sim.Outcome[event] {
+	Perform: func(w *sim.World[event, effect], p *sim.Process[event, effect], f effect) sim.Outcome[event, effect] {
 		switch f := f.(type) {
 		case commit:
 			if f.disk != nil {
 				f.disk[f.key] = f.value
 			}
-			return sim.Outcome[event]{Event: committed{token: f.token}}
+			return sim.Outcome[event, effect]{Event: committed{token: f.token}}
 		case timer:
 			w.After(p, f.after, ticked{token: f.token})
 		case call:
-			return sim.Outcome[event]{Message: &sim.Message[event]{
+			return sim.Outcome[event, effect]{Message: &sim.Message[event]{
 				To:     f.to,
 				Call:   func(r uint64) event { return put{key: f.key, value: "v", reply: r} },
 				Result: func(value any, err error) event { return called{value: value, err: err, token: f.token} },
 			}}
 		case watch:
-			return sim.Outcome[event]{Next: f.feed.next}
+			return sim.Outcome[event, effect]{Next: f.feed.next}
 		}
-		return sim.Outcome[event]{}
+		return sim.Outcome[event, effect]{}
 	},
+}
+
+// fixed returns the system without inputs that build builds.
+func fixed[E, F any](build func(w *sim.World[E, F])) sim.System[E, F] {
+	return func(*prop.Case) func(w *sim.World[E, F]) { return build }
+}
+
+// after returns the system that builds the system of the case and then runs
+// more on the world.
+func after[E, F any](system sim.System[E, F], more func(w *sim.World[E, F])) sim.System[E, F] {
+	return func(c *prop.Case) func(w *sim.World[E, F]) {
+		build := system(c)
+		return func(w *sim.World[E, F]) {
+			build(w)
+			more(w)
+		}
+	}
 }
 
 // inCase runs body in one case of the property engine, without a store of
@@ -631,10 +648,10 @@ func simulation() sim.Simulation[event, effect, int] {
 	store := func(c *prop.Case) any { return c.Draw(prop.Boolean(), "to b") }
 	return sim.Simulation[event, effect, int]{
 		Anatomy: anatomy,
-		System: func(w *sim.World[event, effect]) {
+		System: fixed(func(w *sim.World[event, effect]) {
 			w.Spawn("a", newStore, mediumWith("data"))
 			w.Spawn("b", newStore)
-		},
+		}),
 		Actions: []sim.Action[event, effect]{{
 			Name:  "put",
 			Call:  true,
@@ -704,6 +721,18 @@ func pair(c *prop.Case) *sim.World[event, effect] {
 	return w
 }
 
+// node returns a world whose host node runs the started processes store and
+// cache, beside the host other with the started process other.
+func node(c *prop.Case) *sim.World[event, effect] {
+	w := sim.New(c, anatomy)
+	h := w.AddHost("node")
+	h.Spawn("store", newStore)
+	h.Spawn("cache", newStore)
+	w.Spawn("other", newStore)
+	drain(w)
+	return w
+}
+
 // drain steps each process with a pending event until no process has one.
 func drain(w *sim.World[event, effect]) {
 	for pending := w.Pending(); len(pending) > 0; pending = w.Pending() {
@@ -725,7 +754,7 @@ type cellSet struct {
 // through open. b reads each datagram of its connection into the datagrams of
 // the case.
 func (cs *cellSet) system(open func(env *host.Env) *cell) sim.System[sim.None, sim.None] {
-	return func(w *sim.World[sim.None, sim.None]) {
+	return fixed(func(w *sim.World[sim.None, sim.None]) {
 		cs.mu.Lock()
 		cs.sets, cs.received = append(cs.sets, 0), append(cs.received, nil)
 		at := len(cs.sets) - 1
@@ -747,7 +776,7 @@ func (cs *cellSet) system(open func(env *host.Env) *cell) sim.System[sim.None, s
 			})
 			return c
 		})
-	}
+	})
 }
 
 // simulation returns the simulation of the cells a and b inside conform.Bubble.

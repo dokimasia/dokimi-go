@@ -87,12 +87,26 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a name that no process has", func(t *testing.T) {
+		t.Run("passes a message between two processes of one host under every partition", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Partition([]string{"other"})
+				w.Deliver("store", forward{to: "cache", key: "k", token: 7})
+				w.Deliver("store", forward{to: "other", key: "k", token: 8})
+				drain(w)
+				expect.Equal(c, events(w, "store")[3:], []event{called{value: "stored", token: 7}},
+					"the message within the host arrives, and the message to the isolated host does not")
+			})
+		})
+
+		t.Run("fails the case for a name that no host has", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) { pair(c).Partition([]string{"a"}, []string{"missing"}) })
-			expect.Equal(t, got.Contract, `sim: no process of the world is named "missing"`,
-				"the failure names the process")
+			expect.Equal(t, got.Contract, `sim: no host of the world is named "missing"`,
+				"the failure names the host")
 		})
 
 		t.Run("fails the case while a partition is in force", func(t *testing.T) {
@@ -387,6 +401,34 @@ func TestFault(t *testing.T) {
 			expect.Equal(t, got.Contract, `sim: the dependency "disk" has an outage`,
 				"the failure names the dependency")
 		})
+
+		t.Run("ends each wait of the dependency with the event of the failure of its effect", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				a := anatomy
+				a.Dependency = func(f effect) (string, bool) {
+					if wt, ok := f.(watch); ok && wt.token == 6 {
+						return "other", true
+					}
+					return anatomy.Dependency(f)
+				}
+				w := sim.New(c, a)
+				w.Spawn("store", newStore)
+				first, other, last := &feed{}, &feed{}, &feed{}
+				w.Deliver("store", subscribe{feed: first, token: 5})
+				w.Deliver("store", subscribe{feed: other, token: 6})
+				w.Deliver("store", subscribe{feed: last, token: 7})
+				drain(w)
+				w.Outage("feed")
+				first.items = []event{fed{item: "x", token: 5}}
+				other.items = []event{fed{item: "y", token: 6}}
+				drain(w)
+				expect.Equal(c, events(w, "store")[4:], []event{
+					fed{err: sim.ErrLost, token: 5}, fed{err: sim.ErrLost, token: 7}, fed{item: "y", token: 6},
+				}, "the waits of the feed end in the order of their starts, and the wait of the other dependency goes on")
+			})
+		})
 	})
 
 	t.Run("Restore", func(t *testing.T) {
@@ -491,7 +533,7 @@ func TestFault(t *testing.T) {
 	t.Run("Jump", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("moves the clock of the process forwards and backwards", func(t *testing.T) {
+		t.Run("moves the clock of the host forwards and backwards", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -564,7 +606,27 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a component, which takes no step", func(t *testing.T) {
+		t.Run("counts the steps of every process of the host", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Strobe("node", time.Second, -time.Second, 2)
+				for _, name := range []string{"store", "cache", "store"} {
+					w.Deliver(name, ticked{token: 1})
+					w.Step(name)
+				}
+				times := make([]time.Time, 0, 3)
+				for _, e := range w.Log()[3:] {
+					times = append(times, e.Time)
+				}
+				want := []time.Time{sim.Start.Add(time.Second), sim.Start.Add(-time.Second), sim.Start}
+				expect.Equal(c, times, want,
+					"the processes take the two offsets in turn, and the third step the time of the clock")
+			})
+		})
+
+		t.Run("fails the case for the host of a component", func(t *testing.T) {
 			t.Parallel()
 
 			got := failsInBubble(t, still, func(c *prop.Case) {
@@ -573,15 +635,15 @@ func TestFault(t *testing.T) {
 			})
 
 			assert.Equal(t, got.Contract,
-				`sim: the process "a" is a component, which takes no step that a strobe counts`,
-				"the failure names the component")
+				`sim: the host "a" runs a component, which takes no step that a strobe counts`,
+				"the failure names the host")
 		})
 	})
 
 	t.Run("Tear", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("keeps the first bytes of the next write of each medium of the process at a crash", func(t *testing.T) {
+		t.Run("keeps the first bytes of the next write of each medium of the host at a crash", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -595,7 +657,7 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process that does not run", func(t *testing.T) {
+		t.Run("fails the case for a host that does not run", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -604,14 +666,14 @@ func TestFault(t *testing.T) {
 				w.Crash("store")
 				w.Tear("store", 1)
 			})
-			expect.Equal(t, got.Contract, `sim: the process "store" does not run`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" does not run`, "the failure names the host")
 		})
 
-		t.Run("fails the case for a process without a medium", func(t *testing.T) {
+		t.Run("fails the case for a host without a medium", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) { single(c).Tear("store", 1) })
-			expect.Equal(t, got.Contract, `sim: the process "store" has no medium`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" has no medium`, "the failure names the host")
 		})
 
 		t.Run("tears the next write to the disk of the host of a component", func(t *testing.T) {
@@ -643,7 +705,7 @@ func TestFault(t *testing.T) {
 	t.Run("Corrupt", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("flips the lowest bit of the durable byte of the file of each medium of the process", func(t *testing.T) {
+		t.Run("flips the lowest bit of the durable byte of the file of each medium of the host", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -663,15 +725,15 @@ func TestFault(t *testing.T) {
 		}{
 			{
 				name: "fails the case for an offset past the end of the file", giveFile: "f", giveOffset: 4,
-				want: `sim: no medium of the process "store" has the byte 4 of the file "f"`,
+				want: `sim: no medium of the host "store" has the byte 4 of the file "f"`,
 			},
 			{
 				name: "fails the case for a negative offset", giveFile: "f", giveOffset: -1,
-				want: `sim: no medium of the process "store" has the byte -1 of the file "f"`,
+				want: `sim: no medium of the host "store" has the byte -1 of the file "f"`,
 			},
 			{
 				name: "fails the case for a file that the media lack", giveFile: "g", giveOffset: 0,
-				want: `sim: no medium of the process "store" has the byte 0 of the file "g"`,
+				want: `sim: no medium of the host "store" has the byte 0 of the file "g"`,
 			},
 		}
 		for _, tt := range tests {
@@ -683,7 +745,7 @@ func TestFault(t *testing.T) {
 					w.Spawn("store", newStore, mediumWith("data"))
 					w.Corrupt("store", tt.giveFile, tt.giveOffset)
 				})
-				expect.Equal(t, got.Contract, tt.want, "the failure names the process, the byte and the file")
+				expect.Equal(t, got.Contract, tt.want, "the failure names the host, the byte and the file")
 			})
 		}
 
@@ -705,7 +767,7 @@ func TestFault(t *testing.T) {
 	t.Run("Fill", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("refuses each write of the media of the process after the bytes that they take", func(t *testing.T) {
+		t.Run("refuses each write of the media of the host after the bytes that they take", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -719,14 +781,30 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process without a medium", func(t *testing.T) {
+		t.Run("fills the media of each process of the host", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m, n := mediumWith(""), mediumWith("")
+				h := w.AddHost("node")
+				h.Spawn("store", newStore, m)
+				h.Spawn("cache", newStore, n)
+				w.Fill("node", 0)
+				expect.ErrorIs(c, write(c, m, "data"), syscall.ENOSPC, "the medium of the store refuses the write")
+				expect.ErrorIs(c, write(c, n, "data"), syscall.ENOSPC, "the medium of the cache refuses the write")
+				expect.Equal(c, w.Faults(), []string{"full-disk:node"}, "the full media are one fault of the host")
+			})
+		})
+
+		t.Run("fails the case for a host without a medium", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) { single(c).Fill("store", 1) })
-			expect.Equal(t, got.Contract, `sim: the process "store" has no medium`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" has no medium`, "the failure names the host")
 		})
 
-		t.Run("fails the case for a process whose media are full", func(t *testing.T) {
+		t.Run("fails the case for a host whose media are full", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -735,8 +813,8 @@ func TestFault(t *testing.T) {
 				w.Fill("store", 1)
 				w.Fill("store", 1)
 			})
-			expect.Equal(t, got.Contract, `sim: the media of the process "store" are full`,
-				"the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the media of the host "store" are full`,
+				"the failure names the host")
 		})
 
 		t.Run("fills the disk of the host of a component until RestoreDisk", func(t *testing.T) {
@@ -759,7 +837,7 @@ func TestFault(t *testing.T) {
 	t.Run("RestoreDisk", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("lifts the fill of the media of the process", func(t *testing.T) {
+		t.Run("lifts the fill of the media of the host", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -773,19 +851,19 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process whose media are not full", func(t *testing.T) {
+		t.Run("fails the case for a host whose media are not full", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) { single(c).RestoreDisk("store") })
-			expect.Equal(t, got.Contract, `sim: the media of the process "store" are not full`,
-				"the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the media of the host "store" are not full`,
+				"the failure names the host")
 		})
 	})
 
 	t.Run("Recover", func(t *testing.T) {
 		t.Parallel()
 
-		t.Run("lifts the fill of the media of each process", func(t *testing.T) {
+		t.Run("lifts the fill of the media of each host", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -799,7 +877,7 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("ends each fault in force and restarts each crashed process", func(t *testing.T) {
+		t.Run("ends each fault in force and restarts each crashed host", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -825,6 +903,19 @@ func TestFault(t *testing.T) {
 				drain(w)
 				expect.Equal(c, d, disk{"k": "v"}, "the dependency applies the commit after the recovery")
 			})
+		})
+
+		t.Run("leaves the hosts of a stopped world stopped", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) {
+				w := single(c)
+				w.Stop()
+				w.Recover()
+				w.Crash("store")
+			})
+			expect.Equal(t, got.Contract, `sim: the host "store" does not run`,
+				"the recovery leaves the stopped host stopped")
 		})
 
 		t.Run("performs the effects that a slow dependency kept in flight", func(t *testing.T) {
@@ -1034,14 +1125,14 @@ func TestFault(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process that is no component", func(t *testing.T) {
+		t.Run("fails the case for a host without a component", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) { single(c).ReplaceDisk("store") })
-			expect.Equal(t, got.Contract, `sim: the process "store" is no component`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" runs no component`, "the failure names the host")
 		})
 
-		t.Run("fails the case for a component that does not run", func(t *testing.T) {
+		t.Run("fails the case for the host of a component that does not run", func(t *testing.T) {
 			t.Parallel()
 
 			got := failsInBubble(t, still, func(c *prop.Case) {
@@ -1050,7 +1141,7 @@ func TestFault(t *testing.T) {
 				w.ReplaceDisk("a")
 			})
 
-			assert.Equal(t, got.Contract, `sim: the process "a" does not run`, "the failure names the process")
+			assert.Equal(t, got.Contract, `sim: the host "a" does not run`, "the failure names the host")
 		})
 	})
 

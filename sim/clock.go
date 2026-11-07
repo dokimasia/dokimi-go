@@ -18,11 +18,11 @@ const (
 // perMille is the rate of a clock without drift.
 const perMille = 1000
 
-// Clock is the virtual clock of one process. It advances when the run
-// advances time, at the rate of its drift. The faults of a clock move the
-// time that Now returns by a jump or by the offset of a strobe. They do not
-// move the timers of the process, which wait for the clock to advance, as
-// the timers on the monotonic clock of an operating system do.
+// Clock is the virtual clock of one host. It advances when the run advances
+// time, at the rate of its drift. The faults of a clock move the time that
+// Now returns by a jump or by the offset of a strobe. They do not move the
+// timers of the processes of the host, which wait for the clock to advance,
+// as the timers on the monotonic clock of an operating system do.
 type Clock struct {
 	elapsed time.Duration
 	rate    int64

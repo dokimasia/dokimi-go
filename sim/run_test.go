@@ -37,8 +37,7 @@ var every = map[sim.Fault]int{
 	sim.FaultSlow: 1, sim.FaultClockJump: 1, sim.FaultClockStrobe: 1,
 }
 
-// media are the faults of the media of a process, each in force once at
-// most.
+// media are the faults of the media of a host, each in force once at most.
 var media = map[sim.Fault]int{sim.FaultTornWrite: 1, sim.FaultCorruption: 1, sim.FaultFullDisk: 1}
 
 // rejecting is a spec that explains no call.
@@ -231,6 +230,20 @@ func (m timed) Step(ev event, out []effect) []effect {
 
 func (timed) Err() error { return nil }
 
+// halting is a machine that replies to its start and stops itself in the same
+// step.
+type halting struct{ err error }
+
+func (h *halting) Step(ev event, out []effect) []effect {
+	if s, ok := ev.(started); ok {
+		h.err = errEmpty
+		return append(out, reply{to: s.reply})
+	}
+	return out
+}
+
+func (h *halting) Err() error { return h.err }
+
 // starts counts the starts of the machine of type counted in every run.
 var starts atomic.Uint64
 
@@ -248,7 +261,7 @@ func (counted) Step(ev event, out []effect) []effect {
 func (counted) Err() error { return nil }
 
 // shape returns the shape of the nemesis of Jepsen that the sides of a
-// partition of the processes names have, and the empty string for none.
+// partition of the hosts names have, and the empty string for none.
 func shape(names []string, sides [][]string) string {
 	n := len(names)
 	ring := func(start int) []string { return append(slices.Clone(names[start:]), names[:start]...) }
@@ -311,11 +324,7 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			system := s.System
-			s.System = func(w *sim.World[event, effect]) {
-				system(w)
-				w.Spawn("c", newStore, mediumWith(""))
-			}
+			s.System = after(s.System, func(w *sim.World[event, effect]) { w.Spawn("c", newStore, mediumWith("")) })
 			s.Actions = append(s.Actions, sim.Action[event, effect]{
 				Name: "tick c",
 				Run:  func(w *sim.World[event, effect], _ int, _ any) { w.Deliver("c", ticked{token: 1}) },
@@ -340,12 +349,63 @@ func TestRun(t *testing.T) {
 				prop.Require(string(sim.FaultCrash), 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
 		})
 
-		t.Run("strikes each fault of the media of a process and restores full media", func(t *testing.T) {
+		t.Run("counts a crash of a host of two processes once against tolerate", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.System = fixed(func(w *sim.World[event, effect]) {
+				h := w.AddHost("node")
+				h.Spawn("a", newStore, mediumWith("data"))
+				h.Spawn("b", newStore)
+				w.Spawn("c", newStore)
+			})
+			s.Tolerate = map[sim.Fault]int{sim.FaultCrash: 1}
+			s.Invariants = []sim.Invariant[event, effect]{{
+				Statement: "one host at most is down",
+				Check: func(h *sim.Check, w *sim.World[event, effect]) {
+					up := func(f string) bool { return !strings.HasPrefix(f, "crash:") }
+					down := slices.DeleteFunc(w.Faults(), up)
+					assert.True(h, len(down) <= 1, h.Statement())
+					if slices.Contains(down, "crash:node") {
+						h.Classify("the host node is down")
+					}
+				},
+			}}
+			prop.ForAll(t, "one host at most is down", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Require("the host node is down", 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
+		})
+
+		t.Run("builds the world of a case from the inputs that its system takes from the case", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.System = stores
+			s.Actions = nil
+			var first *sim.World[event, effect]
+			var spawned []bool
+			s.Invariants = []sim.Invariant[event, effect]{{
+				Statement: "the stores of the first case are read",
+				Check: func(_ *sim.Check, w *sim.World[event, effect]) {
+					if first == nil {
+						first = w
+					}
+					if w == first {
+						spawned = []bool{w.Process("b") != nil, w.Process("c") != nil}
+					}
+				},
+			}}
+
+			runScript(t, s, scriptOf([]entry{drawn("stores", 2), drawn("drift.a", 0), drawn("drift.b", 0)}))
+
+			assert.Equal(t, spawned, []bool{true, false}, "the system spawns the two stores of its input")
+		})
+
+		t.Run("strikes each fault of the media of a host and restores full media", func(t *testing.T) {
 			t.Parallel()
 
 			// Two full disks within the bound and a crash leave the run with a
-			// process whose media are full, a process without a medium and a
-			// process that does not run, which no fault of the media takes.
+			// host whose media are full, a host without a medium and a host that
+			// does not run, which no fault of the media takes.
 			s := simulation()
 			s.Tolerate = maps.Clone(media)
 			s.Tolerate[sim.FaultFullDisk], s.Tolerate[sim.FaultCrash] = 2, 1
@@ -359,11 +419,11 @@ func TestRun(t *testing.T) {
 				opts...)
 		})
 
-		t.Run("corrupts a file in a directory of the media of a process", func(t *testing.T) {
+		t.Run("corrupts a file in a directory of the media of a host", func(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				m := medium.NewMemory()
 				_ = m.MkdirAll("d", 0o700)
 				f, _ := m.OpenFile("d/f", os.O_CREATE|os.O_WRONLY, 0o600)
@@ -373,7 +433,7 @@ func TestRun(t *testing.T) {
 				_ = m.SyncDir(".")
 				w.Spawn("a", newStore, m)
 				w.Spawn("b", newStore)
-			}
+			})
 			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
 			prop.ForAll(t, "the run corrupts the file in the directory", func(c *prop.Case) { sim.Run(c, s) },
 				prop.Require(string(sim.FaultCorruption), 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
@@ -383,7 +443,7 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			s.System = func(*sim.World[event, effect]) {}
+			s.System = fixed(func(*sim.World[event, effect]) {})
 			s.Actions, s.Rules, s.Tolerate = nil, nil, every
 			prop.ForAll(t, "a system without processes runs", func(c *prop.Case) {
 				c.Draw(prop.Boolean(), "case")
@@ -467,12 +527,12 @@ func TestRun(t *testing.T) {
 				wantLabel: "a duplicated message",
 			},
 			{
-				name:      "jumps the clock of a process",
+				name:      "jumps the clock of a host",
 				giveFault: sim.FaultClockJump,
 				wantLabel: "a step before the start",
 			},
 			{
-				name:      "strobes the clock of a process",
+				name:      "strobes the clock of a host",
 				giveFault: sim.FaultClockStrobe,
 				wantLabel: "a step before the start",
 			},
@@ -493,16 +553,16 @@ func TestRun(t *testing.T) {
 			})
 		}
 
-		t.Run("cuts the processes in the shapes of the nemesis of Jepsen", func(t *testing.T) {
+		t.Run("cuts the hosts in the shapes of the nemesis of Jepsen", func(t *testing.T) {
 			t.Parallel()
 
 			names := []string{"a", "b", "c", "d", "e"}
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				for _, name := range names {
 					w.Spawn(name, newStore)
 				}
-			}
+			})
 			s.Actions = nil
 			s.Tolerate = map[sim.Fault]int{sim.FaultPartition: 1}
 			s.Invariants = []sim.Invariant[event, effect]{{
@@ -596,6 +656,21 @@ func TestRun(t *testing.T) {
 			prop.ForAll(t, "the action is never taken", func(c *prop.Case) { sim.Run(c, s) }, prop.Store(""))
 		})
 
+		t.Run("checks the rules against a step before the world performs its effects", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.System = fixed(func(w *sim.World[event, effect]) {
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				w.Deliver("a", forward{to: "b", key: "k", token: 7})
+				w.Deliver("a", forward{to: "missing", key: "k", token: 7})
+			})
+			s.Actions = nil
+			expect.Equal(t, refuted(t, s).Contract, rules[4].Statement,
+				"the reused token fails the case before the world sends a call to a process that it lacks")
+		})
+
 		t.Run("fails the case for a rule whose probe has no judge", func(t *testing.T) {
 			t.Parallel()
 
@@ -656,9 +731,9 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				w.Spawn("a", func(*sim.Clock) sim.Machine[event, effect] { return timed{after: time.Second} })
-			}
+			})
 			s.Actions, s.Rules = nil, nil
 			s.Invariants = []sim.Invariant[event, effect]{{
 				Statement: "the tick arrives",
@@ -678,9 +753,9 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				w.Spawn("ticker", func(*sim.Clock) sim.Machine[event, effect] { return ticker{} })
-			}
+			})
 			s.Actions, s.Rules = nil, nil
 			s.Converges = []sim.Convergence[event, effect]{{
 				Statement: "the ticker ticks",
@@ -743,9 +818,9 @@ func TestRun(t *testing.T) {
 				s := simulation()
 				s.Rules = nil
 				s.Isolation = tt.giveLevel
-				s.System = func(w *sim.World[event, effect]) {
+				s.System = fixed(func(w *sim.World[event, effect]) {
 					w.Spawn("ledger", func(*sim.Clock) sim.Machine[event, effect] { return ledger{} })
-				}
+				})
 				s.Actions = []sim.Action[event, effect]{{
 					Name: "read",
 					Call: true,
@@ -782,9 +857,9 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				w.Spawn("counted", func(*sim.Clock) sim.Machine[event, effect] { return counted{} })
-			}
+			})
 			s.Actions, s.Rules = nil, nil
 			s.Invariants = []sim.Invariant[event, effect]{{
 				Statement: "the counted machine never starts",
@@ -854,7 +929,7 @@ func TestRun(t *testing.T) {
 
 			s := simulation()
 			s.Actions, s.Rules = nil, nil
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				w.Spawn("a", newStore)
 				w.Spawn("b", newStore)
 				w.Partition([]string{"a"}, []string{"b"})
@@ -866,7 +941,7 @@ func TestRun(t *testing.T) {
 				w.Call(2, "b", "Park", nil, nil, func(r uint64) event { return park{reply: r} })
 				w.Deliver("b", put{key: "k", reply: 9})
 				drain(w)
-			}
+			})
 			s.Invariants = []sim.Invariant[event, effect]{{
 				Statement: "the store a never stops",
 				Check: func(h *sim.Check, w *sim.World[event, effect]) {
@@ -1184,10 +1259,10 @@ func TestRun(t *testing.T) {
 		t.Run("corrupts no machine without media in a world of components", func(t *testing.T) {
 			t.Parallel()
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				sim.SpawnComponent(w, "c", openCell)
 				w.Spawn("m", newStore)
-			}
+			})
 			s.Around, s.Actions, s.Rules = conform.Bubble, nil, nil
 			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
 			r := &recorded{Recorder: assert.NewRecorder(), t: t}
@@ -1215,10 +1290,10 @@ func TestRun(t *testing.T) {
 		t.Run("corrupts no medium without a file with data in a world of machines", func(t *testing.T) {
 			t.Parallel()
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				w.Spawn("a", newStore, medium.NewMemory())
 				w.Spawn("b", newStore)
-			}
+			})
 			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
 			r := &recorded{Recorder: assert.NewRecorder(), t: t}
 
@@ -1232,11 +1307,11 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 			s := simulation()
 			var m *medium.Memory
-			s.System = func(w *sim.World[event, effect]) {
+			s.System = fixed(func(w *sim.World[event, effect]) {
 				m = mediumWith("data")
 				w.Spawn("a", newStore, m)
 				w.Spawn("b", newStore)
-			}
+			})
 			s.Tolerate = map[sim.Fault]int{sim.FaultCorruption: 1}
 			var first *sim.World[event, effect]
 			var firstMedium *medium.Memory
@@ -1263,16 +1338,14 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 			s := simulation()
 			s.Anatomy.Cancelled = nil
-			system := s.System
-			s.System = func(w *sim.World[event, effect]) {
-				system(w)
+			s.System = after(s.System, func(w *sim.World[event, effect]) {
 				// The goroutine of c waits for the end of its lifetime, so a bubble
 				// whose case ends without the crash of c ends in a deadlock.
 				sim.SpawnComponent(w, "c", func(env *host.Env) *cell {
 					env.Go(func() { env.Wait(func() bool { return env.Lifetime().Err() != nil }) })
 					return openCell(env)
 				})
-			}
+			})
 			s.Around, s.Rules = conform.Bubble, nil
 			var first *sim.World[event, effect]
 			var events []history.Event
@@ -1298,15 +1371,15 @@ func TestRun(t *testing.T) {
 			}), "the cancel ends no call of a machine")
 		})
 
-		t.Run("strikes each fault on the processes of its kind in a world of machines and components",
+		t.Run("strikes each fault on the hosts of its kind in a world of machines and components",
 			func(t *testing.T) {
 				t.Parallel()
 				s := simulation()
-				s.System = func(w *sim.World[event, effect]) {
+				s.System = fixed(func(w *sim.World[event, effect]) {
 					sim.SpawnComponent(w, "a", openCell)
 					w.Spawn("m", newStore)
 					sim.SpawnComponent(w, "b", openCell)
-				}
+				})
 				s.Around, s.Actions, s.Rules = conform.Bubble, nil, nil
 				s.Tolerate = map[sim.Fault]int{
 					sim.FaultCrash: 1, sim.FaultDiskReplacement: 1, sim.FaultClockStrobe: 1, sim.FaultReset: 1,
@@ -1336,7 +1409,7 @@ func TestRun(t *testing.T) {
 				assert.False(t, r.Failed(), "the world takes each step")
 				assert.True(t, len(faults) > 3, "the run checks each step of the first case")
 				expect.Equal(t, faults[3], []string{"crash:a", "clock-strobe:m", "disk-replacement:b"},
-					"a crash strikes a process, a disk replacement a component and a strobe a machine")
+					"a crash strikes a host, a disk replacement a component and a strobe a host of machines")
 			})
 
 		refusals := []struct {
@@ -1372,14 +1445,30 @@ func TestRun(t *testing.T) {
 			})
 		}
 
+		t.Run("crashes no host whose processes have stopped", func(t *testing.T) {
+			t.Parallel()
+			s := simulation()
+			s.System = fixed(func(w *sim.World[event, effect]) {
+				w.Spawn("a", func(*sim.Clock) sim.Machine[event, effect] { return &halting{} })
+			})
+			s.Actions, s.Rules, s.Strategy = nil, nil, sim.Uniform()
+			s.Tolerate = map[sim.Fault]int{sim.FaultCrash: 1}
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			runScript(r, s, scriptOf([]entry{drawn("drift.a", 0)}, stepOf("deliver", drawn("process", 0)),
+				stepOf("crash", drawn("process", 0))))
+
+			assert.Length(t, r.Faults(), 1, "the world refuses the crash of the host of the stopped process")
+		})
+
 		t.Run("advances a world of machines by the time until the next timer and the amount of the case",
 			func(t *testing.T) {
 				t.Parallel()
 				s := simulation()
-				s.System = func(w *sim.World[event, effect]) {
+				s.System = fixed(func(w *sim.World[event, effect]) {
 					w.Spawn("a", newStore)
 					w.After(w.Process("a"), time.Second, ticked{token: 1})
-				}
+				})
 				s.Actions, s.Rules = nil, nil
 				var first *sim.World[event, effect]
 				var now []time.Time
@@ -1420,18 +1509,16 @@ func TestRun(t *testing.T) {
 			var cs cellSet
 			s := cs.simulation()
 			var set, woke atomic.Bool
-			system := s.System
-			s.System = func(w *sim.World[sim.None, sim.None]) {
+			s.System = after(s.System, func(*sim.World[sim.None, sim.None]) {
 				set.Store(false)
 				woke.Store(false)
-				system(w)
 				env := cs.a.Value().env
 				env.Go(func() {
 					env.Wait(func() bool { return set.Load() || env.Lifetime().Err() != nil })
 					woke.Store(set.Load())
 				})
 				synctest.Wait()
-			}
+			})
 			s.Actions = []sim.Action[sim.None, sim.None]{{
 				Name: "set",
 				Run:  func(*sim.World[sim.None, sim.None], int, any) { set.Store(true) },
@@ -1506,11 +1593,9 @@ func TestRun(t *testing.T) {
 				s.Blocking, s.Tolerate = tt.giveBlocking, map[sim.Fault]int{sim.FaultSlowLink: tt.giveTolerate}
 				start := opening(tt.giveBlocking)
 				if tt.giveThird {
-					system := s.System
-					s.System = func(w *sim.World[sim.None, sim.None]) {
-						system(w)
+					s.System = after(s.System, func(w *sim.World[sim.None, sim.None]) {
 						sim.SpawnComponent(w, "c", openCell)
-					}
+					})
 					start = append(start, drawn("drift.c", 0), drawn("latency.a.c", 0.0), drawn("latency.b.c", 0.0))
 				}
 				r := &recorded{Recorder: assert.NewRecorder(), t: t}
@@ -1680,7 +1765,7 @@ func TestRun(t *testing.T) {
 			s := simulation()
 			s.Actions, s.Rules, s.Invariants, s.Converges, s.Scenarios = nil, nil, nil, nil, nil
 			s.Spec = history.Spec[int]{}
-			s.System = func(w *sim.World[event, effect]) { w.Spawn("a", newScattered) }
+			s.System = fixed(func(w *sim.World[event, effect]) { w.Spawn("a", newScattered) })
 			got := assert.Rejects(t, "the determinism check fails the test", func(tb assert.TB) { sim.Test(tb, s) })
 			expect.Equal(t, got[0].Detail["outcome"], any(prop.Flaky),
 				"a replay of a passing case makes other steps than the case")
@@ -1697,6 +1782,24 @@ func TestRun(t *testing.T) {
 			s.Require = map[sim.Fault]float64{sim.FaultCrash: 0.5}
 			got := assert.Rejects(t, "the requirement fails the test", func(tb assert.TB) { sim.Test(tb, s) })
 			expect.NotNil(t, got[0].Detail["coverage"], "the record of the run states the shortfall of its coverage")
+		})
+
+		t.Run("runs each scenario on the simplest choice of each input of its system", func(t *testing.T) {
+			t.Parallel()
+
+			var runs, wider atomic.Int32
+			s := simulation()
+			s.System, s.Actions = stores, nil
+			s.Scenarios = []sim.Scenario[event, effect]{{Name: "put", Run: func(w *sim.World[event, effect]) {
+				runs.Add(1)
+				if w.Process("b") != nil {
+					wider.Add(1)
+				}
+				putOnA(w)
+			}}}
+			sim.Test(t, s)
+			assert.True(t, runs.Load() > 1, "the test runs the scenario and its crash points")
+			assert.Equal(t, wider.Load(), int32(0), "each run of the scenario takes the simplest input")
 		})
 
 		t.Run("checks the history of each scenario against the spec", func(t *testing.T) {
@@ -1765,7 +1868,7 @@ func TestRun(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
-			s.System = func(w *sim.World[event, effect]) { w.Spawn("a", newStore) }
+			s.System = fixed(func(w *sim.World[event, effect]) { w.Spawn("a", newStore) })
 			s.Actions = nil
 			s.Invariants = []sim.Invariant[event, effect]{{
 				Statement: "the store a does not crash after it stores a put",
@@ -1789,11 +1892,7 @@ func TestRun(t *testing.T) {
 
 			var built atomic.Int32
 			s := simulation()
-			system := s.System
-			s.System = func(w *sim.World[event, effect]) {
-				built.Add(1)
-				system(w)
-			}
+			s.System = after(s.System, func(*sim.World[event, effect]) { built.Add(1) })
 			t.Cleanup(func() { assert.True(t, built.Load() > 0, "the falsification runs the proofs of the rules") })
 			sim.Falsify(t, s)
 		})
@@ -1899,6 +1998,17 @@ func TestRun(t *testing.T) {
 	})
 }
 
+// stores is a system of one to three stores a, b and c. The case chooses
+// their number under the label stores.
+func stores(c *prop.Case) func(w *sim.World[event, effect]) {
+	n := c.Draw(prop.Integer(1, 3), "stores")
+	return func(w *sim.World[event, effect]) {
+		for i := range n {
+			w.Spawn(string(rune('a'+i)), newStore)
+		}
+	}
+}
+
 // putOnA is a scenario whose client 0 puts a key on the store a.
 func putOnA(w *sim.World[event, effect]) {
 	w.Call(0, "a", "Put", nil, nil, func(r uint64) event { return put{key: "k", value: "v", reply: r} })
@@ -1921,11 +2031,7 @@ func putTwiceOnA(w *sim.World[event, effect]) {
 func FuzzRun(f *testing.F) {
 	var runs atomic.Int32
 	s := simulation()
-	system := s.System
-	s.System = func(w *sim.World[event, effect]) {
-		runs.Add(1)
-		system(w)
-	}
+	s.System = after(s.System, func(*sim.World[event, effect]) { runs.Add(1) })
 	// Under -fuzz the worker processes run every input. This process then counts no run.
 	if flag.Lookup("test.fuzz").Value.String() == "" {
 		f.Cleanup(func() { assert.True(f, runs.Load() > 0, "the fuzz target runs the simulation") })

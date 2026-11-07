@@ -31,7 +31,7 @@ type Machine[E, F any] interface {
 }
 
 // Outcome is the result of performing one effect.
-type Outcome[E any] struct {
+type Outcome[E, F any] struct {
 	// Event is the event of the result, and the zero E for an effect without
 	// a result, such as a reply.
 	Event E
@@ -42,10 +42,36 @@ type Outcome[E any] struct {
 	// Message is the inbound call that the effect sends to another process,
 	// whose reply is the result of the effect, and nil for any other effect.
 	Message *Message[E]
+	// Launch is the machine that the effect starts on the host of its
+	// process, and nil for any other effect.
+	Launch *Launch[E, F]
+	// Stop is the name of a process that an effect started and that this
+	// effect stops with the stop event, and empty for any other effect. The
+	// world stops the process before it queues Event.
+	Stop string
+}
+
+// Launch is a machine that an effect starts on the host of its process. The
+// first event of the machine is an inbound call, whose reply returns to the
+// process of the effect as the result of the effect.
+type Launch[E, F any] struct {
+	// Machine builds the machine from the clock of the host.
+	Machine func(clock *Clock) Machine[E, F]
+	// Call returns the first event of the machine, an inbound call with the
+	// reply token reply, in place of the start event of the anatomy.
+	Call func(reply uint64) E
+	// Result returns the event of the result of the effect from the value and
+	// the error of the reply to the call.
+	Result func(value any, err error) E
+	// Name is the name of the process of the machine.
+	Name string
+	// Deps are the dependencies of the process, which a performer reads
+	// through Dependency.
+	Deps []any
 }
 
 // Perform performs the effect f of the process p.
-type Perform[E, F any] func(w *World[E, F], p *Process[E, F], f F) Outcome[E]
+type Perform[E, F any] func(w *World[E, F], p *Process[E, F], f F) Outcome[E, F]
 
 // Anatomy is how a world reads the events and the effects of its machines.
 // The generator sim writes it from the directives of a declaration.
@@ -74,14 +100,14 @@ type Anatomy[E, F any] struct {
 	// false for any other effect, such as an unwatch or a reply.
 	Token func(f F) (token uint64, ok bool)
 	// Dependency returns the name of the dependency that performs the effect
-	// f, such as store.Writer, and false for an effect that a function of the
-	// consumer performs.
+	// f or that the function of its performer calls, such as store.Writer,
+	// and false for an effect without a dependency.
 	Dependency func(f F) (name string, ok bool)
 	// Fail returns the event of the result of the effect f that failed with
 	// err, and false for an effect without a result.
 	Fail func(f F, err error) (ev E, ok bool)
-	// Errors returns the errors that the directive fault of the dependency
-	// declares for the call that performs f.
+	// Errors returns the errors that the directive fault declares for the
+	// dependency of the effect f.
 	Errors func(f F) []error
 	// Timeout returns the timeout of the effect f, and 0 for an effect whose
 	// call the run alone bounds.
@@ -90,8 +116,10 @@ type Anatomy[E, F any] struct {
 	Perform Perform[E, F]
 }
 
-// System builds the processes of a world and their dependencies.
-type System[E, F any] func(w *World[E, F])
+// System builds the processes of a world and their dependencies from inputs
+// that it takes from the case: the function takes the inputs, and the
+// function that it returns builds the world.
+type System[E, F any] func(c *prop.Case) func(w *World[E, F])
 
 // ErrRunEnded is the error of a call that the stop of its process leaves
 // without a reply.
@@ -103,15 +131,20 @@ var ErrCrashed = errors.New("sim: the process of the call crashed before it repl
 // ErrCancelled is the error of a call whose client stopped waiting for it.
 var ErrCancelled = errors.New("sim: the client stopped waiting for the call")
 
-// World is the system of one run: its processes, the events that wait for
-// each process, the effects in flight, the faults, the timers, the log of its
-// steps and the history of the calls of its clients.
+// World is the system of one run: its hosts and their processes, the events
+// that wait for each process, the effects in flight, the faults, the timers,
+// the log of its steps and the history of the calls of its clients.
 type World[E, F any] struct {
-	c      *prop.Case
-	calls  map[uint64]inbound[E, F]
+	c     *prop.Case
+	calls map[uint64]inbound[E, F]
+	// after checks the world after each step, and judge checks the rules
+	// once the world records a step of a machine, before it performs the
+	// effects of the step. Both are nil outside a run.
 	after  func()
+	judge  func()
 	plant  func(m Machine[E, F]) Machine[E, F]
 	a      Anatomy[E, F]
+	hosts  []*Host[E, F]
 	procs  []*Process[E, F]
 	log    []Entry[E, F]
 	timers []timer[E, F]
@@ -144,7 +177,7 @@ type World[E, F any] struct {
 	blockingOpt bool
 }
 
-// point is a crash point of a scenario: the step whose process crashes and
+// point is a crash point of a scenario: the step whose host crashes and
 // restarts, before the step or after it, and 0 for none.
 type point struct {
 	step  int
@@ -160,11 +193,14 @@ type timer[E, F any] struct {
 }
 
 // wait is a pending wait of a process, in the epoch of the process when the
-// wait started.
+// wait started: the effect that started it, and the name of the dependency of
+// the effect, empty for an effect without one.
 type wait[E, F any] struct {
-	next    func() (E, bool, bool)
-	process *Process[E, F]
-	epoch   uint64
+	f          F
+	next       func() (E, bool, bool)
+	process    *Process[E, F]
+	dependency string
+	epoch      uint64
 }
 
 // New returns an empty world whose machines have the anatomy a, and which
@@ -173,29 +209,33 @@ func New[E, F any](c *prop.Case, a Anatomy[E, F]) *World[E, F] {
 	return &World[E, F]{c: c, a: a, calls: map[uint64]inbound[E, F]{}}
 }
 
-// Spawn adds a process named name to the world, and queues its start.
-// newMachine builds the machine of the process from its clock. A process
-// that restarts builds a new machine with the same function, in a new epoch.
-// deps are the dependencies of the process, such as the doubles of its
-// stores, which a performer reads through Dependency. The case chooses the
-// drift of the clock of the process.
+// Spawn adds a host named name with one process of that name to the world,
+// and queues the start of the process. newMachine builds the machine of the
+// process from its clock. A process that restarts builds a new machine with
+// the same function, in a new epoch. deps are the dependencies of the
+// process, such as the doubles of its stores, which a performer reads through
+// Dependency. The case chooses the drift of the clock of the host. Spawn
+// fails the case where the world has a host or a process named name.
 func (w *World[E, F]) Spawn(name string, newMachine func(clock *Clock) Machine[E, F], deps ...any) {
-	drift := w.c.Draw(prop.Integer(minDrift, maxDrift), "drift."+name)
-	p := &Process[E, F]{name: name, clock: newClock(drift), newMachine: newMachine, deps: deps}
-	w.procs = append(w.procs, p)
-	w.start(p)
+	w.AddHost(name).Spawn(name, newMachine, deps...)
 }
 
 // start gives the process p a new machine in a new epoch, and queues its
 // start, an inbound call with a new reply token.
 func (w *World[E, F]) start(p *Process[E, F]) {
+	w.incarnate(p)
+	p.queue = append(p.queue, queued[E]{ev: w.a.Started(w.token()), epoch: p.epoch})
+}
+
+// incarnate gives the process p a new machine in a new epoch, and makes it
+// run.
+func (w *World[E, F]) incarnate(p *Process[E, F]) {
 	p.epoch++
-	p.machine = p.newMachine(p.clock)
+	p.machine = p.newMachine(p.host.clock)
 	if w.plant != nil {
 		p.machine = w.plant(p.machine)
 	}
 	p.state = running
-	p.queue = append(p.queue, queued[E]{ev: w.a.Started(w.token()), epoch: p.epoch})
 }
 
 // Deliver queues ev for the process named to, in the current epoch of the
@@ -281,7 +321,7 @@ func (w *World[E, F]) After(p *Process[E, F], d time.Duration, ev E) {
 
 // at calls run once the clock of the process p has advanced by d.
 func (w *World[E, F]) at(p *Process[E, F], d time.Duration, run func()) {
-	w.timers = append(w.timers, timer[E, F]{at: p.clock.advanced() + d, process: p, run: run})
+	w.timers = append(w.timers, timer[E, F]{at: p.host.clock.advanced() + d, process: p, run: run})
 }
 
 // Pending returns the names of the processes that run and have an event of
@@ -337,8 +377,8 @@ func (w *World[E, F]) Step(name string) bool {
 	}
 	for len(p.queue) > 0 && p.queue[0].epoch != p.epoch {
 		w.record(Entry[E, F]{
-			Process: p.name, Epoch: p.queue[0].epoch, Event: p.queue[0].ev, Time: p.clock.Now(), Dropped: true,
-			Faults: w.Faults(),
+			Process: p.name, Epoch: p.queue[0].epoch, Event: p.queue[0].ev, Time: p.host.clock.Now(),
+			Dropped: true, Faults: w.Faults(),
 		})
 		p.queue = p.queue[1:]
 	}
@@ -349,14 +389,14 @@ func (w *World[E, F]) Step(name string) bool {
 	p.queue = p.queue[1:]
 	w.steps++
 	if w.crash == (point{step: w.steps}) {
-		w.Crash(p.name)
-		w.Restart(p.name)
+		w.Crash(p.host.name)
+		w.Restart(p.host.name)
 	} else {
 		w.take(p, ev)
 	}
 	if w.crash == (point{step: w.steps, after: true}) {
-		w.Crash(p.name)
-		w.Restart(p.name)
+		w.Crash(p.host.name)
+		w.Restart(p.host.name)
 	}
 	w.poll()
 	if w.after != nil {
@@ -365,30 +405,34 @@ func (w *World[E, F]) Step(name string) bool {
 	return true
 }
 
-// take makes the process p take the event ev, at the offset of its strobe,
-// and stops p when its machine reports an error after the step.
+// take makes the process p take the event ev, at the offset of the strobe of
+// its host, and stops p when its machine reports an error after the step.
 func (w *World[E, F]) take(p *Process[E, F], ev E) {
-	if p.strobe.left > 0 {
-		p.clock.strobe = p.strobe.next
-		p.strobe.next, p.strobe.then = p.strobe.then, p.strobe.next
-		p.strobe.left--
+	h := p.host
+	if h.strobe.left > 0 {
+		h.clock.strobe = h.strobe.next
+		h.strobe.next, h.strobe.then = h.strobe.then, h.strobe.next
+		h.strobe.left--
 	}
 	w.step(p, ev, false)
-	p.clock.strobe = 0
+	h.clock.strobe = 0
 	if p.machine.Err() != nil {
 		w.stop(p)
 	}
 }
 
-// step makes p apply ev, records the step, and performs its effects, or its
-// replies alone where replies is set. It passes the type of each effect to
-// the case as a label.
+// step makes p apply ev, records the step, judges the rules of a run, and
+// performs its effects, or its replies alone where replies is set. It passes
+// the type of each effect to the case as a label.
 func (w *World[E, F]) step(p *Process[E, F], ev E, replies bool) {
 	effects := p.machine.Step(ev, nil)
 	w.record(Entry[E, F]{
-		Process: p.name, Epoch: p.epoch, Event: ev, Effects: effects, Err: p.machine.Err(), Time: p.clock.Now(),
-		Faults: w.Faults(),
+		Process: p.name, Epoch: p.epoch, Event: ev, Effects: effects, Err: p.machine.Err(),
+		Time: p.host.clock.Now(), Faults: w.Faults(),
 	})
+	if w.judge != nil {
+		w.judge()
+	}
 	for _, f := range effects {
 		w.c.Classify(reflect.TypeOf(f).String())
 	}
@@ -426,19 +470,75 @@ func (w *World[E, F]) reply(p *Process[E, F], to uint64, value any, err error) {
 	}
 }
 
-// apply performs the effect f of the process p: it queues the event of the
-// result for a later step of p, starts the wait and sends the message.
+// apply performs the effect f of the process p: it stops the process of the
+// stop of the outcome, queues the event of the result for a later step of p,
+// starts the wait, sends the message and starts the machine of the launch.
 func (w *World[E, F]) apply(p *Process[E, F], f F) {
 	o := w.a.Perform(w, p, f)
+	if o.Stop != "" {
+		w.halt(p, o.Stop)
+	}
 	if !reflect.ValueOf(&o.Event).Elem().IsZero() {
 		p.queue = append(p.queue, queued[E]{ev: o.Event, epoch: p.epoch})
 	}
 	if o.Next != nil {
-		w.waits = append(w.waits, wait[E, F]{next: o.Next, process: p, epoch: p.epoch})
+		name, _ := w.a.Dependency(f)
+		w.waits = append(w.waits, wait[E, F]{f: f, next: o.Next, process: p, dependency: name, epoch: p.epoch})
 	}
 	if o.Message != nil {
 		w.send(p, f, o.Message)
 	}
+	if o.Launch != nil {
+		w.launch(p, f, o.Launch)
+	}
+}
+
+// launch starts the machine s on the host of the process p, the process of
+// the effect f. The process of s takes a new machine in a new epoch, and the
+// call of s as its first event. The reply to the call returns to p as the
+// event of the result of s, within the timeout of f. launch fails the case
+// for a process of another host, for a process that Spawn added and for a
+// process that runs.
+func (w *World[E, F]) launch(p *Process[E, F], f F, s *Launch[E, F]) {
+	q := w.Process(s.Name)
+	switch {
+	case q == nil:
+		q = p.host.add(s.Name, s.Machine, s.Deps)
+		q.started = true
+	case q.host != p.host:
+		w.c.Fatalf("sim: the process %q runs on the host %q, so the process %q of the host %q cannot start it",
+			s.Name, q.host.name, p.name, p.host.name)
+	case !q.started:
+		w.c.Fatalf("sim: Spawn added the process %q, so no effect starts it", s.Name)
+	case q.state == running:
+		w.c.Fatalf("sim: the process %q runs, so no effect starts it", s.Name)
+	default:
+		q.newMachine, q.deps = s.Machine, s.Deps
+	}
+	w.incarnate(q)
+	a := w.awaiting(p, f, s.Result)
+	token := w.token()
+	w.calls[token] = inbound[E, F]{process: q, await: a, build: s.Call}
+	q.queue = append(q.queue, queued[E]{ev: s.Call(token), epoch: q.epoch})
+}
+
+// halt stops the process named name, which an effect started on the host of
+// the process p: it passes the stop event to its machine, performs the
+// replies that it returns and stops it. halt fails the case for a process
+// that no effect started, for a process of another host and for a process
+// that does not run.
+func (w *World[E, F]) halt(p *Process[E, F], name string) {
+	q := w.named(name)
+	switch {
+	case !q.started:
+		w.c.Fatalf("sim: no effect started the process %q, so no effect stops it", name)
+	case q.host != p.host:
+		w.c.Fatalf("sim: the process %q runs on the host %q, so the process %q of the host %q cannot stop it",
+			name, q.host.name, p.name, p.host.name)
+	case q.state != running:
+		w.c.Fatalf("sim: the process %q does not run, so no effect stops it", name)
+	}
+	w.stop(q)
 }
 
 // poll queues the next event of each wait that has one, in the order in which
@@ -453,118 +553,128 @@ func (w *World[E, F]) poll() {
 	})
 }
 
-// Crash crashes the process named name: its machine, its pause, its strobe,
-// its waits and the events that wait for it are gone. Its open calls end as
-// unknown with ErrCrashed, the sender of each message to it takes ErrCrashed,
-// and the receiver of each message that it sent takes the cancel of the
-// call. The dependencies keep what they applied, and each medium.Memory among
-// them crashes: it loses each write that a sync did not cover. An event for
-// the process until its restart has the old epoch, so the restarted machine
-// never takes it. A component process crashes its incarnation by a process
-// crash or by a power loss, which the case chooses and which shrinks to a
-// process crash. Its open calls end as unknown with medium.ErrCrashed. It
-// fails the case for a name that no process has, and for a process that does
-// not run.
+// Crash crashes the host named name: each of its processes that runs crashes.
+// The machine of a crashed process, its waits and the events that wait for it
+// are gone, and so are the pause and the strobe of the host. The open calls
+// of a crashed process end as unknown with ErrCrashed, the sender of each
+// message to it takes ErrCrashed, and the receiver of each message that it
+// sent takes the cancel of the call. The dependencies keep what they applied,
+// and each medium.Memory among the dependencies of each process of the host
+// crashes: it loses each write that a sync did not cover. An event for a
+// process until its restart has the old epoch, so the restarted machine never
+// takes it. A component process crashes its incarnation by a process crash or
+// by a power loss, which the case chooses and which shrinks to a process
+// crash. Its open calls end as unknown with medium.ErrCrashed. Crash fails
+// the case for a name that no host has, and for a host that does not run.
 func (w *World[E, F]) Crash(name string) {
-	p := w.down(name)
-	if p.comp != nil {
-		w.crashComponent(p, w.c.Draw(prop.SampledFrom(host.ProcessCrash, host.PowerLoss), "kill."+p.name))
+	h := w.down(name)
+	for _, p := range h.procs {
+		if p.state == running {
+			p.queue, p.state = nil, crashed
+			if p.comp != nil {
+				w.crashComponent(p, w.c.Draw(prop.SampledFrom(host.ProcessCrash, host.PowerLoss), "kill."+p.name))
+			}
+			w.forget(p, ErrCrashed)
+		}
+		for _, m := range media(p) {
+			m.Crash()
+		}
 	}
-	for _, m := range media(p) {
-		m.Crash()
-	}
-	w.forget(p, ErrCrashed)
 	w.strike(FaultCrash)
 }
 
-// down marks the process named name as crashed and returns it: the events
-// that wait for it, its pause and its strobe are gone. It fails the case for
-// a name that no process has, and for a process that does not run.
-func (w *World[E, F]) down(name string) *Process[E, F] {
-	p := w.named(name)
-	if p.state != running {
-		w.c.Fatalf("sim: the process %q does not run", name)
+// down marks the host named name as crashed and returns it: its pause and its
+// strobe are gone. It fails the case for a name that no host has, and for a
+// host that does not run.
+func (w *World[E, F]) down(name string) *Host[E, F] {
+	h := w.hostNamed(name)
+	if h.state != running {
+		w.c.Fatalf("sim: the host %q does not run", name)
 	}
-	p.queue = nil
-	p.state = crashed
-	p.paused = false
-	p.strobe = strobe{}
-	return p
+	h.state, h.paused, h.strobe = crashed, false, strobe{}
+	return h
 }
 
-// Restart starts a new machine of the crashed process named name, in a new
-// epoch, and queues its start. A component process starts a new incarnation
-// and opens its value. It fails the case for a name that no process has, and
-// for a process that has not crashed.
+// Restart restarts the crashed host named name. Each process of the host that
+// the crash crashed and that Spawn added takes a new machine in a new epoch,
+// and its start. A component process starts a new incarnation and opens its
+// value. A process that an effect started remains crashed until an effect
+// starts it again. Restart fails the case for a name that no host has, and
+// for a host that has not crashed.
 func (w *World[E, F]) Restart(name string) {
-	p := w.named(name)
-	if p.state != crashed {
-		w.c.Fatalf("sim: the process %q has not crashed", name)
+	h := w.hostNamed(name)
+	if h.state != crashed {
+		w.c.Fatalf("sim: the host %q has not crashed", name)
 	}
-	w.restart(p)
+	w.restart(h)
 	w.strike(FaultRestart)
 }
 
-// restart starts the crashed process p again: a machine through start, and a
+// restart starts the crashed host h again, and each process of h that the
+// crash crashed and that Spawn added: a machine through start, and a
 // component through startComponent.
-func (w *World[E, F]) restart(p *Process[E, F]) {
-	p.replaced = false
-	if p.comp != nil {
-		w.startComponent(p)
-		return
+func (w *World[E, F]) restart(h *Host[E, F]) {
+	h.state, h.replaced = running, false
+	for _, p := range h.procs {
+		switch {
+		case p.state != crashed || p.started:
+		case p.comp != nil:
+			w.startComponent(p)
+		default:
+			w.start(p)
+		}
 	}
-	w.start(p)
 }
 
-// Pause pauses the process named name: it takes no event, and its clock does
-// not advance while the time of the run advances. A component process pauses
-// its incarnation. It fails the case for a name that no process has, and for
-// a process that does not run or is paused.
+// Pause pauses the host named name: its processes take no event, and its
+// clock does not advance while the time of the run advances. A component
+// process pauses its incarnation. Pause fails the case for a name that no
+// host has, and for a host that does not run or is paused.
 func (w *World[E, F]) Pause(name string) {
-	p := w.named(name)
-	if p.state != running || p.paused {
-		w.c.Fatalf("sim: the process %q does not run unpaused", name)
+	h := w.hostNamed(name)
+	if h.state != running || h.paused {
+		w.c.Fatalf("sim: the host %q does not run unpaused", name)
 	}
-	p.paused = true
-	if p.comp != nil {
+	h.paused = true
+	if p := h.component(); p != nil {
 		p.comp.inc.Pause()
 	}
 	w.strike(FaultPause)
 }
 
-// Resume ends the pause of the process named name. It fails the case for a
-// name that no process has, and for a process that is not paused.
+// Resume ends the pause of the host named name. It fails the case for a name
+// that no host has, and for a host that is not paused.
 func (w *World[E, F]) Resume(name string) {
-	p := w.named(name)
-	if !p.paused {
-		w.c.Fatalf("sim: the process %q is not paused", name)
+	h := w.hostNamed(name)
+	if !h.paused {
+		w.c.Fatalf("sim: the host %q is not paused", name)
 	}
-	resume(p)
+	resume(h)
 }
 
-// resume ends the pause of the paused process p.
-func resume[E, F any](p *Process[E, F]) {
-	p.paused = false
-	if p.comp != nil {
+// resume ends the pause of the paused host h.
+func resume[E, F any](h *Host[E, F]) {
+	h.paused = false
+	if p := h.component(); p != nil && p.state == running {
 		p.comp.inc.Resume()
 	}
 }
 
-// Advance advances the time of the run by d, the clock of each process that
-// is not paused by d times its drift, and the monotonic clock of each host of
-// a component by d times its rate error. It runs the function of each timer
+// Advance advances the time of the run by d, the clock of each host that is
+// not paused by d times its drift, and the monotonic clock of each host of a
+// component by d times its rate error. It runs the function of each timer
 // whose clock has advanced to the timer.
 func (w *World[E, F]) Advance(d time.Duration) {
 	w.elapsed += d
-	for _, p := range w.procs {
-		if !p.paused {
-			p.clock.advance(d)
+	for _, h := range w.hosts {
+		if !h.paused {
+			h.clock.advance(d)
 		}
 	}
 	w.advanceHosts(d)
 	var ready []timer[E, F]
 	w.timers = slices.DeleteFunc(w.timers, func(t timer[E, F]) bool {
-		if t.process.clock.advanced() < t.at {
+		if t.process.host.clock.advanced() < t.at {
 			return false
 		}
 		ready = append(ready, t)
@@ -575,13 +685,17 @@ func (w *World[E, F]) Advance(d time.Duration) {
 	}
 }
 
-// Next returns the time of the run until the next timer of a process that is
-// not paused, and false when no such timer is pending.
+// Now returns the time of the run: Start, plus the time by which Advance has
+// advanced the run. It has no drift, and no fault of a host moves it.
+func (w *World[E, F]) Now() time.Time { return Start.Add(w.elapsed) }
+
+// Next returns the time of the run until the next timer of a process whose
+// host is not paused, and false when no such timer is pending.
 func (w *World[E, F]) Next() (time.Duration, bool) {
 	next, found := time.Duration(math.MaxInt64), false
 	for _, t := range w.timers {
-		if !t.process.paused {
-			next, found = min(next, t.process.clock.runTime(t.at-t.process.clock.advanced())), true
+		if c := t.process.host.clock; !t.process.host.paused {
+			next, found = min(next, c.runTime(t.at-c.advanced())), true
 		}
 	}
 	if !found {
@@ -594,8 +708,14 @@ func (w *World[E, F]) Next() (time.Duration, bool) {
 // crashed, performs the replies that it returns, and ends each open call of
 // the history as unknown with ErrRunEnded. It ends the incarnation of each
 // component process that runs by a process crash, and fails the case for a
-// goroutine of the incarnation that is alive after quiescence.
+// goroutine of the incarnation that is alive after quiescence. Each host that
+// runs stops, so no fault of a host strikes it afterwards.
 func (w *World[E, F]) Stop() {
+	for _, h := range w.hosts {
+		if h.state == running {
+			h.state = stopped
+		}
+	}
 	for _, p := range w.procs {
 		switch {
 		case p.state != running:

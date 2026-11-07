@@ -17,18 +17,25 @@
 // effect that starts a call or a wait. The world records each step of a
 // machine in its log, and each call of a client in the history of the case.
 //
-// A process persists through each medium.Memory among the dependencies that
-// [World.Spawn] gives it. A crash of the process crashes each such medium, so
-// the process loses each write that a sync did not cover. [World.Tear],
-// [World.Corrupt] and [World.Fill] strike the faults of the media of a
-// process: a torn write, a flipped bit at rest and a full disk.
+// The processes of a world run on hosts. The processes of one [Host] share
+// its clock, and a crash, a restart, a pause, a jump and a strobe strike each
+// of them at once. [World.Spawn] adds a host with one process, and
+// [World.AddHost] adds a host for several. The [Outcome] of an effect can
+// start a machine on the host of its process and stop such a machine.
+// [World.Now] returns the time of the run, which no fault of a host moves.
+//
+// A process persists through each medium.Memory among its dependencies. A
+// crash of its host crashes each such medium, so the process loses each write
+// that a sync did not cover. [World.Tear], [World.Corrupt] and [World.Fill]
+// strike the faults of the media of a host: a torn write, a flipped bit at
+// rest and a full disk.
 //
 // A component process runs a Go value on a host of go.dokimi.dev/host.
 // [SpawnComponent] starts it, and [ComponentOf] returns it by its name to a
 // function of the simulation. [World.Invoke] runs each call of a client on a
-// goroutine of its incarnation. The faults of a process strike a
-// component through its host, and the faults of the network strike the links
-// between the hosts of the components.
+// goroutine of its incarnation. The faults of a host strike a component
+// through its host of go.dokimi.dev/host, and the faults of the network
+// strike the links between the hosts of the components.
 //
 // # Determinism
 //

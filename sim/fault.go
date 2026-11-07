@@ -26,7 +26,7 @@ const (
 	FaultDelay Fault = "delay"
 	// FaultDuplicate queues a message in flight once more.
 	FaultDuplicate Fault = "duplicate"
-	// FaultPartition cuts the processes into sides.
+	// FaultPartition cuts the hosts into sides.
 	FaultPartition Fault = "partition"
 	// FaultRepair ends a partition.
 	FaultRepair Fault = "repair"
@@ -38,21 +38,21 @@ const (
 	FaultOutage Fault = "outage"
 	// FaultSlow keeps each effect of a dependency in flight.
 	FaultSlow Fault = "slow"
-	// FaultCrash crashes a process.
+	// FaultCrash crashes a host.
 	FaultCrash Fault = "crash"
-	// FaultPause pauses a process.
+	// FaultPause pauses a host.
 	FaultPause Fault = "pause"
-	// FaultRestart restarts a crashed process.
+	// FaultRestart restarts a crashed host.
 	FaultRestart Fault = "restart"
-	// FaultClockJump moves a clock.
+	// FaultClockJump moves the clock of a host.
 	FaultClockJump Fault = "clock-jump"
-	// FaultClockStrobe moves a clock between two offsets.
+	// FaultClockStrobe moves the clock of a host between two offsets.
 	FaultClockStrobe Fault = "clock-strobe"
-	// FaultTornWrite tears the next write of the media of a process.
+	// FaultTornWrite tears the next write of the media of a host.
 	FaultTornWrite Fault = "torn-write"
-	// FaultCorruption flips a bit of a durable file of the media of a process.
+	// FaultCorruption flips a bit of a durable file of the media of a host.
 	FaultCorruption Fault = "corruption"
-	// FaultFullDisk fills the media of a process.
+	// FaultFullDisk fills the media of a host.
 	FaultFullDisk Fault = "full-disk"
 	// FaultReset resets the streams between two components.
 	FaultReset Fault = "reset"
@@ -88,18 +88,19 @@ type stall[E, F any] struct {
 	done    bool
 }
 
-// Partition cuts the processes into sides. Two processes exchange messages
-// while one side contains both, so the sides of majorities-ring and bridge
-// overlap. A message across the cut does not arrive, and the network of the
-// components cuts the links across it. It fails the case for a name that no
-// process has, and while a partition is in force.
+// Partition cuts the hosts into sides. Two processes exchange messages while
+// they run on one host or one side contains both of their hosts, so the sides
+// of majorities-ring and bridge overlap. A message across the cut does not
+// arrive, and the network of the components cuts the links across it. It
+// fails the case for a name that no host has, and while a partition is in
+// force.
 func (w *World[E, F]) Partition(sides ...[]string) {
 	if w.sides != nil {
 		w.c.Fatalf("sim: a partition is in force")
 	}
 	for _, side := range sides {
 		for _, name := range side {
-			w.named(name)
+			w.hostNamed(name)
 		}
 	}
 	w.sides = sides
@@ -129,10 +130,11 @@ func (w *World[E, F]) repair() {
 // Sides returns the sides of the partition in force, and nil without one.
 func (w *World[E, F]) Sides() [][]string { return w.sides }
 
-// cut reports whether a partition cuts the processes a and b apart.
+// cut reports whether a partition cuts the processes a and b apart: they run
+// on two hosts, and no side contains both hosts.
 func (w *World[E, F]) cut(a, b *Process[E, F]) bool {
-	return w.sides != nil && !slices.ContainsFunc(w.sides, func(side []string) bool {
-		return slices.Contains(side, a.name) && slices.Contains(side, b.name)
+	return w.sides != nil && a.host != b.host && !slices.ContainsFunc(w.sides, func(side []string) bool {
+		return slices.Contains(side, a.host.name) && slices.Contains(side, b.host.name)
 	})
 }
 
@@ -246,14 +248,27 @@ func (w *World[E, F]) LoseAfter(dependency string) {
 }
 
 // Outage loses each effect of the dependency named dependency before the
-// dependency applies it, until Restore. It fails the case for a dependency
-// with an outage.
+// dependency applies it, until Restore. It ends each wait of an effect of the
+// dependency with the event of the failure of the effect, in the order in
+// which the waits started. It fails the case for a dependency with an
+// outage.
 func (w *World[E, F]) Outage(dependency string) {
 	d := w.dependency(dependency)
 	if d.outage {
 		w.c.Fatalf("sim: the dependency %q has an outage", dependency)
 	}
 	d.outage = true
+	var ended []wait[E, F]
+	w.waits = slices.DeleteFunc(w.waits, func(wt wait[E, F]) bool {
+		if wt.dependency != dependency {
+			return false
+		}
+		ended = append(ended, wt)
+		return true
+	})
+	for _, wt := range ended {
+		w.lose(wt.process, wt.f, w.lost(wt.f))
+	}
 	w.strike(FaultOutage)
 }
 
@@ -293,107 +308,120 @@ func (w *World[E, F]) restore(d *dependency[E, F]) {
 	}
 }
 
-// Jump moves the clock of the process named name by d, backwards for a
-// negative d. A component process moves the wall clock of its host through
-// Host.Bump. It fails the case for a name that no process has.
+// Jump moves the clock of the host named name by d, backwards for a negative
+// d. The host of a component moves the wall clock of its host of
+// go.dokimi.dev/host through Host.Bump. It fails the case for a name that no
+// host has.
 func (w *World[E, F]) Jump(name string, d time.Duration) {
-	if p := w.named(name); p.comp != nil {
-		p.comp.host.Bump(d)
+	if h := w.hostNamed(name); h.component() != nil {
+		h.component().comp.host.Bump(d)
 	} else {
-		p.clock.jumps += d
+		h.clock.jumps += d
 	}
 	w.strike(FaultClockJump)
 }
 
-// Strobe moves the clock of the process named name between the offsets a
-// and b at each of its next steps steps, from a. It fails the case for a name
-// that no process has, and for a component process, which takes no step.
+// Strobe moves the clock of the host named name between the offsets a and b
+// at the next steps of its processes, from a. The argument steps is the number
+// of those steps. It fails the case for a name that no host has, and for the
+// host of a component, which takes no step that a strobe counts.
 func (w *World[E, F]) Strobe(name string, a, b time.Duration, steps int) {
-	p := w.named(name)
-	if p.comp != nil {
-		w.c.Fatalf("sim: the process %q is a component, which takes no step that a strobe counts", name)
+	h := w.hostNamed(name)
+	if h.component() != nil {
+		w.c.Fatalf("sim: the host %q runs a component, which takes no step that a strobe counts", name)
 	}
-	p.strobe = strobe{next: a, then: b, left: steps}
+	h.strobe = strobe{next: a, then: b, left: steps}
 	w.strike(FaultClockStrobe)
 }
 
-// Tear makes each medium.Memory among the dependencies of the process named
-// name, or the disk of the host of a component, keep only the first n bytes
-// of its next write, where a crash follows the write before a sync of its
-// file. It fails the case for a name that no process has, for a process that
-// does not run, and for a process without a medium.
+// Tear makes each medium.Memory among the dependencies of the processes of
+// the host named name, or the disk of the host of a component, keep only the
+// first n bytes of its next write, where a crash follows the write before a
+// sync of its file. It fails the case for a name that no host has, for a host
+// that does not run, and for a host without a medium.
 func (w *World[E, F]) Tear(name string, n int) {
-	p := w.named(name)
-	if p.state != running {
-		w.c.Fatalf("sim: the process %q does not run", name)
+	h := w.hostNamed(name)
+	if h.state != running {
+		w.c.Fatalf("sim: the host %q does not run", name)
 	}
-	for _, m := range w.mediaOf(p) {
+	for _, m := range w.mediaOf(h) {
 		m.Tear(n)
 	}
 	w.strike(FaultTornWrite)
 }
 
 // Corrupt flips the lowest bit of the durable byte at the offset of the file
-// of each medium.Memory among the dependencies of the process named name. It
-// fails the case for a name that no process has, for a process without a
-// medium, and for an offset outside each file of that name on its media.
+// of each medium.Memory among the dependencies of the processes of the host
+// named name. It fails the case for a name that no host has, for a host
+// without a medium, and for an offset outside each file of that name on its
+// media.
 func (w *World[E, F]) Corrupt(name, file string, offset int64) {
 	hit := false
-	for _, m := range w.mediaOf(w.named(name)) {
+	for _, m := range w.mediaOf(w.hostNamed(name)) {
 		if info, err := m.Stat(file); err == nil && 0 <= offset && offset < info.Size() {
 			hit = true
 		}
 		m.Corrupt(file, offset)
 	}
 	if !hit {
-		w.c.Fatalf("sim: no medium of the process %q has the byte %d of the file %q", name, offset, file)
+		w.c.Fatalf("sim: no medium of the host %q has the byte %d of the file %q", name, offset, file)
 	}
 	w.strike(FaultCorruption)
 }
 
-// Fill makes each medium.Memory among the dependencies of the process named
-// name refuse every write after its next n bytes, until RestoreDisk. It fails
-// the case for a name that no process has, for a process without a medium,
-// and for a process whose media are full.
+// Fill makes each medium.Memory among the dependencies of the processes of
+// the host named name refuse every write after its next n bytes, until
+// RestoreDisk. It fails the case for a name that no host has, for a host
+// without a medium, and for a host whose media are full.
 func (w *World[E, F]) Fill(name string, n int64) {
-	p := w.named(name)
-	if p.full {
-		w.c.Fatalf("sim: the media of the process %q are full", name)
+	h := w.hostNamed(name)
+	if h.full {
+		w.c.Fatalf("sim: the media of the host %q are full", name)
 	}
-	for _, m := range w.mediaOf(p) {
+	for _, m := range w.mediaOf(h) {
 		m.Fill(n)
 	}
-	p.full = true
+	h.full = true
 	w.strike(FaultFullDisk)
 }
 
-// mediaOf returns the disks of p, and fails the case for a process without
-// one.
-func (w *World[E, F]) mediaOf(p *Process[E, F]) []*medium.Memory {
-	out := disks(p)
+// mediaOf returns the disks of the processes of h, and fails the case for a
+// host without one.
+func (w *World[E, F]) mediaOf(h *Host[E, F]) []*medium.Memory {
+	out := hostDisks(h)
 	if len(out) == 0 {
-		w.c.Fatalf("sim: the process %q has no medium", p.name)
+		w.c.Fatalf("sim: the host %q has no medium", h.name)
 	}
 	return out
 }
 
-// RestoreDisk lifts the fill of the media of the process named name. It fails
-// the case for a name that no process has, and for a process whose media are
-// not full.
-func (w *World[E, F]) RestoreDisk(name string) {
-	p := w.named(name)
-	if !p.full {
-		w.c.Fatalf("sim: the media of the process %q are not full", name)
+// hostDisks returns the disks of the processes of h, in the order of the
+// processes.
+func hostDisks[E, F any](h *Host[E, F]) []*medium.Memory {
+	out := make([]*medium.Memory, 0, len(h.procs))
+	for _, p := range h.procs {
+		out = append(out, disks(p)...)
 	}
-	unfill(p)
+	return out
 }
 
-// unfill lifts the fill of the disks of p.
-func unfill[E, F any](p *Process[E, F]) {
-	for _, m := range disks(p) {
+// RestoreDisk lifts the fill of the media of the host named name. It fails
+// the case for a name that no host has, and for a host whose media are not
+// full.
+func (w *World[E, F]) RestoreDisk(name string) {
+	h := w.hostNamed(name)
+	if !h.full {
+		w.c.Fatalf("sim: the media of the host %q are not full", name)
+	}
+	unfill(h)
+}
+
+// unfill lifts the fill of the disks of the processes of h.
+func unfill[E, F any](h *Host[E, F]) {
+	for _, m := range hostDisks(h) {
 		m.Fill(-1)
 	}
-	p.full = false
+	h.full = false
 }
 
 // media returns each medium.Memory among the dependencies of p, in the order
@@ -408,18 +436,18 @@ func media[E, F any](p *Process[E, F]) []*medium.Memory {
 	return out
 }
 
-// Recover ends each fault in force and restarts each crashed process.
+// Recover ends each fault in force and restarts each crashed host.
 func (w *World[E, F]) Recover() {
-	for _, p := range w.procs {
-		if p.paused {
-			resume(p)
+	for _, h := range w.hosts {
+		if h.paused {
+			resume(h)
 		}
-		p.strobe = strobe{}
-		if p.full {
-			unfill(p)
+		h.strobe = strobe{}
+		if h.full {
+			unfill(h)
 		}
-		if p.state == crashed {
-			w.restart(p)
+		if h.state == crashed {
+			w.restart(h)
 		}
 	}
 	w.repair()
@@ -433,19 +461,21 @@ func (w *World[E, F]) Recover() {
 	}
 }
 
-// ReplaceDisk crashes the component process named name by a disk
+// ReplaceDisk crashes the host of the component named name by a disk
 // replacement. Its open calls end as unknown with medium.ErrCrashed, and its
 // next incarnation starts over a new empty disk of its host. A single
 // component loses every write, and a system that keeps a copy of each write
 // on another component keeps its data. It fails the case for a name that no
-// process has, for a process that is no component, and for a process that
-// does not run.
+// host has, for a host without a component, and for a host that does not
+// run.
 func (w *World[E, F]) ReplaceDisk(name string) {
-	if w.named(name).comp == nil {
-		w.c.Fatalf("sim: the process %q is no component", name)
+	p := w.hostNamed(name).component()
+	if p == nil {
+		w.c.Fatalf("sim: the host %q runs no component", name)
 	}
-	p := w.down(name)
-	p.replaced = true
+	h := w.down(name)
+	h.replaced = true
+	p.queue, p.state = nil, crashed
 	w.crashComponent(p, host.DiskReplacement)
 	w.strike(FaultDiskReplacement)
 }
@@ -503,30 +533,30 @@ func (w *World[E, F]) link(a, b string) [2]string {
 }
 
 // Faults returns the faults in force: the crash or the disk replacement, the
-// pause, the strobe and the full media of each process in the order of their
-// spawns, the partition, the slow links in the order of their strikes, and
+// pause, the strobe and the full media of each host in the order of their
+// additions, the partition, the slow links in the order of their strikes, and
 // the outage, the slowness and the armed losses of each dependency in the
 // order in which the world first saw it. Each fault is its kind and its
 // target, such as pause:store or slow-link:a,b, and the partition is its kind
 // alone.
 func (w *World[E, F]) Faults() []string {
 	var out []string
-	for _, p := range w.procs {
-		if p.state == crashed {
+	for _, h := range w.hosts {
+		if h.state == crashed {
 			kind := FaultCrash
-			if p.replaced {
+			if h.replaced {
 				kind = FaultDiskReplacement
 			}
-			out = append(out, string(kind)+":"+p.name)
+			out = append(out, string(kind)+":"+h.name)
 		}
-		if p.paused {
-			out = append(out, string(FaultPause)+":"+p.name)
+		if h.paused {
+			out = append(out, string(FaultPause)+":"+h.name)
 		}
-		if p.strobe.left > 0 {
-			out = append(out, string(FaultClockStrobe)+":"+p.name)
+		if h.strobe.left > 0 {
+			out = append(out, string(FaultClockStrobe)+":"+h.name)
 		}
-		if p.full {
-			out = append(out, string(FaultFullDisk)+":"+p.name)
+		if h.full {
+			out = append(out, string(FaultFullDisk)+":"+h.name)
 		}
 	}
 	if w.sides != nil {

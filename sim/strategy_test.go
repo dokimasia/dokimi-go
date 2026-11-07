@@ -21,14 +21,14 @@ func queued(
 ) sim.Simulation[event, effect, int] {
 	return sim.Simulation[event, effect, int]{
 		Anatomy: anatomy,
-		System: func(w *sim.World[event, effect]) {
+		System: fixed(func(w *sim.World[event, effect]) {
 			for _, name := range []string{"a", "b"} {
 				w.Spawn(name, newStore)
 				for token := range uint64(n) {
 					w.Deliver(name, ticked{token: token})
 				}
 			}
-		},
+		}),
 		Strategy:   s,
 		Invariants: []sim.Invariant[event, effect]{{Statement: "the strategy picks the processes", Check: check}},
 	}

@@ -64,12 +64,15 @@ type invocation struct {
 // have taken effect or not.
 var unknown = []error{context.Canceled, context.DeadlineExceeded, medium.ErrCrashed, host.ErrReset}
 
-// SpawnComponent adds a component process named name to w on a new host, and
-// starts its first incarnation. The hosts of the components of w share one
-// network, which the case builds from the options of the simulation. The open
-// of an incarnation runs on a goroutine of the incarnation, and the world
-// waits for it as the world of a subject waits for its open.
+// SpawnComponent adds a component process named name to w on a new host of
+// the same name, and starts its first incarnation. The hosts of the
+// components of w share one network, which the case builds from the options
+// of the simulation. The open of an incarnation runs on a goroutine of the
+// incarnation, and the world waits for it as the world of a subject waits for
+// its open. SpawnComponent fails the case where w has a host or a process
+// named name.
 func SpawnComponent[T, E, F any](w *World[E, F], name string, open func(env *host.Env) T) *Component[T] {
+	w.vacant(name)
 	if w.network == nil {
 		w.network = host.NewNetwork(w.c, w.blocking(), w.netOpts...)
 	}
@@ -79,8 +82,8 @@ func SpawnComponent[T, E, F any](w *World[E, F], name string, open func(env *hos
 	}
 	handle := &Component[T]{c: c, name: name}
 	c.handle = handle
-	p := &Process[E, F]{name: name, clock: newClock(0), comp: c}
-	w.procs = append(w.procs, p)
+	p := w.host(name, newClock(0)).add(name, nil, nil)
+	p.comp = c
 	w.startComponent(p)
 	return handle
 }

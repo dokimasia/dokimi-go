@@ -32,6 +32,99 @@ func (l loud) Step(_ event, out []effect) []effect {
 
 func (loud) Err() error { return nil }
 
+// place makes the agent start the store name on its host within timeout, with
+// a call that parks where parks is set.
+type place struct {
+	name    string
+	token   uint64
+	timeout time.Duration
+	parks   bool
+}
+
+// unplace makes the agent stop the store name.
+type unplace struct {
+	name  string
+	token uint64
+}
+
+func (place) event()   {}
+func (unplace) event() {}
+
+// launch starts the store name on the host of its process within timeout,
+// with a call that parks where parks is set.
+type launch struct {
+	name    string
+	token   uint64
+	timeout time.Duration
+	parks   bool
+}
+
+// halt stops the store name.
+type halt struct {
+	name  string
+	token uint64
+}
+
+func (launch) effect() {}
+func (halt) effect()   {}
+
+// agent is a machine that starts and stops the stores of its host.
+type agent struct{}
+
+func (agent) Step(ev event, out []effect) []effect {
+	switch ev := ev.(type) {
+	case started:
+		return append(out, reply{to: ev.reply})
+	case place:
+		return append(out, launch(ev))
+	case unplace:
+		return append(out, halt(ev))
+	default:
+		return out
+	}
+}
+
+func (agent) Err() error { return nil }
+
+// newAgent returns an agent machine.
+func newAgent(*sim.Clock) sim.Machine[event, effect] { return agent{} }
+
+// starting returns the anatomy of the specs whose performer also performs the
+// launches and the halts of an agent. A launch starts a store whose
+// dependencies are its name and its token. A halt queues the tick of its token
+// after the stop.
+func starting() sim.Anatomy[event, effect] {
+	a := anatomy
+	a.Timeout = func(f effect) time.Duration {
+		if l, ok := f.(launch); ok {
+			return l.timeout
+		}
+		return anatomy.Timeout(f)
+	}
+	a.Perform = func(w *sim.World[event, effect], p *sim.Process[event, effect], f effect) sim.Outcome[event, effect] {
+		switch f := f.(type) {
+		case launch:
+			return sim.Outcome[event, effect]{Launch: &sim.Launch[event, effect]{
+				Machine: newStore,
+				Call: func(r uint64) event {
+					if f.parks {
+						return park{reply: r}
+					}
+					return put{key: "k", value: "v", reply: r}
+				},
+				Result: func(value any, err error) event { return called{value: value, err: err, token: f.token} },
+				Name:   f.name,
+				Deps:   []any{f.name, f.token},
+			}}
+		case halt:
+			return sim.Outcome[event, effect]{Event: ticked{token: f.token}, Stop: f.name}
+		default:
+			return anatomy.Perform(w, p, f)
+		}
+	}
+	return a
+}
+
 func TestWorld(t *testing.T) {
 	t.Parallel()
 
@@ -65,6 +158,17 @@ func TestWorld(t *testing.T) {
 				assert.Length(c, w.Log(), 1, "the world records the step")
 				expect.Equal(c, w.Log()[0].Event, event(started{reply: 2}), "the second start has the second token")
 			})
+		})
+
+		t.Run("fails the case for a name that a host has", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				w.AddHost("store")
+				w.Spawn("store", newStore)
+			})
+			expect.Equal(t, got.Contract, `sim: the world has a host named "store"`, "the failure names the host")
 		})
 	})
 
@@ -238,6 +342,152 @@ func TestWorld(t *testing.T) {
 					"the wait of the other process goes on")
 			})
 		})
+
+		t.Run("starts the machine of a launch on the host of its process with its call", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, starting())
+				w.Spawn("agent", newAgent)
+				w.Deliver("agent", place{name: "cell", token: 7})
+				drain(w)
+				p := w.Process("cell")
+				assert.NotNil(c, p, "the launch adds the process cell")
+				expect.True(c, p.Clock() == w.Process("agent").Clock(), "the cell runs on the host of the agent")
+				expect.Equal(c, sim.Dependency[string](w, p), "cell", "the cell has the dependencies of the launch")
+				expect.Equal(c, events(w, "cell")[0], event(put{key: "k", value: "v", reply: 2}),
+					"the first event of the cell is the call of the launch")
+			})
+		})
+
+		t.Run("returns the reply of a started machine to the process of the launch", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, starting())
+				w.Spawn("agent", newAgent)
+				w.Deliver("agent", place{name: "cell", token: 7})
+				drain(w)
+				expect.Equal(c, events(w, "agent")[2:], []event{called{value: "stored", token: 7}},
+					"the agent takes the reply of the cell as the result of the launch")
+			})
+		})
+
+		t.Run("starts a stopped process that an effect started again in a new epoch", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, starting())
+				w.Spawn("agent", newAgent)
+				for _, ev := range []event{place{name: "cell", token: 7}, unplace{name: "cell", token: 8}} {
+					w.Deliver("agent", ev)
+					drain(w)
+				}
+				w.Deliver("agent", place{name: "cell", token: 9})
+				drain(w)
+				expect.Equal(c, w.Process("cell").Epoch(), uint64(2), "the second launch raises the epoch of the cell")
+				expect.Equal(c, sim.Dependency[uint64](w, w.Process("cell")), uint64(9),
+					"the cell has the dependencies of the second launch")
+				expect.Equal(c, events(w, "agent")[6:], []event{called{value: "stored", token: 9}},
+					"the agent takes the reply of the second launch")
+			})
+		})
+
+		t.Run("stops a process that an effect started before it queues the event of the effect", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, starting())
+				w.Spawn("agent", newAgent)
+				w.Deliver("agent", place{name: "cell", token: 7, parks: true})
+				drain(w)
+				w.Deliver("agent", unplace{name: "cell", token: 8})
+				drain(w)
+				expect.Equal(c, events(w, "agent")[3:], []event{called{err: errStopped, token: 7}, ticked{token: 8}},
+					"the agent takes the reply of the stop event of the cell before the event of the halt")
+				expect.Equal(c, events(w, "cell"), []event{park{reply: 2}, stopped{}},
+					"the cell takes the stop event after its call")
+				expect.Empty(c, w.Pending(), "the stopped cell takes no event")
+			})
+		})
+
+		refusals := []struct {
+			name    string
+			giveRun func(w *sim.World[event, effect])
+			want    string
+		}{
+			{
+				name: "fails the case for a launch of a process that runs",
+				giveRun: func(w *sim.World[event, effect]) {
+					w.Spawn("agent", newAgent)
+					w.Deliver("agent", place{name: "cell", token: 7})
+					w.Deliver("agent", place{name: "cell", token: 8})
+				},
+				want: `sim: the process "cell" runs, so no effect starts it`,
+			},
+			{
+				name: "fails the case for a launch of a process that Spawn added",
+				giveRun: func(w *sim.World[event, effect]) {
+					h := w.AddHost("node")
+					h.Spawn("agent", newAgent)
+					h.Spawn("cell", newStore)
+					w.Deliver("agent", place{name: "cell", token: 7})
+				},
+				want: `sim: Spawn added the process "cell", so no effect starts it`,
+			},
+			{
+				name: "fails the case for a launch of a process of another host",
+				giveRun: func(w *sim.World[event, effect]) {
+					w.Spawn("agent", newAgent)
+					w.Spawn("cell", newStore)
+					w.Deliver("agent", place{name: "cell", token: 7})
+				},
+				want: `sim: the process "cell" runs on the host "cell", so the process "agent" of the host "agent" ` +
+					`cannot start it`,
+			},
+			{
+				name: "fails the case for a stop of a process that no effect started",
+				giveRun: func(w *sim.World[event, effect]) {
+					h := w.AddHost("node")
+					h.Spawn("agent", newAgent)
+					h.Spawn("cell", newStore)
+					w.Deliver("agent", unplace{name: "cell", token: 7})
+				},
+				want: `sim: no effect started the process "cell", so no effect stops it`,
+			},
+			{
+				name: "fails the case for a stop of a process that does not run",
+				giveRun: func(w *sim.World[event, effect]) {
+					w.Spawn("agent", newAgent)
+					w.Deliver("agent", place{name: "cell", token: 7})
+					w.Deliver("agent", unplace{name: "cell", token: 8})
+					w.Deliver("agent", unplace{name: "cell", token: 9})
+				},
+				want: `sim: the process "cell" does not run, so no effect stops it`,
+			},
+			{
+				name: "fails the case for a stop of a process of another host",
+				giveRun: func(w *sim.World[event, effect]) {
+					w.Spawn("a", newAgent)
+					w.Spawn("b", newAgent)
+					w.Deliver("a", place{name: "cell", token: 7})
+					w.Deliver("b", unplace{name: "cell", token: 8})
+				},
+				want: `sim: the process "cell" runs on the host "a", so the process "b" of the host "b" cannot stop it`,
+			},
+		}
+		for _, tt := range refusals {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				got := failure(t, func(c *prop.Case) {
+					w := sim.New(c, starting())
+					tt.giveRun(w)
+					drain(w)
+				})
+				expect.Equal(t, got.Contract, tt.want, "the failure names the process")
+			})
+		}
 	})
 
 	t.Run("Call", func(t *testing.T) {
@@ -531,6 +781,23 @@ func TestWorld(t *testing.T) {
 
 			assert.Equal(t, got, []time.Duration{time.Second, time.Second}, "each host advances by the second")
 		})
+
+		t.Run("fails a launch at its timeout and cancels its call at the started process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, starting())
+				w.Spawn("agent", newAgent)
+				w.Deliver("agent", place{name: "cell", token: 7, timeout: time.Second, parks: true})
+				drain(w)
+				w.Advance(time.Hour)
+				drain(w)
+				expect.Equal(c, events(w, "agent")[2:], []event{called{err: context.DeadlineExceeded, token: 7}},
+					"the agent takes the timeout of the launch")
+				expect.Equal(c, events(w, "cell"), []event{park{reply: 2}, cancelled{reply: 2}},
+					"the cell takes the cancel of the call of the launch")
+			})
+		})
 	})
 
 	t.Run("After", func(t *testing.T) {
@@ -644,6 +911,40 @@ func TestWorld(t *testing.T) {
 		})
 	})
 
+	t.Run("Now", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("returns the time of the run without the drift of a host", func(t *testing.T) {
+			t.Parallel()
+			var got []time.Time
+			inBubble(t, `[{"label": "drift.store", "value": {"type": "int", "value": 500}}]`,
+				func(c *prop.Case, first bool) {
+					w := sim.New(c, anatomy)
+					w.Spawn("store", newStore)
+					w.Advance(time.Second)
+					if first {
+						got = []time.Time{w.Now(), w.Process("store").Clock().Now()}
+					}
+				})
+
+			assert.Equal(t, got, []time.Time{sim.Start.Add(time.Second), sim.Start.Add(1500 * time.Millisecond)},
+				"the run advances by the second, and the clock of the host by the second times its drift")
+		})
+
+		t.Run("returns a time that no fault of a host moves", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				w.Jump("store", time.Hour)
+				w.Strobe("store", time.Minute, time.Minute, 1)
+				w.Pause("store")
+				w.Advance(time.Second)
+				expect.Equal(c, w.Now(), sim.Start.Add(time.Second), "the time of the run advances by the second alone")
+			})
+		})
+	})
+
 	t.Run("Crash", func(t *testing.T) {
 		t.Parallel()
 
@@ -680,7 +981,7 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process that does not run", func(t *testing.T) {
+		t.Run("fails the case for a host that does not run", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -688,10 +989,32 @@ func TestWorld(t *testing.T) {
 				w.Crash("store")
 				w.Crash("store")
 			})
-			expect.Equal(t, got.Contract, `sim: the process "store" does not run`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" does not run`, "the failure names the host")
 		})
 
-		t.Run("ends the pause and the strobe of the process", func(t *testing.T) {
+		t.Run("fails the case for the name of a process of a shared host", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) { node(c).Crash("store") })
+			expect.Equal(t, got.Contract, `sim: no host of the world is named "store"`,
+				"the failure names the process, which no host has")
+		})
+
+		t.Run("crashes each process of the host and leaves the other hosts running", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Crash("node")
+				expect.Equal(c, w.Faults(), []string{"crash:node"}, "the crash is one fault under the name of the host")
+				for _, name := range []string{"store", "cache", "other"} {
+					w.Deliver(name, ticked{token: 1})
+				}
+				expect.Equal(c, w.Pending(), []string{"other"}, "the processes of the crashed host take no event")
+			})
+		})
+
+		t.Run("ends the pause and the strobe of the host", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -841,7 +1164,7 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process that has not crashed", func(t *testing.T) {
+		t.Run("fails the case for a host that has not crashed", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -849,7 +1172,56 @@ func TestWorld(t *testing.T) {
 				w.Spawn("store", newStore)
 				w.Restart("store")
 			})
-			expect.Equal(t, got.Contract, `sim: the process "store" has not crashed`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" has not crashed`, "the failure names the host")
+		})
+
+		t.Run("starts each process of the host that Spawn added in a new epoch", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Crash("node")
+				w.Restart("node")
+				expect.Equal(c, w.Pending(), []string{"store", "cache"}, "each process of the host takes its start")
+				expect.Equal(c, []uint64{w.Process("store").Epoch(), w.Process("cache").Epoch()}, []uint64{2, 2},
+					"the restart raises the epoch of each process of the host")
+			})
+		})
+
+		t.Run("leaves a process that stopped before the crash of its host stopped", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Deliver("cache", put{key: "k", reply: 9})
+				w.Step("cache")
+				w.Crash("node")
+				w.Restart("node")
+				expect.Equal(c, w.Pending(), []string{"store"}, "the restart starts the store alone")
+				expect.Equal(c, w.Process("cache").Epoch(), uint64(1), "the stopped cache keeps its epoch")
+			})
+		})
+
+		t.Run("leaves a process that an effect started crashed until an effect starts it again", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, starting())
+				w.Spawn("agent", newAgent)
+				w.Deliver("agent", place{name: "cell", token: 7})
+				drain(w)
+				w.Crash("agent")
+				w.Restart("agent")
+				expect.Equal(c, w.Pending(), []string{"agent"}, "the restart starts the agent alone")
+				w.Call(0, "cell", "Put", nil, nil, func(r uint64) event { return put{key: "k", value: "v", reply: r} })
+				got := w.History().Events()
+				assert.Length(c, got, 2, "the history has the invocation and the completion")
+				expect.ErrorIs(c, got[1].Error, sim.ErrCrashed, "the call to the crashed cell ends with its crash")
+				drain(w)
+				w.Deliver("agent", place{name: "cell", token: 8})
+				drain(w)
+				expect.Equal(c, w.Process("cell").Epoch(), uint64(2), "the launch starts the cell in a new epoch")
+			})
 		})
 
 		t.Run("opens a new incarnation of a crashed component in a new epoch", func(t *testing.T) {
@@ -887,7 +1259,7 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a paused process", func(t *testing.T) {
+		t.Run("fails the case for a paused host", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -895,11 +1267,11 @@ func TestWorld(t *testing.T) {
 				w.Pause("store")
 				w.Pause("store")
 			})
-			expect.Equal(t, got.Contract, `sim: the process "store" does not run unpaused`,
-				"the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" does not run unpaused`,
+				"the failure names the host")
 		})
 
-		t.Run("fails the case for a crashed process", func(t *testing.T) {
+		t.Run("fails the case for a crashed host", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -907,8 +1279,8 @@ func TestWorld(t *testing.T) {
 				w.Crash("store")
 				w.Pause("store")
 			})
-			expect.Equal(t, got.Contract, `sim: the process "store" does not run unpaused`,
-				"the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" does not run unpaused`,
+				"the failure names the host")
 		})
 
 		t.Run("blocks each call of the environment of a component until Resume", func(t *testing.T) {
@@ -952,11 +1324,27 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a process that is not paused", func(t *testing.T) {
+		t.Run("fails the case for a host that is not paused", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) { single(c).Resume("store") })
-			expect.Equal(t, got.Contract, `sim: the process "store" is not paused`, "the failure names the process")
+			expect.Equal(t, got.Contract, `sim: the host "store" is not paused`, "the failure names the host")
+		})
+
+		t.Run("ends the pause of the host of a component after the stop of the world", func(t *testing.T) {
+			t.Parallel()
+			var faults []string
+			inBubble(t, still, func(c *prop.Case, first bool) {
+				w, _, _ := cells(c)
+				w.Pause("a")
+				w.Stop()
+				w.Resume("a")
+				if first {
+					faults = w.Faults()
+				}
+			})
+
+			assert.Empty(t, faults, "no pause is in force after the resume")
 		})
 	})
 
@@ -1015,6 +1403,17 @@ func TestWorld(t *testing.T) {
 				w.Crash("store")
 				w.Stop()
 				assert.Length(c, w.Log(), 1, "a crashed process takes no stop event")
+			})
+		})
+
+		t.Run("leaves a crashed host crashed", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				w.Crash("store")
+				w.Stop()
+				expect.Equal(c, w.Faults(), []string{"crash:store"}, "the crash of the host is in force after the stop")
 			})
 		})
 

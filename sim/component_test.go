@@ -84,6 +84,17 @@ func TestComponent(t *testing.T) {
 			assert.Equal(t, at, time.Second, "the world advances by the bound while the open sleeps")
 		})
 
+		t.Run("fails the case for a name that a host has", func(t *testing.T) {
+			t.Parallel()
+
+			got := failure(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				w.AddHost("a")
+				sim.SpawnComponent(w, "a", openCell)
+			})
+			assert.Equal(t, got.Contract, `sim: the world has a host named "a"`, "the failure names the host")
+		})
+
 		t.Run("fails the case for an open that does not return within the bound of a component", func(t *testing.T) {
 			t.Parallel()
 

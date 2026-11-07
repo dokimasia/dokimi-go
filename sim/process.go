@@ -9,25 +9,24 @@ import (
 	"time"
 )
 
-// Process is one process of a world: its name, its epoch, its clock, its
+// Process is one process of a world: its name, its host, its epoch, its
 // machine and its dependencies, or the component that it runs. The clock of a
-// component process is the clock of the run without a drift, and the code of
-// the component reads the clock of its host. replaced marks a component
-// process that a disk replacement crashed, until its restart.
+// process is the clock of its host. The clock of the host of a component is
+// the clock of the run without a drift, and the code of the component reads
+// the clock of its host of go.dokimi.dev/host.
 type Process[E, F any] struct {
+	host       *Host[E, F]
 	machine    Machine[E, F]
-	clock      *Clock
 	newMachine func(clock *Clock) Machine[E, F]
 	comp       *component
 	name       string
 	queue      []queued[E]
 	deps       []any
-	strobe     strobe
 	epoch      uint64
 	state      state
-	paused     bool
-	full       bool
-	replaced   bool
+	// started marks a process that an effect started, which a restart of its
+	// host does not start again.
+	started bool
 }
 
 // queued is an event that waits for its process, with the epoch of the
@@ -46,16 +45,18 @@ type strobe struct {
 	left       int
 }
 
-// state is the state of a process.
+// state is the state of a process or of a host.
 type state uint8
 
 const (
-	// running is a process that takes events, while it is not paused.
+	// running is a process that takes events, while its host is not paused,
+	// and a host that runs.
 	running state = iota
 	// stopped is a process that took the stop event, or whose machine stopped
-	// itself.
+	// itself, and a host after the stop of the world.
 	stopped
-	// crashed is a process whose machine is gone until a restart.
+	// crashed is a process whose machine is gone until a restart, and a host
+	// that crashed.
 	crashed
 )
 
@@ -65,11 +66,12 @@ func (p *Process[E, F]) Name() string { return p.name }
 // Epoch returns the epoch of the process, from 1, which each restart raises.
 func (p *Process[E, F]) Epoch() uint64 { return p.epoch }
 
-// Clock returns the clock of the process.
-func (p *Process[E, F]) Clock() *Clock { return p.clock }
+// Clock returns the clock of the process, which is the clock of its host.
+func (p *Process[E, F]) Clock() *Clock { return p.host.clock }
 
-// runs reports whether the process takes events: it runs and is not paused.
-func (p *Process[E, F]) runs() bool { return p.state == running && !p.paused }
+// runs reports whether the process takes events: it runs, and its host is not
+// paused.
+func (p *Process[E, F]) runs() bool { return p.state == running && !p.host.paused }
 
 // Dependency returns the first dependency of the process p of the type T,
 // such as the double of a store that the performer of an effect calls. Spawn

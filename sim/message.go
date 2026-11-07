@@ -49,10 +49,7 @@ type await[E, F any] struct {
 // name that no process has.
 func (w *World[E, F]) send(p *Process[E, F], f F, m *Message[E]) {
 	to := w.named(m.To)
-	a := &await[E, F]{result: m.Result, process: p, epoch: p.epoch}
-	if d := w.a.Timeout(f); d > 0 {
-		w.at(p, d, func() { w.expire(a) })
-	}
+	a := w.awaiting(p, f, m.Result)
 	switch {
 	case w.cut(p, to):
 	case to.state == crashed:
@@ -62,6 +59,16 @@ func (w *World[E, F]) send(p *Process[E, F], f F, m *Message[E]) {
 	default:
 		w.request(to, m.Call, a)
 	}
+}
+
+// awaiting returns the await of the result of the effect f of the process p,
+// whose event result builds, and expires it at the timeout of f.
+func (w *World[E, F]) awaiting(p *Process[E, F], f F, result func(value any, err error) E) *await[E, F] {
+	a := &await[E, F]{result: result, process: p, epoch: p.epoch}
+	if d := w.a.Timeout(f); d > 0 {
+		w.at(p, d, func() { w.expire(a) })
+	}
+	return a
 }
 
 // request queues the call that build builds from a new reply token for the

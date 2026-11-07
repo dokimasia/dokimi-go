@@ -54,14 +54,17 @@ var kinds = []Fault{
 type Simulation[E, F, S any] struct {
 	// Anatomy is how the world reads the events and the effects.
 	Anatomy Anatomy[E, F]
-	// System builds the processes of each world and their dependencies.
+	// System builds the processes of each world and their dependencies from
+	// inputs that it takes from the case of the world. A scenario runs the
+	// simplest case, so its system takes the simplest choice of each input.
 	System System[E, F]
 	// Spec is the sequential specification of the calls of the clients.
 	Spec history.Spec[S]
 	// Fingerprint returns a hash of the state of the system. A nil
 	// Fingerprint observes the checksum of the log alone.
 	Fingerprint func(w *World[E, F]) uint64
-	// Tolerate bounds the faults in force at once, by their kind.
+	// Tolerate bounds the faults in force at once, by their kind. A fault of
+	// a host counts once for the host, which can run several processes.
 	Tolerate map[Fault]int
 	// Require is the share of the cases in which each kind of fault strikes.
 	Require map[Fault]float64
@@ -120,7 +123,9 @@ type Convergence[E, F any] struct {
 	Within    time.Duration
 }
 
-// Scenario is a fixed run, whose events the crash points cover.
+// Scenario is a fixed run, whose events the crash points cover. Each run of a
+// scenario is the simplest case of the property engine, whose draws take the
+// simplest value of each generator.
 type Scenario[E, F any] struct {
 	Run  func(w *World[E, F])
 	Name string
@@ -160,21 +165,21 @@ const (
 
 // Run runs one case of s on a new world: the active phase of the actions and
 // the faults as the steps of a machine of the package stateful of the assert
-// library, then the recovery and the final phase. After every step it waits
-// for the quiescence of the components and checks the rules and the
-// invariants. After every step at which no client has an open call, it also
-// checks the history against the spec, partitioned by the keys of the calls,
-// continuing the searches of the check before it. Once the final phase
+// library, then the recovery and the final phase. It checks the rules against
+// each step of a machine before the world performs the effects of the step.
+// After every step it waits for the quiescence of the components and checks
+// the invariants. After every step at which no client has an open call, it
+// also checks the history against the spec, partitioned by the keys of the
+// calls, continuing the searches of the check before it. Once the final phase
 // ends, it checks the convergences, the whole history against the spec and
 // its isolation. A history that the checker cannot decide within its budget
 // gives no verdict: it ends the checks of the history against the spec
 // without a failure, and Run passes the label undecided to the case. The
 // machine has no spec, so no check of the history puts every call into one
 // partition. Run passes the name of each action that it takes to the case as
-// a label. At the end of
-// the case, also after a failure, it crashes each component that runs by a
-// process crash. No goroutine of a component then runs after the end of its
-// case.
+// a label. At the end of the case, also after a failure, it crashes each
+// component that runs by a process crash. No goroutine of a component then
+// runs after the end of its case.
 func Run[E, F, S any](c *prop.Case, s Simulation[E, F, S]) {
 	r := begin(c, s)
 	stateful.Steps(c, stateful.Machine[struct{}]{
@@ -186,6 +191,11 @@ func Run[E, F, S any](c *prop.Case, s Simulation[E, F, S]) {
 // confirmEvery is the count of the passing cases of Test after which it
 // replays a case to check that the run is deterministic.
 const confirmEvery = 16
+
+// simplest is the replay token of a case without recorded choices, in the
+// format of the property engine of the assert library. A replay of the token
+// takes the simplest value of each draw.
+const simplest = "prop1:"
 
 // Test runs the property of s on tb over random runs, with the shares of the
 // faults that s requires, and then the crash points of each scenario of s. It
@@ -267,7 +277,7 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 				sc.Run(r.w)
 				r.w.Stop()
 				r.check()
-			}, append(slices.Clip(opts), prop.Cases(1))...)
+			}, append(slices.Clip(opts), prop.Replay(simplest))...)
 		}
 	})
 	first := got[0]
@@ -323,7 +333,7 @@ func scenario[E, F, S any](tb assert.TB, s Simulation[E, F, S], sc Scenario[E, F
 		r.check()
 		r.checkHistory()
 		steps = r.w.steps
-	}, append(s.around(), prop.Cases(1), prop.Store(""))...)
+	}, append(s.around(), prop.Replay(simplest), prop.Store(""))...)
 	return steps
 }
 
@@ -356,9 +366,8 @@ const (
 )
 
 // stepped returns the action a, whose run the settle of the components, the
-// check of the rules and the invariants where check is set, and the check of
-// the history follow. The run checks the history only once no client has an
-// open call.
+// check of the invariants where check is set, and the check of the history
+// follow. The run checks the history only once no client has an open call.
 func (r *run[E, F, S]) stepped(a stateful.Action[struct{}], check bool) stateful.Action[struct{}] {
 	run := a.Run
 	a.Run = func(c *prop.Case, client int, in any) {
@@ -427,10 +436,10 @@ func begin[E, F, S any](c *prop.Case, s Simulation[E, F, S]) *run[E, F, S] {
 		w.sched = stateful.NewScheduler(c, stateful.Uniform())
 	}
 	r := &run[E, F, S]{c: c, w: w, pick: newPicker[E, F](c, s.Strategy, pickLimit), s: s}
-	w.after = r.check
+	w.after, w.judge = r.check, r.checkRules
 	c.Cleanup(w.shutdown)
 	c.Cleanup(r.report)
-	s.System(w)
+	s.System(c)(w)
 	return r
 }
 
@@ -521,7 +530,7 @@ func fault[I any](
 // and the advance of time, the cancel of a call, the faults within the
 // bounds of Tolerate and their ends, and the actions of the consumer that are
 // not final. The settle of the components and the checks follow each action,
-// and a delivery checks the rules and the invariants through its step. A
+// and a delivery checks the invariants through its step. A
 // world with a component advances by 1 µs to 10 s while no machine has a
 // timer, and cancels a call of a component without the cancelled event of
 // the anatomy.
@@ -632,14 +641,22 @@ func (r *run[E, F, S]) settleDown() {
 	r.c.Fatalf("sim: the system takes more than %d steps to settle", settleLimit)
 }
 
-// check observes the checksum and the fingerprint, and checks each rule and
-// each invariant. It fails the case for a rule whose probe has no judge.
+// check observes the checksum and the fingerprint, and checks each
+// invariant.
 func (r *run[E, F, S]) check() {
-	log := r.w.Log()
 	r.c.Observe(r.w.Checksum())
 	if r.s.Fingerprint != nil {
 		r.c.Observe(r.s.Fingerprint(r.w))
 	}
+	for _, inv := range r.s.Invariants {
+		inv.Check(&Check{Case: r.c, statement: inv.Statement}, r.w)
+	}
+}
+
+// checkRules checks each rule against the log, once the world has recorded a
+// step of a machine. It fails the case for a rule whose probe has no judge.
+func (r *run[E, F, S]) checkRules() {
+	log := r.w.Log()
 	for _, rule := range r.s.Rules {
 		problems, known := judge(rule.Probe, r.s.Anatomy, log)
 		if !known {
@@ -647,17 +664,14 @@ func (r *run[E, F, S]) check() {
 		}
 		assert.Empty(r.c, problems, rule.Statement)
 	}
-	for _, inv := range r.s.Invariants {
-		inv.Check(&Check{Case: r.c, statement: inv.Statement}, r.w)
-	}
 }
 
 // settle runs the recovery and the final phase once the steps of the active
 // phase have ended: it ends each fault in force, takes each final action of
 // the consumer that is available once, in the order of the actions, and
-// settles. It then checks each convergence, stops the world, checks the rules
-// and the invariants once more, and checks the history against the spec,
-// partitioned by the keys of the calls, and its isolation.
+// settles. It then checks each convergence, stops the world, checks the
+// invariants once more, and checks the history against the spec, partitioned
+// by the keys of the calls, and its isolation.
 func (r *run[E, F, S]) settle() {
 	r.w.Recover()
 	for _, a := range r.s.Actions {
@@ -721,15 +735,19 @@ func (r *run[E, F, S]) nextOf(from int, live []int) (int, bool) {
 }
 
 // faults returns the action of each fault that Tolerate names, and the end
-// of each fault that lasts, in the order of kinds.
+// of each fault that lasts, in the order of kinds. A fault of a host chooses
+// its target among the hosts, and a fault of a message among the processes.
 func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	w := r.w
 	within := func(kind Fault) bool { return r.inForce(kind) < r.s.Tolerate[kind] }
 	process := func(match func(p *Process[E, F]) bool) func(c *prop.Case) string {
 		return func(c *prop.Case) string { return choose(c, r.processes(match), "process") }
 	}
-	some := func(match func(p *Process[E, F]) bool) func() bool {
-		return func() bool { return len(r.processes(match)) > 0 }
+	host := func(match func(h *Host[E, F]) bool) func(c *prop.Case) string {
+		return func(c *prop.Case) string { return choose(c, r.hosts(match), "process") }
+	}
+	some := func(match func(h *Host[E, F]) bool) func() bool {
+		return func() bool { return len(r.hosts(match)) > 0 }
 	}
 	target := func(match func(d *dependency[E, F]) bool) func(c *prop.Case) string {
 		return func(c *prop.Case) string { return choose(c, r.dependencies(match), "dependency") }
@@ -737,14 +755,16 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	tolerated := func(kind Fault, match func(d *dependency[E, F]) bool) func() bool {
 		return func() bool { return within(kind) && len(r.dependencies(match)) > 0 }
 	}
-	alive := func(p *Process[E, F]) bool { return p.state == running }
-	up := func(p *Process[E, F]) bool {
-		return p.state == running && !p.paused && (p.comp == nil || w.blocking())
+	alive := func(h *Host[E, F]) bool {
+		return slices.ContainsFunc(h.procs, func(p *Process[E, F]) bool { return p.state == running })
 	}
-	machine := func(p *Process[E, F]) bool { return p.comp == nil }
-	hosted := func(p *Process[E, F]) bool { return p.comp != nil && p.state == running }
-	down := func(p *Process[E, F]) bool { return p.state == crashed }
-	asleep := func(p *Process[E, F]) bool { return p.paused }
+	up := func(h *Host[E, F]) bool {
+		return h.state == running && !h.paused && (h.component() == nil || w.blocking())
+	}
+	machine := func(h *Host[E, F]) bool { return h.component() == nil }
+	hosted := func(h *Host[E, F]) bool { return h.component() != nil && h.state == running }
+	down := func(h *Host[E, F]) bool { return h.state == crashed }
+	asleep := func(h *Host[E, F]) bool { return h.paused }
 	seen := func(*dependency[E, F]) bool { return true }
 	calm := func(d *dependency[E, F]) bool { return !d.outage }
 	fast := func(d *dependency[E, F]) bool { return !d.slow }
@@ -759,7 +779,7 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	// not match when it strikes.
 	struck := func(match func(p *Process[E, F]) bool) (func() bool, func(c *prop.Case) string) {
 		if w.network == nil {
-			return some(match), process(match)
+			return func() bool { return len(r.processes(match)) > 0 }, process(match)
 		}
 		return spawned, process(func(*Process[E, F]) bool { return true })
 	}
@@ -767,13 +787,13 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	behindOn, behindTo := struck(w.behind)
 	byKind := map[Fault][]stateful.Action[struct{}]{
 		FaultCrash: {
-			fault(string(FaultCrash), func() bool { return within(FaultCrash) && some(alive)() }, process(alive),
+			fault(string(FaultCrash), func() bool { return within(FaultCrash) && some(alive)() }, host(alive),
 				w.Crash),
 		},
-		FaultRestart: {fault(string(FaultRestart), some(down), process(down), w.Restart)},
+		FaultRestart: {fault(string(FaultRestart), some(down), host(down), w.Restart)},
 		FaultPause: {
-			fault(string(FaultPause), func() bool { return within(FaultPause) && some(up)() }, process(up), w.Pause),
-			act("resume", some(asleep), process(asleep), w.Resume),
+			fault(string(FaultPause), func() bool { return within(FaultPause) && some(up)() }, host(up), w.Pause),
+			act("resume", some(asleep), host(asleep), w.Resume),
 		},
 		FaultPartition: {
 			fault(string(FaultPartition), func() bool { return w.sides == nil && spawned() }, r.sides,
@@ -830,7 +850,7 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 		FaultFullDisk: {
 			fault(string(FaultFullDisk), func() bool { return within(FaultFullDisk) && some(roomy[E, F])() }, r.fill,
 				func(f filling) { w.Fill(f.name, f.n) }),
-			act("restore-disk", some(full[E, F]), process(full[E, F]), w.RestoreDisk),
+			act("restore-disk", some(full[E, F]), host(full[E, F]), w.RestoreDisk),
 		},
 		FaultReset: {
 			fault(string(FaultReset), func() bool { return len(r.links()) > 0 },
@@ -850,7 +870,7 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 		},
 		FaultDiskReplacement: {
 			fault(string(FaultDiskReplacement), func() bool { return within(FaultDiskReplacement) && some(hosted)() },
-				process(hosted), w.ReplaceDisk),
+				host(hosted), w.ReplaceDisk),
 		},
 	}
 	var actions []stateful.Action[struct{}]
@@ -862,16 +882,16 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	return actions
 }
 
-// The processes that the faults of media strike: stored runs over media in
-// memory or on the disk of a host, filed has a file with a byte on its disks,
-// roomy has disks that are not full, and full has full disks.
-func stored[E, F any](p *Process[E, F]) bool { return p.state == running && len(disks(p)) > 0 }
+// The hosts that the faults of media strike: stored runs over media in memory
+// or on the disk of a host of a component, filed has a file with a byte on its
+// disks, roomy has disks that are not full, and full has full disks.
+func stored[E, F any](h *Host[E, F]) bool { return h.state == running && len(hostDisks(h)) > 0 }
 
-func filed[E, F any](p *Process[E, F]) bool { return len(filesOf(p)) > 0 }
+func filed[E, F any](h *Host[E, F]) bool { return len(filesOf(h)) > 0 }
 
-func roomy[E, F any](p *Process[E, F]) bool { return len(disks(p)) > 0 && !p.full }
+func roomy[E, F any](h *Host[E, F]) bool { return len(hostDisks(h)) > 0 && !h.full }
 
-func full[E, F any](p *Process[E, F]) bool { return p.full }
+func full[E, F any](h *Host[E, F]) bool { return h.full }
 
 // links returns the link between each two components, in the order of their
 // spawns, and fastLinks the links that no slow-link keeps slow.
@@ -909,36 +929,36 @@ func (r *run[E, F, S]) slowing(c *prop.Case) slowing {
 	}
 }
 
-// tearing is the input of a torn write: a process and the bytes that its
-// torn write keeps.
+// tearing is the input of a torn write: a host and the bytes that its torn
+// write keeps.
 type tearing struct {
 	name string
 	n    int
 }
 
-// tear returns the input of a torn write that the case chooses: a process
-// that runs over media in memory, and the bytes that the write keeps.
+// tear returns the input of a torn write that the case chooses: a host that
+// runs over media in memory, and the bytes that the write keeps.
 func (r *run[E, F, S]) tear(c *prop.Case) tearing {
-	return tearing{name: choose(c, r.processes(stored[E, F]), "process"), n: c.Draw(prop.Integer(0, maxTear), "tear")}
+	return tearing{name: choose(c, r.hosts(stored[E, F]), "process"), n: c.Draw(prop.Integer(0, maxTear), "tear")}
 }
 
-// corrupting is the input of a corruption: a process, a file of its media and
+// corrupting is the input of a corruption: a host, a file of its media and
 // the offset of the byte whose bit flips.
 type corrupting struct {
 	name, file string
 	offset     int64
 }
 
-// corruption returns the input of a corruption that the case chooses: a
-// process with a file on its media, the file, and an offset in it.
+// corruption returns the input of a corruption that the case chooses: a host
+// with a file on its media, the file, and an offset in it.
 func (r *run[E, F, S]) corruption(c *prop.Case) corrupting {
-	name := choose(c, r.processes(filed[E, F]), "process")
-	f := choose(c, filesOf(r.w.named(name)), "file")
+	name := choose(c, r.hosts(filed[E, F]), "process")
+	f := choose(c, filesOf(r.w.hostNamed(name)), "file")
 	return corrupting{name: name, file: f.name, offset: c.Draw(prop.Integer(0, f.size-1), "offset")}
 }
 
 // sharedCorrupting is the input of a corruption in a run with a component: a
-// process with media, the share of its files with data and the share of the
+// host with media, the share of its files with data and the share of the
 // size of the file that locate the byte whose bit flips.
 type sharedCorrupting struct {
 	name         string
@@ -946,29 +966,29 @@ type sharedCorrupting struct {
 }
 
 // corruptionAction returns the action of a corruption. A run without a
-// component chooses a process with a file on its media, the file and an
-// offset in it. A run with a component chooses a process with media and the
-// shares that locate the byte, because the files of a component depend on
-// the order of its goroutines. Such a corruption takes no effect where the
-// media of the process have no file with data when it strikes.
+// component chooses a host with a file on its media, the file and an offset in
+// it. A run with a component chooses a host with media and the shares that
+// locate the byte, because the files of a component depend on the order of
+// its goroutines. Such a corruption takes no effect where the media of the
+// host have no file with data when it strikes.
 func (r *run[E, F, S]) corruptionAction() stateful.Action[struct{}] {
 	w := r.w
 	if w.network == nil {
-		return fault(string(FaultCorruption), func() bool { return len(r.processes(filed[E, F])) > 0 }, r.corruption,
+		return fault(string(FaultCorruption), func() bool { return len(r.hosts(filed[E, F])) > 0 }, r.corruption,
 			func(k corrupting) { w.Corrupt(k.name, k.file, k.offset) })
 	}
 	// A component has the disk of its host, so a run with a component has a
-	// process with media.
-	disked := func(p *Process[E, F]) bool { return len(disks(p)) > 0 }
+	// host with media.
+	disked := func(h *Host[E, F]) bool { return len(hostDisks(h)) > 0 }
 	return fault(string(FaultCorruption), func() bool { return true },
 		func(c *prop.Case) sharedCorrupting {
 			return sharedCorrupting{
-				name: choose(c, r.processes(disked), "process"), file: c.Draw(prop.Float(0.0, 1.0), "file"),
+				name: choose(c, r.hosts(disked), "process"), file: c.Draw(prop.Float(0.0, 1.0), "file"),
 				offset: c.Draw(prop.Float(0.0, 1.0), "offset"),
 			}
 		},
 		func(k sharedCorrupting) {
-			files := filesOf(w.named(k.name))
+			files := filesOf(w.hostNamed(k.name))
 			if len(files) == 0 {
 				return
 			}
@@ -983,18 +1003,18 @@ func shareOf[N int | int64](share float64, n N) N {
 	return min(N(share*float64(n)), n-1)
 }
 
-// filling is the input of a fill: a process, and the bytes that its media
-// take before they refuse a write.
+// filling is the input of a fill: a host, and the bytes that its media take
+// before they refuse a write.
 type filling struct {
 	name string
 	n    int64
 }
 
-// fill returns the input of a fill that the case chooses: a process with
-// media that are not full, and the bytes that they take.
+// fill returns the input of a fill that the case chooses: a host with media
+// that are not full, and the bytes that they take.
 func (r *run[E, F, S]) fill(c *prop.Case) filling {
 	return filling{
-		name: choose(c, r.processes(roomy[E, F]), "process"),
+		name: choose(c, r.hosts(roomy[E, F]), "process"),
 		n:    c.Draw(prop.Integer[int64](0, maxFill), "fill"),
 	}
 }
@@ -1005,11 +1025,12 @@ type file struct {
 	size int64
 }
 
-// filesOf returns each file with a byte on the media of p, from the root of
-// each medium down and in the order of the names in each directory.
-func filesOf[E, F any](p *Process[E, F]) []file {
+// filesOf returns each file with a byte on the media of the processes of h,
+// from the root of each medium down and in the order of the names in each
+// directory.
+func filesOf[E, F any](h *Host[E, F]) []file {
 	var out []file
-	for _, m := range disks(p) {
+	for _, m := range hostDisks(h) {
 		for dirs := []string{"."}; len(dirs) > 0; dirs = dirs[1:] {
 			entries, _ := m.ReadDir(dirs[0])
 			for _, e := range entries {
@@ -1040,17 +1061,17 @@ type strobing struct {
 	steps int
 }
 
-// jump returns the input of a jump that the case chooses: a process and an
+// jump returns the input of a jump that the case chooses: a host and an
 // amount.
 func (r *run[E, F, S]) jump(c *prop.Case) jump {
 	return jump{name: choose(c, r.names(), "process"), d: c.Draw(prop.Duration(-maxJump, maxJump), "jump")}
 }
 
-// strobe returns the input of a strobe that the case chooses: a process, two
-// offsets and the steps of the strobe.
+// strobe returns the input of a strobe that the case chooses: a host of
+// machines, two offsets and the steps of the strobe.
 func (r *run[E, F, S]) strobe(c *prop.Case) strobing {
 	return strobing{
-		name:  choose(c, r.processes(func(p *Process[E, F]) bool { return p.comp == nil }), "process"),
+		name:  choose(c, r.hosts(func(h *Host[E, F]) bool { return h.component() == nil }), "process"),
 		a:     c.Draw(prop.Duration(-maxJump, maxJump), "strobe.a"),
 		b:     c.Draw(prop.Duration(-maxJump, maxJump), "strobe.b"),
 		steps: c.Draw(prop.Integer(1, maxStrobe), "strobe.steps"),
@@ -1081,9 +1102,21 @@ func (r *run[E, F, S]) processes(match func(p *Process[E, F]) bool) []string {
 	return out
 }
 
-// names returns the names of the processes in the order of their spawns.
+// hosts returns the names of the hosts that match, in the order of their
+// additions.
+func (r *run[E, F, S]) hosts(match func(h *Host[E, F]) bool) []string {
+	var out []string
+	for _, h := range r.w.hosts {
+		if match(h) {
+			out = append(out, h.name)
+		}
+	}
+	return out
+}
+
+// names returns the names of the hosts in the order of their additions.
 func (r *run[E, F, S]) names() []string {
-	return r.processes(func(*Process[E, F]) bool { return true })
+	return r.hosts(func(*Host[E, F]) bool { return true })
 }
 
 // dependencies returns the names of the dependencies that the world has seen
