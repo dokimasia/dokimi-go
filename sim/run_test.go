@@ -983,12 +983,10 @@ func TestRun(t *testing.T) {
 			s.History = []history.Option{history.Budget(1)}
 			r := &recorded{Recorder: assert.NewRecorder(), t: t}
 
-			sets := cs.runCase(r, s, scriptOf(opening(false), set(0, "a"), set(1, "a"), set(0, "b")))
+			sets := cs.runCase(r, s, scriptOf(opening(false), set(0, "a"), set(1, "a"), set(0, "b")),
+				prop.Require("undecided", 0.01))
 
-			failures := r.Failures()
-			assert.NotEmpty(t, failures, "the check after the final phase fails undecided")
-			inner, _ := failures[0].CaseFailure()
-			expect.Equal(t, inner.Detail["outcome"], any(history.Undecided), "the final check is undecided")
+			expect.Empty(t, r.Failures(), "a history that its checker cannot decide fails no case, and labels it")
 			expect.Equal(t, sets[0], 3, "each Set runs after the undecided check")
 		})
 
@@ -1477,6 +1475,17 @@ func TestRun(t *testing.T) {
 				"the scenario fails at the check of its history")
 		})
 
+		t.Run("passes a scenario whose history its checker cannot decide within the budget", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Actions = nil
+			s.Spec = rejecting
+			s.History = []history.Option{history.Budget(1)}
+			s.Scenarios = []sim.Scenario[event, effect]{{Name: "puts", Run: putTwiceOnA}}
+			sim.Test(t, s)
+		})
+
 		t.Run("fails at a scenario without a crash", func(t *testing.T) {
 			t.Parallel()
 
@@ -1656,6 +1665,17 @@ func TestRun(t *testing.T) {
 // putOnA is a scenario whose client 0 puts a key on the store a.
 func putOnA(w *sim.World[event, effect]) {
 	w.Call(0, "a", "Put", nil, nil, func(r uint64) event { return put{key: "k", value: "v", reply: r} })
+	for pending := w.Pending(); len(pending) > 0; pending = w.Pending() {
+		w.Step(pending[0])
+	}
+}
+
+// putTwiceOnA is the scenario of two concurrent Puts on the store a, by the
+// clients 0 and 1, whose history the checker needs more than one step to
+// search.
+func putTwiceOnA(w *sim.World[event, effect]) {
+	w.Call(0, "a", "Put", nil, nil, func(r uint64) event { return put{key: "k", value: "v", reply: r} })
+	w.Call(1, "a", "Put", nil, nil, func(r uint64) event { return put{key: "k", value: "w", reply: r} })
 	for pending := w.Pending(); len(pending) > 0; pending = w.Pending() {
 		w.Step(pending[0])
 	}

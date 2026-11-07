@@ -816,22 +816,23 @@ func opening(blocking bool) []entry {
 }
 
 // runCase runs the case of the draws first, in a run of the property engine
-// of s on the seat, and returns the count of the Sets of each case.
+// of s on the seat with the options more, and returns the count of the Sets
+// of each case.
 func (cs *cellSet) runCase(seat assert.TB, s sim.Simulation[sim.None, sim.None, []history.Operation],
-	draws string,
+	draws string, more ...prop.Option,
 ) []int {
 	seat.Helper()
-	runScript(seat, s, draws)
+	runScript(seat, s, draws, more...)
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	return slices.Clone(cs.sets)
 }
 
 // runScript runs the case of the draws first, in a run of the property engine
-// of s on the seat, inside the environment of s.
-func runScript[E, F, S any](seat assert.TB, s sim.Simulation[E, F, S], draws string) {
+// of s on the seat with the options more, inside the environment of s.
+func runScript[E, F, S any](seat assert.TB, s sim.Simulation[E, F, S], draws string, more ...prop.Option) {
 	seat.Helper()
-	opts := []prop.Option{prop.Draws(draws), prop.Cases(1), prop.Store("")}
+	opts := append([]prop.Option{prop.Draws(draws), prop.Cases(1), prop.Store("")}, more...)
 	if s.Around != nil {
 		opts = append(opts, prop.Around(s.Around))
 	}

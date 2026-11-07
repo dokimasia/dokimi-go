@@ -163,12 +163,14 @@ const (
 // library, then the recovery and the final phase. After every step it waits
 // for the quiescence of the components, checks the rules and the invariants,
 // and checks the history against the spec, partitioned by the keys of the
-// calls, continuing the searches of the check before it. A history that the
-// checker cannot decide within its budget ends the checks of the history
-// after the steps. Once the final phase ends, it checks the convergences, the
-// whole history against the spec and its isolation. The machine has no spec,
-// so no check of the history puts every call into one partition. Run passes
-// the name of each action that it takes to the case as a label. At the end of
+// calls, continuing the searches of the check before it. Once the final phase
+// ends, it checks the convergences, the whole history against the spec and
+// its isolation. A history that the checker cannot decide within its budget
+// gives no verdict: it ends the checks of the history against the spec
+// without a failure, and Run passes the label undecided to the case. The
+// machine has no spec, so no check of the history puts every call into one
+// partition. Run passes the name of each action that it takes to the case as
+// a label. At the end of
 // the case, also after a failure, it crashes each component that runs by a
 // process crash. No goroutine of a component then runs after the end of its
 // case.
@@ -318,9 +320,7 @@ func scenario[E, F, S any](tb assert.TB, s Simulation[E, F, S], sc Scenario[E, F
 		sc.Run(r.w)
 		r.w.Stop()
 		r.check()
-		if s.Spec.Next != nil {
-			history.Linearizable(c, r.w.History(), s.Spec, "the history of the calls of the clients is linearizable")
-		}
+		r.checkHistory()
 		steps = r.w.steps
 	}, append(s.around(), prop.Cases(1), prop.Store(""))...)
 	return steps
@@ -336,7 +336,7 @@ func seedOf(key string) uint64 {
 
 // run is one case of a simulation: its world and its strategy, and the
 // searches of the last check of the history. undecided reports a check that
-// the checker could not decide, which ends the checks after the steps.
+// the checker could not decide, which ends the checks of the history.
 type run[E, F, S any] struct {
 	c         *prop.Case
 	w         *World[E, F]
@@ -346,8 +346,13 @@ type run[E, F, S any] struct {
 	undecided bool
 }
 
-// linearizable is the statement of the checks of the history of a run.
-const linearizable = "the history of the calls of the clients is linearizable"
+// linearizable is the statement of the checks of the history of a run, and
+// undecidedLabel the label of a case whose history the checker could not
+// decide.
+const (
+	linearizable   = "the history of the calls of the clients is linearizable"
+	undecidedLabel = "undecided"
+)
 
 // stepped returns the action a, whose run the settle of the components, the
 // check of the rules and the invariants where check is set, and the check of
@@ -365,9 +370,11 @@ func (r *run[E, F, S]) stepped(a stateful.Action[struct{}], check bool) stateful
 	return a
 }
 
-// checkHistory checks the history of the case against the spec after a step,
-// continuing the searches of the check before it. A violation fails the case,
-// and a search that ends undecided ends the checks after the steps.
+// checkHistory checks the history of the case against the spec, continuing
+// the searches of the check before it: after a step, at the end of the final
+// phase and at the end of a scenario. A violation fails the case. A search
+// that ends undecided gives no verdict: it ends the checks of the history and
+// passes the label undecided to the case.
 func (r *run[E, F, S]) checkHistory() {
 	//dokimi:mutate-skip lcr-left: a check after an undecided one searches a longer history under the same budget and ends undecided too, so the flag saves its search alone
 	if r.s.Spec.Next == nil || r.undecided {
@@ -383,6 +390,7 @@ func (r *run[E, F, S]) checkHistory() {
 		if f.Detail[outcomeField] == history.Undecided {
 			//dokimi:mutate-skip sbr-delete: a check after an undecided one searches a longer history under the same budget and ends undecided too, so the flag saves its search alone
 			r.undecided = true
+			r.c.Classify(undecidedLabel)
 			return
 		}
 		r.c.Report(f, true)
@@ -647,10 +655,8 @@ func (r *run[E, F, S]) settle() {
 	}
 	r.w.Stop()
 	r.check()
+	r.checkHistory()
 	h := r.w.History()
-	if r.s.Spec.Next != nil {
-		history.Linearizable(r.c, h, r.s.Spec, linearizable, r.checks()...)
-	}
 	switch r.s.Isolation {
 	case Serializable:
 		history.Serializable(r.c, h, "the transactions of the clients are serializable")
