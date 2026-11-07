@@ -1,5 +1,12 @@
 # go.dokimi.dev/conform
 
+## 0.16.1
+
+### Patch Changes
+
+- 41eb868: Fix `probe.LinearizableHistory` and `probe.FaultyWorldHistory` to merge the orders of calls that leave equal references.
+- 41eb868: Fix `probe.FaultyWorldHistory` to check the history after each step without an open call and once after its last step.
+
 ## 0.16.0
 
 ### Minor Changes
