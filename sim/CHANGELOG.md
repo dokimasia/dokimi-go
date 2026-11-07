@@ -1,5 +1,13 @@
 # go.dokimi.dev/sim
 
+## 0.5.1
+
+### Patch Changes
+
+- d14d1ac: Fix `sim.Run` to check the history after each step without an open call.
+- Updated dependencies [41eb868]
+  - go.dokimi.dev/conform@0.16.1
+
 ## 0.5.0
 
 ### Minor Changes
