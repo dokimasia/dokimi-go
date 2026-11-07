@@ -82,9 +82,13 @@ func (i *Incarnation) Go(f func()) {
 // applies k to the disk:
 //
 //   - ProcessCrash calls medium.Memory.Kill, which keeps every write.
-//   - PowerLoss calls medium.Memory.CrashKeeping, with a count of the pending
-//     calls of each file and of each directory that the case chooses and
-//     that shrinks to 0, the crash state of a crash without a torn write.
+//   - PowerLoss calls medium.Memory.CrashKeeping with the shares of one list
+//     that the case chooses for the crash under the label keep. The crash
+//     takes the shares in the order of its calls of keep. A name keeps its
+//     share of its pending calls, rounded down: the share times one more
+//     than the count of its pending calls. A name past the end of the list
+//     keeps no pending call. The list shrinks to the empty list, the crash
+//     state of a crash without a torn write.
 //   - DiskReplacement gives the host a new empty disk.
 //
 // Crash then resets each connection of the incarnation and closes each of its
@@ -106,8 +110,14 @@ func (i *Incarnation) Crash(k Kill) {
 	case ProcessCrash, DiskReplacement:
 		i.disk.Kill()
 	case PowerLoss:
-		i.disk.CrashKeeping(func(name string, pending int) int {
-			return h.c.Draw(prop.Integer(0, pending), "keep."+name)
+		shares := h.c.Draw(prop.List(prop.Float(0.0, 1.0)), "keep")
+		i.disk.CrashKeeping(func(_ string, pending int) int {
+			if len(shares) == 0 {
+				return 0
+			}
+			share := shares[0]
+			shares = shares[1:]
+			return min(int(share*float64(pending+1)), pending)
 		})
 	}
 	h.crashed(k)

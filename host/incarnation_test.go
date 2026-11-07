@@ -21,10 +21,18 @@ import (
 	"go.dokimi.dev/medium"
 )
 
-// keepOne are the draws of a power loss that keeps one pending call of the
-// file a.
-const keepOne = `[{"label": "drift.node-1", "value": {"type": "int", "value": 0}},` +
-	`{"label": "keep.a", "value": {"type": "int", "value": 1}}]`
+// keepHalf are the draws of a power loss whose one share keeps one of the two
+// pending calls of the file a, and keepFirst those whose shares keep every
+// pending call of the first file and none of the second. keepOnce are those
+// whose one share keeps every pending call of the first file.
+const (
+	keepHalf = `[{"label": "drift.node-1", "value": {"type": "int", "value": 0}},` +
+		`{"label": "keep", "value": {"type": "list", "of": "float", "value": [0.5]}}]`
+	keepFirst = `[{"label": "drift.node-1", "value": {"type": "int", "value": 0}},` +
+		`{"label": "keep", "value": {"type": "list", "of": "float", "value": [1.0, 0.0]}}]`
+	keepOnce = `[{"label": "drift.node-1", "value": {"type": "int", "value": 0}},` +
+		`{"label": "keep", "value": {"type": "list", "of": "float", "value": [1.0]}}]`
+)
 
 func TestIncarnation(t *testing.T) {
 	t.Parallel()
@@ -95,10 +103,10 @@ func TestIncarnation(t *testing.T) {
 			assert.Equal(t, got, "abcd", "the page cache survives the crash of the process")
 		})
 
-		t.Run("keeps the pending calls that the case chooses at a power loss", func(t *testing.T) {
+		t.Run("keeps the share of the pending calls that the case chooses at a power loss", func(t *testing.T) {
 			t.Parallel()
 			var got string
-			inCase(t, keepOne, func(c *prop.Case, first bool) {
+			inCase(t, keepHalf, func(c *prop.Case, first bool) {
 				h, i, env := started(c)
 				pending(c, env.Disk(), "a", "ab", "cd")
 				i.Crash(host.PowerLoss)
@@ -107,7 +115,39 @@ func TestIncarnation(t *testing.T) {
 				}
 			})
 
-			assert.Equal(t, got, "ab", "the case keeps the first pending write")
+			assert.Equal(t, got, "ab", "the share of one half keeps the first of the two pending writes")
+		})
+
+		t.Run("takes the shares of a power loss in the order of the names", func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			inCase(t, keepFirst, func(c *prop.Case, first bool) {
+				h, i, env := started(c)
+				pending(c, env.Disk(), "a", "ab", "cd")
+				pending(c, env.Disk(), "b", "ef", "gh")
+				i.Crash(host.PowerLoss)
+				if content := []string{read(c, h.Disk(), "a"), read(c, h.Disk(), "b")}; first {
+					got = content
+				}
+			})
+
+			assert.Equal(t, got, []string{"abcd", ""}, "the first share keeps a, and the second drops b")
+		})
+
+		t.Run("keeps no pending call of a name past the end of the shares", func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			inCase(t, keepOnce, func(c *prop.Case, first bool) {
+				h, i, env := started(c)
+				pending(c, env.Disk(), "a", "ab", "cd")
+				pending(c, env.Disk(), "b", "ef", "gh")
+				i.Crash(host.PowerLoss)
+				if content := []string{read(c, h.Disk(), "a"), read(c, h.Disk(), "b")}; first {
+					got = content
+				}
+			})
+
+			assert.Equal(t, got, []string{"abcd", ""}, "the one share keeps a, and b has no share")
 		})
 
 		t.Run("drops every pending call at a power loss that keeps none", func(t *testing.T) {
