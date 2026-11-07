@@ -161,9 +161,10 @@ const (
 // Run runs one case of s on a new world: the active phase of the actions and
 // the faults as the steps of a machine of the package stateful of the assert
 // library, then the recovery and the final phase. After every step it waits
-// for the quiescence of the components, checks the rules and the invariants,
-// and checks the history against the spec, partitioned by the keys of the
-// calls, continuing the searches of the check before it. Once the final phase
+// for the quiescence of the components and checks the rules and the
+// invariants. After every step at which no client has an open call, it also
+// checks the history against the spec, partitioned by the keys of the calls,
+// continuing the searches of the check before it. Once the final phase
 // ends, it checks the convergences, the whole history against the spec and
 // its isolation. A history that the checker cannot decide within its budget
 // gives no verdict: it ends the checks of the history against the spec
@@ -356,7 +357,8 @@ const (
 
 // stepped returns the action a, whose run the settle of the components, the
 // check of the rules and the invariants where check is set, and the check of
-// the history follow.
+// the history follow. The run checks the history only once no client has an
+// open call.
 func (r *run[E, F, S]) stepped(a stateful.Action[struct{}], check bool) stateful.Action[struct{}] {
 	run := a.Run
 	a.Run = func(c *prop.Case, client int, in any) {
@@ -365,16 +367,18 @@ func (r *run[E, F, S]) stepped(a stateful.Action[struct{}], check bool) stateful
 		if check {
 			r.check()
 		}
-		r.checkHistory()
+		if len(r.w.callers()) == 0 {
+			r.checkHistory()
+		}
 	}
 	return a
 }
 
 // checkHistory checks the history of the case against the spec, continuing
-// the searches of the check before it: after a step, at the end of the final
-// phase and at the end of a scenario. A violation fails the case. A search
-// that ends undecided gives no verdict: it ends the checks of the history and
-// passes the label undecided to the case.
+// the searches of the check before it: after a step at which no client has an
+// open call, at the end of the final phase and at the end of a scenario. A
+// violation fails the case. A search that ends undecided gives no verdict: it
+// ends the checks of the history and passes the label undecided to the case.
 func (r *run[E, F, S]) checkHistory() {
 	//dokimi:mutate-skip lcr-left: a check after an undecided one searches a longer history under the same budget and ends undecided too, so the flag saves its search alone
 	if r.s.Spec.Next == nil || r.undecided {

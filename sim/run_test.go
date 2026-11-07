@@ -956,6 +956,28 @@ func TestRun(t *testing.T) {
 			expect.Equal(t, sets[0], 1, "the case ends at the Get, before the second Set")
 		})
 
+		t.Run("checks the history once no client has an open call", func(t *testing.T) {
+			t.Parallel()
+			var cs cellSet
+			s := cs.simulation()
+			s.System = cs.system(func(env *host.Env) *cell {
+				c := openCell(env)
+				c.forgets = true
+				return c
+			})
+			r := &recorded{Recorder: assert.NewRecorder(), t: t}
+
+			sets := cs.runCase(r, s, scriptOf(opening(false), parkAt(0), get(1, "a"), set(1, "b"),
+				stepOf("cancel", drawn("client", 0)), set(1, "b")))
+
+			failures := r.Failures()
+			assert.NotEmpty(t, failures, "the run fails")
+			inner, _ := failures[0].CaseFailure()
+			expect.Equal(t, inner.Contract, "the history of the calls of the clients is linearizable",
+				"the check of the history fails")
+			expect.Equal(t, sets[0], 1, "the case runs the first Set while the call parks, and ends at the cancel")
+		})
+
 		t.Run("ends the case at the step whose check of the history faults", func(t *testing.T) {
 			t.Parallel()
 			var cs cellSet
