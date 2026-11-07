@@ -73,18 +73,32 @@ func TestPool(t *testing.T) {
 				want: 7,
 			},
 			{
-				name: "takes the key at the index of the case at a cold pick of a hot pool",
+				name: "takes the key at the share of the case at a cold pick of a hot pool",
 				giveDraws: `[{"label": "keys", "value": {"type": "list", "of": "int", "value": [7, 8]}},` +
 					`{"label": "keys.hot", "value": {"type": "bool", "value": true}},` +
 					`{"label": "k.hot", "value": {"type": "bool", "value": false}},` +
-					`{"label": "k", "value": {"type": "int", "value": 1}}]`,
+					`{"label": "k", "value": {"type": "float", "value": 0.75}}]`,
 				want: 8,
 			},
 			{
-				name: "takes the key at the index of the case from a pool that is not hot",
+				name: "takes the key at the share of the case from a pool that is not hot",
 				giveDraws: `[{"label": "keys", "value": {"type": "list", "of": "int", "value": [7, 8]}},` +
 					`{"label": "keys.hot", "value": {"type": "bool", "value": false}},` +
-					`{"label": "k", "value": {"type": "int", "value": 1}}]`,
+					`{"label": "k", "value": {"type": "float", "value": 0.75}}]`,
+				want: 8,
+			},
+			{
+				name: "takes the first key at a share below the share of the second key",
+				giveDraws: `[{"label": "keys", "value": {"type": "list", "of": "int", "value": [7, 8]}},` +
+					`{"label": "keys.hot", "value": {"type": "bool", "value": false}},` +
+					`{"label": "k", "value": {"type": "float", "value": 0.25}}]`,
+				want: 7,
+			},
+			{
+				name: "takes the last key at the share 1",
+				giveDraws: `[{"label": "keys", "value": {"type": "list", "of": "int", "value": [7, 8]}},` +
+					`{"label": "keys.hot", "value": {"type": "bool", "value": false}},` +
+					`{"label": "k", "value": {"type": "float", "value": 1.0}}]`,
 				want: 8,
 			},
 		}
@@ -108,7 +122,7 @@ func TestPool(t *testing.T) {
 			t.Parallel()
 			draws := `[{"label": "keys", "value": {"type": "list", "of": "int", "value": [7]}},` +
 				`{"label": "keys.hot", "value": {"type": "bool", "value": false}},` +
-				`{"label": "k", "value": {"type": "int", "value": 1}}]`
+				`{"label": "k", "value": {"type": "float", "value": 0.75}}]`
 
 			got := firstOf(t, draws, func(c *prop.Case) int {
 				p := probe.NewPool(c, keysOf, "keys")

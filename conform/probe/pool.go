@@ -33,13 +33,20 @@ func NewPool[T any](c *prop.Case, g prop.Generator[[]T], label string) *Pool[T] 
 // Pick returns a key of the pool, as a choice of the case under label. It
 // follows the hotspot distribution of YCSB with a hot set of one key: a pick
 // from a hot pool takes the first key in half of its picks, a choice under the
-// label with the suffix .hot. Every other pick takes the key at an index that
-// the case chooses, which shrinks to the first key.
+// label with the suffix .hot. Every other pick takes the key at a share of the
+// pool that the case chooses, which shrinks to the first key. So the bounds of
+// the choices do not depend on the keys that the calls produced.
 func (p *Pool[T]) Pick(c *prop.Case, label string) T {
 	if p.hot && c.Draw(prop.Boolean(), label+".hot") {
 		return p.keys[0]
 	}
-	return p.keys[c.Draw(prop.Integer(0, len(p.keys)-1), label)]
+	return p.keys[shareOf(c.Draw(prop.Float(0.0, 1.0), label), len(p.keys))]
+}
+
+// shareOf returns the index at the share in [0, 1] of n items, at most the
+// last index. n is at least 1.
+func shareOf[N int | int64](share float64, n N) N {
+	return min(N(share*float64(n)), n-1)
 }
 
 // Add adds the key v, which a call produced.

@@ -490,7 +490,8 @@ var (
 type entry map[string]any
 
 // drawn returns the entry of a draw of the value under the label, with the
-// typed literal of a bool, an int, a float64, a string or a list of strings.
+// typed literal of a bool, an int, a float64, a string, a list of float64 or
+// a list of strings.
 func drawn(label string, value any) entry {
 	literal := map[string]any{"value": value}
 	switch value.(type) {
@@ -502,6 +503,8 @@ func drawn(label string, value any) entry {
 		literal["type"] = "float"
 	case string:
 		literal["type"] = "string"
+	case []float64:
+		literal["type"], literal["of"] = "list", "float"
 	default:
 		literal["type"], literal["of"] = "list", "string"
 	}
@@ -539,20 +542,27 @@ func stepOf(action string, draws ...entry) []entry {
 }
 
 // put returns the step of a Put of the value under the first key of the pool,
-// on the idle client at the index among the idle clients. get returns the
-// step of a Get of the first key, and now the step of a Now.
-func put(idle int, value string) []entry {
-	return stepOf("Put", drawn("client", idle), drawn("put.key", 0), drawn("put.value", value))
+// on the client at the index or on the first client without an open call
+// after it. get returns the step of a Get of the first key, and now the step
+// of a Now.
+func put(client int, value string) []entry {
+	return stepOf("Put", drawn("client", client), drawn("put.key", 0.0), drawn("put.value", value))
 }
 
-func get(idle int) []entry {
-	return stepOf("Get", drawn("client", idle), drawn("get.key", 0))
+func get(client int) []entry {
+	return stepOf("Get", drawn("client", client), drawn("get.key", 0.0))
 }
 
-// create returns the step of a Create of the value on the idle client at the
-// index among the idle clients.
-func create(idle int, value string) []entry {
-	return stepOf("Create", drawn("client", idle), drawn("create.value", value))
+// create returns the step of a Create of the value on the client at the index
+// or on the first client without an open call after it.
+func create(client int, value string) []entry {
+	return stepOf("Create", drawn("client", client), drawn("create.value", value))
+}
+
+// cancel returns the step of a cancel of the open call of the client at the
+// index or of the first client with an open call after it.
+func cancel(client int) []entry {
+	return stepOf("cancel", drawn("client", client))
 }
 
 func now() []entry {
@@ -779,7 +789,7 @@ func TestWorld(t *testing.T) {
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(sealedWorld), script(
 				worldOpening(sealedFaults, "tear"), disk("tear", drawn("disk.bytes", 2)), put(0, "x"),
-				stepOf("crash", drawn("kill", int(host.PowerLoss)), drawn("keep..", 1), drawn("keep.a", 2)),
+				stepOf("crash", drawn("kill", int(host.PowerLoss)), drawn("keep", []float64{1.0, 1.0})),
 				restart, get(0),
 			), conform.Durable(openUnsynced))
 
@@ -794,7 +804,7 @@ func TestWorld(t *testing.T) {
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(sealedWorld), script(
 				worldOpening(sealedFaults, "flip"), put(0, "x"),
-				disk("flip", drawn("disk.file", 0), drawn("disk.offset", 6)), get(0),
+				disk("flip", drawn("disk.file", 0.0), drawn("disk.offset", 0.93)), get(0),
 			), conform.Durable(openStore))
 
 			assert.Equal(t, outcomesOf(events), []outcome{
@@ -807,8 +817,7 @@ func TestWorld(t *testing.T) {
 			t.Parallel()
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
-				worldOpening(blockingFaults, "disk-hold"), disk("disk-hold"), put(0, "x"),
-				stepOf("cancel", drawn("client", 0)), end, get(0),
+				worldOpening(blockingFaults, "disk-hold"), disk("disk-hold"), put(0, "x"), cancel(0), end, get(0),
 			), conform.Durable(openStore), conform.Blocking[*kv]())
 
 			assert.Equal(t, outcomesOf(events), []outcome{
@@ -841,7 +850,7 @@ func TestWorld(t *testing.T) {
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
 				worldOpening(blockingFaults, "dependency-hold"), put(0, "x"), dependency("dependency-hold"),
-				put(0, "y"), stepOf("cancel", drawn("client", 0)), end, get(0),
+				put(0, "y"), cancel(0), end, get(0),
 			), conform.Hosted(openHosted), conform.Blocking[*kv]())
 
 			assert.Equal(t, outcomesOf(events), []outcome{
@@ -855,8 +864,7 @@ func TestWorld(t *testing.T) {
 			t.Parallel()
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
-				worldOpening(blockingFaults, "pause"), pause, put(0, "x"), stepOf("cancel", drawn("client", 0)), end,
-				get(0),
+				worldOpening(blockingFaults, "pause"), pause, put(0, "x"), cancel(0), end, get(0),
 			), conform.Durable(openStore), conform.Blocking[*kv]())
 
 			assert.Equal(t, outcomesOf(events), []outcome{
@@ -865,17 +873,79 @@ func TestWorld(t *testing.T) {
 			}, "the Put waits for the end of the pause, and then writes")
 		})
 
-		t.Run("cancels the open call of the client that the case picks", func(t *testing.T) {
+		t.Run("cancels the open call of the first client with one from the client that the case picks",
+			func(t *testing.T) {
+				t.Parallel()
+
+				events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
+					worldOpening(blockingFaults, "disk-hold"), disk("disk-hold"), put(1, "x"), cancel(0),
+				), conform.Durable(openStore), conform.Blocking[*kv]())
+
+				assert.Equal(t, outcomesOf(events), []outcome{
+					{op: "Put", kind: history.Unknown, cause: context.Canceled, client: 1},
+				}, "the cancel of client 0 ends the Put of client 1")
+			})
+
+		t.Run("calls the first client without an open call from the client that the case picks", func(t *testing.T) {
 			t.Parallel()
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
-				worldOpening(blockingFaults, "disk-hold"), disk("disk-hold"), put(1, "x"),
-				stepOf("cancel", drawn("client", 0)),
+				worldOpening(blockingFaults, "disk-hold"), disk("disk-hold"), put(1, "x"), put(1, "y"),
 			), conform.Durable(openStore), conform.Blocking[*kv]())
 
 			assert.Equal(t, outcomesOf(events), []outcome{
-				{op: "Put", kind: history.Unknown, cause: context.Canceled, client: 1},
-			}, "the cancel ends the Put of client 1")
+				{op: "Put", kind: history.Unknown, cause: medium.ErrCrashed, client: 1},
+				{op: "Put", kind: history.Unknown, cause: medium.ErrCrashed},
+			}, "the second Put of client 1 goes to client 0")
+		})
+
+		t.Run("takes no effect for a call while every client has an open call", func(t *testing.T) {
+			t.Parallel()
+
+			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
+				worldOpening(blockingFaults, "disk-hold"), disk("disk-hold"), put(0, "x"), put(0, "y"), put(1, "x"),
+			), conform.Durable(openStore), conform.Blocking[*kv]())
+
+			assert.Length(t, outcomesOf(events), 2, "the third Put finds no client without an open call")
+		})
+
+		t.Run("takes no effect for a cancel without an open call", func(t *testing.T) {
+			t.Parallel()
+
+			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
+				worldOpening(instantFaults), put(0, "x"), cancel(1), get(0),
+			), conform.Durable(openStore))
+
+			assert.Equal(t, outcomesOf(events), []outcome{
+				{op: "Put", kind: history.OK},
+				{op: "Get", kind: history.OK, values: []any{"x"}},
+			}, "the cancel finds no open call")
+		})
+
+		t.Run("strikes a fault of a dependency before a call of a dependency", func(t *testing.T) {
+			t.Parallel()
+
+			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
+				worldOpening(instantFaults, "fail-next"), dependency("fail-next"), put(0, "x"),
+			), conform.Hosted(openHosted))
+
+			assert.Equal(t, outcomesOf(events), []outcome{
+				{op: "Put", kind: history.Unknown, cause: host.ErrInjected},
+			}, "the failure of the next call fails the first Put")
+		})
+
+		t.Run("takes no effect for a flip of a disk without a file with data", func(t *testing.T) {
+			t.Parallel()
+
+			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(sealedWorld), script(
+				worldOpening(sealedFaults, "flip"), disk("flip", drawn("disk.file", 0.0), drawn("disk.offset", 0.0)),
+				put(0, "x"), get(0),
+			), conform.Durable(openStore))
+
+			assert.Equal(t, outcomesOf(events), []outcome{
+				{op: "Put", kind: history.OK},
+				{op: "Get", kind: history.OK, values: []any{"x"}},
+			}, "the flip finds no file, and the Get reads the value")
 		})
 
 		t.Run("completes a call that is open at a crash as unknown with medium.ErrCrashed", func(t *testing.T) {
@@ -938,7 +1008,7 @@ func TestWorld(t *testing.T) {
 			}
 
 			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(storeWorld), script(
-				worldOpening(instantFaults), put(0, "x"), stepOf("cancel", drawn("client", 0)), get(0),
+				worldOpening(instantFaults), put(0, "x"), cancel(0), get(0),
 			), conform.Durable(lingering))
 
 			assert.Equal(t, outcomesOf(events), []outcome{
@@ -1072,9 +1142,16 @@ func TestWorld(t *testing.T) {
 					giveSteps: [][]entry{disk("fill", drawn("disk.bytes", 2))}, giveRefused: disk("fail-before"),
 				},
 				{
-					name:      "strikes no fault of a dependency before a call of a dependency",
-					giveStart: worldOpening(instantFaults, "fail-next"), giveRefused: dependency("fail-next"),
-					giveOpts: []conform.Option[*kv]{conform.Hosted(openHosted)},
+					name:      "calls no client past the clients of the world",
+					giveStart: worldOpening(instantFaults), giveRefused: put(2, "x"),
+				},
+				{
+					name:      "calls no operation of a crashed subject",
+					giveStart: worldOpening(instantFaults), giveSteps: [][]entry{crash}, giveRefused: put(0, "x"),
+				},
+				{
+					name:      "cancels no call of a crashed subject",
+					giveStart: worldOpening(instantFaults), giveSteps: [][]entry{crash}, giveRefused: cancel(0),
 				},
 				{
 					name:      "strikes no fault of a dependency that its case does not keep",
@@ -1085,10 +1162,6 @@ func TestWorld(t *testing.T) {
 					name:      "strikes no fault of a dependency on a crashed subject",
 					giveStart: worldOpening(instantFaults, "fail-next"), giveSteps: [][]entry{put(0, "x"), crash},
 					giveRefused: dependency("fail-next"), giveOpts: []conform.Option[*kv]{conform.Hosted(openHosted)},
-				},
-				{
-					name:      "strikes no fault of the clock before a read of the wall clock",
-					giveStart: worldOpening(instantFaults, "bump"), giveRefused: bump(0, false),
 				},
 				{
 					name: "strikes no fault of the clock that its case does not keep", giveProbe: spec.WorldRecovery,
@@ -1126,19 +1199,6 @@ func TestWorld(t *testing.T) {
 					giveStart: worldOpening(blockingFaults, "disk-hold"),
 					giveSteps: [][]entry{disk("disk-hold"), crash}, giveRefused: end,
 					giveOpts: []conform.Option[*kv]{conform.Blocking[*kv]()},
-				},
-				{
-					name:      "flips no bit of a disk without a file with data",
-					giveProbe: spec.FaultyWorldHistory, giveRun: linearizableOver(sealedWorld),
-					giveStart:   worldOpening(sealedFaults, "fail-part", "flip"),
-					giveSteps:   [][]entry{disk("fail-part", drawn("disk.bytes", 0)), put(0, "x")},
-					giveRefused: disk("flip"),
-				},
-				{
-					name:      "flips no bit past the data of a file",
-					giveProbe: spec.FaultyWorldHistory, giveRun: linearizableOver(sealedWorld),
-					giveStart: worldOpening(sealedFaults, "flip"), giveSteps: [][]entry{put(0, "x")},
-					giveRefused: disk("flip", drawn("disk.file", 0), drawn("disk.offset", 7)),
 				},
 			}
 			for _, tt := range tests {
@@ -1308,7 +1368,7 @@ func TestWorld(t *testing.T) {
 			}, "the world counts the strikes of each fault")
 		})
 
-		t.Run("records the faults of the clock as vacuous for a store that never reads its wall clock",
+		t.Run("records the faults of the clock and of the dependencies as vacuous for a store that uses neither",
 			func(t *testing.T) {
 				t.Parallel()
 
@@ -1319,8 +1379,8 @@ func TestWorld(t *testing.T) {
 				world, _ := worldOf(t)
 
 				assert.NotNil(t, world, "the check has a world")
-				expect.Equal(t, world.Faults.Vacuous, []string{"bump", "strobe"},
-					"the faults of the clock are vacuous")
+				expect.Equal(t, world.Faults.Vacuous, []string{"bump", "fail-next", "fail-until-healed", "strobe"},
+					"the faults of the clock and of the dependencies are vacuous, and no case counts their strikes")
 			})
 
 		t.Run("records the partitions that its checker cannot decide within their budget", func(t *testing.T) {
@@ -1404,6 +1464,17 @@ func TestWorld(t *testing.T) {
 
 			assert.Equal(t, offsets, []time.Duration{0, -17085937, 0},
 				"the wall clock is 1.5 to the power of 7 ms behind until the end of the bump")
+		})
+
+		t.Run("bumps the wall clock before the first read of the wall clock", func(t *testing.T) {
+			t.Parallel()
+
+			offsets, _ := clockOf(runCase(t, spec.WorldRecovery, completesOver(nowWorld), script(
+				nowOpening(0, instantFaults, "bump"), bump(1, true), now(), end, now(),
+			), conform.Hosted(openHosted)))
+
+			assert.Equal(t, offsets, []time.Duration{0, 17085937},
+				"the wall clock is 1.5 to the power of 7 ms behind at the first read, until the end of the bump")
 		})
 
 		t.Run("strobes the wall clock every period until the end of the strobe", func(t *testing.T) {

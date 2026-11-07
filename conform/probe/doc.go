@@ -30,4 +30,11 @@
 // advances of the clock. The operations pick their keys from a [Pool]. The
 // check of a world runs each case inside a bubble of conform.Bubble, under
 // the options that [WorldOptions] returns.
+//
+// A world takes the bounds of each request from the choices of the case and
+// from the state that its steps set: whether the subject runs, the fault in
+// force and the faults that the case keeps. The bounds do not depend on the
+// order of the goroutines of the subject, so a replay of a case in native mode
+// requests the bounds of the case. A step without a target, such as a call
+// while every client has an open call, takes no effect.
 package probe

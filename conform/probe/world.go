@@ -262,12 +262,12 @@ type worldInput struct {
 }
 
 // diskFault is the input of a fault step of the disk: the fault, the bytes
-// of a part, a tear or a fill, and the file and the offset of a flip.
+// of a part, a tear or a fill, and the shares of the files with data and of
+// the size of a file that locate the byte of a flip.
 type diskFault struct {
-	kind   string
-	name   string
-	bytes  int
-	offset int
+	kind         string
+	bytes        int
+	file, offset float64
 }
 
 // clockFault is the input of a fault step of the clock: a bump by delta, or a
@@ -339,19 +339,22 @@ func (w *world[S]) machine() stateful.Machine[struct{}] {
 	return m
 }
 
-// callAction returns the step that calls op on an idle client of a running
-// subject.
+// callAction returns the step that calls op on a running subject. The case
+// chooses a client among all clients, and the call goes to the first client
+// without an open call from it on, in the order of the clients and around.
+// The step takes no effect while every client has an open call.
 func (w *world[S]) callAction(op *Operation[S]) stateful.Action[struct{}] {
 	return stateful.Action[struct{}]{
 		Name:    op.Name,
-		Enabled: func(struct{}) bool { return w.inc != nil && len(w.clients(false)) > 0 },
+		Enabled: func(struct{}) bool { return w.inc != nil },
 		Input: func(c *prop.Case, _ struct{}) any {
-			idle := w.clients(false)
-			return worldInput{client: idle[c.Draw(prop.Integer(0, len(idle)-1), "client")], value: op.Input(c)}
+			return worldInput{client: w.client(c), value: op.Input(c)}
 		},
 		Run: func(_ *prop.Case, _ int, input any) {
 			in, _ := input.(worldInput)
-			w.invoke(in.client, op, in.value)
+			if client, idle := w.nextClient(in.client, false); idle {
+				w.invoke(client, op, in.value)
+			}
 		},
 	}
 }
@@ -371,22 +374,26 @@ func (w *world[S]) advanceAction() stateful.Action[struct{}] {
 	}
 }
 
-// cancelAction returns the step that ends the context of the open call of a
-// client, which completes the call as unknown.
+// cancelAction returns the step that ends the context of an open call of a
+// running subject, which completes the call as unknown. The case chooses a
+// client among all clients, and the step ends the call of the first client
+// with an open call from it on. The step takes no effect without an open
+// call.
 func (w *world[S]) cancelAction() stateful.Action[struct{}] {
 	return stateful.Action[struct{}]{
 		Name:    "cancel",
-		Enabled: func(struct{}) bool { return len(w.clients(true)) > 0 },
-		Input: func(c *prop.Case, _ struct{}) any {
-			busy := w.clients(true)
-			return busy[c.Draw(prop.Integer(0, len(busy)-1), "client")]
-		},
+		Enabled: func(struct{}) bool { return w.inc != nil },
+		Input:   func(c *prop.Case, _ struct{}) any { return w.client(c) },
 		Run: func(_ *prop.Case, _ int, input any) {
-			client, _ := input.(int)
+			from, _ := input.(int)
+			client, busy := w.nextClient(from, true)
+			if !busy {
+				return
+			}
 			w.mu.Lock()
 			defer w.mu.Unlock()
-			// The world is quiescent between the input and the run of the step,
-			// so the call of the client is still open.
+			// The world is quiescent between the search and the end of the
+			// call, so the call of the client is still open.
 			wc := w.open[client]
 			w.end(client, wc)
 			wc.call.Unknown(context.Canceled)
@@ -427,21 +434,21 @@ var diskFaults = []string{
 }
 
 // diskAction returns the step that strikes a fault of the disk that the case
-// keeps on a running subject, while no fault is in force.
+// keeps on a running subject, while no fault is in force. The case chooses the
+// byte of a flip as a share of the files with data and a share of the size of
+// the file.
 func (w *world[S]) diskAction() stateful.Action[struct{}] {
 	return stateful.Action[struct{}]{
 		Name:    "disk",
-		Enabled: func(struct{}) bool { return w.free() && len(w.diskKinds()) > 0 },
+		Enabled: func(struct{}) bool { return w.free() && len(w.keptOf(diskFaults...)) > 0 },
 		Input: func(c *prop.Case, _ struct{}) any {
-			f := diskFault{kind: c.Draw(prop.SampledFrom(w.diskKinds()...), "disk")}
+			f := diskFault{kind: c.Draw(prop.SampledFrom(w.keptOf(diskFaults...)...), "disk")}
 			switch f.kind {
 			case faultFailPart, faultTear, faultFill:
 				f.bytes = c.Draw(prop.Integer(0, os.Getpagesize()), "disk.bytes")
 			case faultFlip:
-				files := w.written()
-				at := files[c.Draw(prop.Integer(0, len(files)-1), "disk.file")]
-				f.name = at.name
-				f.offset = c.Draw(prop.Integer(0, int(at.size)-1), "disk.offset")
+				f.file = c.Draw(prop.Float(0.0, 1.0), "disk.file")
+				f.offset = c.Draw(prop.Float(0.0, 1.0), "disk.offset")
 			}
 			return f
 		},
@@ -458,16 +465,6 @@ func (w *world[S]) free() bool {
 	return w.inc != nil && w.fault == ""
 }
 
-// diskKinds returns the faults of the disk that the case keeps, without the
-// flip while no file of the disk has data.
-func (w *world[S]) diskKinds() []string {
-	kinds := w.keptOf(diskFaults...)
-	if w.kept[faultFlip] && len(w.written()) == 0 {
-		kinds = slices.DeleteFunc(kinds, func(kind string) bool { return kind == faultFlip })
-	}
-	return kinds
-}
-
 // written returns the files of the disk of the host that have data.
 func (w *world[S]) written() []file {
 	return slices.DeleteFunc(filesOf(w.host.Disk()), func(f file) bool { return f.size == 0 })
@@ -477,14 +474,11 @@ func (w *world[S]) written() []file {
 var dependencyFaults = []string{faultFailNext, faultFailUntilHealed, faultDependencyHold}
 
 // dependencyAction returns the step that strikes a fault of the dependencies
-// that the case keeps on a running subject that called a dependency, while no
-// fault is in force.
+// that the case keeps on a running subject, while no fault is in force.
 func (w *world[S]) dependencyAction() stateful.Action[struct{}] {
 	return stateful.Action[struct{}]{
-		Name: "dependency",
-		Enabled: func(struct{}) bool {
-			return w.free() && len(w.keptOf(dependencyFaults...)) > 0 && len(w.host.Injector().Calls()) > 0
-		},
+		Name:    "dependency",
+		Enabled: func(struct{}) bool { return w.free() && len(w.keptOf(dependencyFaults...)) > 0 },
 		Input: func(c *prop.Case, _ struct{}) any {
 			return c.Draw(prop.SampledFrom(w.keptOf(dependencyFaults...)...), "dependency")
 		},
@@ -507,17 +501,15 @@ func (w *world[S]) dependencyAction() stateful.Action[struct{}] {
 }
 
 // clockAction returns the step that bumps or strobes the wall clock of a
-// running subject that has read its wall clock, while no fault is in force.
-// It chooses each value as the clock nemesis of Jepsen does: a bump of 1.5 to
-// the power of 6 to 31 ms either way, and a strobe by 2 to the power of 2 to
-// 18 ms every 2 to the power of 0 to 10 ms. Each shrinks to its smallest
-// value, and a bump to one forward.
+// running subject, while no fault is in force. It chooses each value as the
+// clock nemesis of Jepsen does: a bump of 1.5 to the power of 6 to 31 ms
+// either way, and a strobe by 2 to the power of 2 to 18 ms every 2 to the
+// power of 0 to 10 ms. Each shrinks to its smallest value, and a bump to one
+// forward.
 func (w *world[S]) clockAction() stateful.Action[struct{}] {
 	return stateful.Action[struct{}]{
-		Name: "clock",
-		Enabled: func(struct{}) bool {
-			return w.free() && len(w.keptOf(faultBump, faultStrobe)) > 0 && w.host.WallRead()
-		},
+		Name:    "clock",
+		Enabled: func(struct{}) bool { return w.free() && len(w.keptOf(faultBump, faultStrobe)) > 0 },
 		Input: func(c *prop.Case, _ struct{}) any {
 			f := clockFault{kind: c.Draw(prop.SampledFrom(w.keptOf(faultBump, faultStrobe)...), "clock")}
 			if f.kind == faultBump {
@@ -655,18 +647,24 @@ func (w *world[S]) endAll(err error) {
 	}
 }
 
-// clients returns the clients with an open call for busy, and the clients
-// without one otherwise.
-func (w *world[S]) clients(busy bool) []int {
+// client returns a client that the case chooses among all clients.
+func (w *world[S]) client(c *prop.Case) int {
+	return c.Draw(prop.Integer(0, len(w.open)-1), "client")
+}
+
+// nextClient returns the first client from the client from on, in the order
+// of the clients and around, that has an open call for busy and none
+// otherwise. It reports false where no client is in that state.
+func (w *world[S]) nextClient(from int, busy bool) (int, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	var clients []int
-	for client, wc := range w.open {
-		if (wc != nil) == busy {
-			clients = append(clients, client)
+	for i := range w.open {
+		client := (from + i) % len(w.open)
+		if (w.open[client] != nil) == busy {
+			return client, true
 		}
 	}
-	return clients
+	return 0, false
 }
 
 // crash completes each open call as unknown with medium.ErrCrashed, crashes
@@ -691,6 +689,8 @@ func (w *world[S]) crash(k host.Kill, fail func(format string, args ...any)) {
 }
 
 // disk strikes the fault f of the disk, which puts a fill or a hold in force.
+// A flip strikes the byte at its shares of the files with data and of the
+// size of the file, and takes no effect without a file with data.
 func (w *world[S]) disk(f diskFault) {
 	m := w.host.Disk()
 	switch f.kind {
@@ -706,7 +706,12 @@ func (w *world[S]) disk(f diskFault) {
 		m.Fill(int64(f.bytes))
 		w.fault = f.kind
 	case faultFlip:
-		m.Corrupt(f.name, int64(f.offset))
+		files := w.written()
+		if len(files) == 0 {
+			return
+		}
+		at := files[shareOf(f.file, len(files))]
+		m.Corrupt(at.name, shareOf(f.offset, at.size))
 	default:
 		m.Hold()
 		w.fault = f.kind
@@ -877,18 +882,34 @@ func (w *world[S]) recovery() {
 }
 
 // finish ends the case: it crashes a running incarnation by a process crash,
-// as a crash step does, records the faults of the clock as vacuous for a
-// subject that never read its wall clock, and adds the world of the case to
-// the record of the check. A goroutine that is alive after the crash fails the
-// case, and the record still contains the world.
+// as a crash step does, and adds the world of the case to the record of the
+// check. It records the faults of the clock as vacuous for a subject that
+// never read its wall clock, and the faults of the dependencies for a subject
+// that never called a dependency. A goroutine that is alive after the crash
+// fails the case, and the record still contains the world.
 func (w *world[S]) finish() {
 	if w.inc != nil {
 		w.crash(host.ProcessCrash, w.h.Errorf)
 	}
 	if !w.host.WallRead() {
-		w.record.Faults.Vacuous = []string{faultBump, faultStrobe}
+		w.vacate(faultBump, faultStrobe)
+	}
+	if len(w.host.Injector().Calls()) == 0 {
+		w.vacate(dependencyFaults...)
 	}
 	w.h.RecordWorld(&w.record)
+}
+
+// vacate records each fault of faults that the world strikes as vacuous, and
+// removes the count of its strikes, for a subject that never used the
+// resource of the faults.
+func (w *world[S]) vacate(faults ...string) {
+	for _, fault := range faults {
+		if _, strikes := w.kept[fault]; strikes {
+			delete(w.record.Faults.Struck, fault)
+			w.record.Faults.Vacuous = append(w.record.Faults.Vacuous, fault)
+		}
+	}
 }
 
 // milliseconds returns base to the power of exponent milliseconds.
