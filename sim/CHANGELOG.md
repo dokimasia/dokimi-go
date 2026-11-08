@@ -1,5 +1,13 @@
 # go.dokimi.dev/sim
 
+## 0.7.0
+
+### Minor Changes
+
+- f228fb9: Add `Anatomy.End` for the event that ends a wait at an outage after the wait has delivered an event.
+- f228fb9: Add `Anatomy.Ends` and cancel the wait of the token that it returns for an effect.
+- f228fb9: Add `Outcome.Cancel` and call it when the world drops the outcome of an effect or ends its wait.
+
 ## 0.6.0
 
 ### Minor Changes
