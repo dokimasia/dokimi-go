@@ -320,10 +320,14 @@ func TestRun(t *testing.T) {
 	t.Run("Run", func(t *testing.T) {
 		t.Parallel()
 
+		// Every case delivers, so the queues of the stores are short and delay
+		// strikes a message behind another in fewer cases. A mean of 100 steps
+		// gives each fault 1% of the cases.
 		t.Run("finds no failure in machines that keep the rules under every fault", func(t *testing.T) {
 			t.Parallel()
 
 			s := simulation()
+			s.MeanSteps, s.MaxSteps = 100, 300
 			s.Tolerate = maps.Clone(every)
 			s.Tolerate[sim.FaultCrash], s.Tolerate[sim.FaultPause] = 2, 2
 			always := s.Actions[0]
@@ -439,6 +443,89 @@ func TestRun(t *testing.T) {
 			}
 			assert.True(t, longSteps.total > baseSteps.total,
 				"the cases of a mean of 300 steps take more steps than the cases of the default mean of 30")
+		})
+
+		// The action feed queues more ticks than a run of deliveries takes, so
+		// the active phase lists the deliveries and feed alone. advance and
+		// cancel are not enabled. A case whose swarm keeps deliver fast takes
+		// four deliveries for each feed, at the weight 1 of deliver and the
+		// weight 3 of the three other actions. A case without it takes one.
+		t.Run("keeps a second delivery at the weight of the other actions in half of the cases", func(t *testing.T) {
+			t.Parallel()
+
+			var fed, taken, fastFed, fastTaken, slowFed, slowTaken, fast, slow int
+			s := simulation()
+			s.MeanSteps, s.MaxSteps = 100, 300
+			s.System = fixed(func(w *sim.World[event, effect]) {
+				fed, taken = 0, 0
+				w.Spawn("a", newStore)
+			})
+			s.Actions = []sim.Action[event, effect]{{
+				Name: "feed",
+				Run: func(w *sim.World[event, effect], _ int, _ any) {
+					fed++
+					for range 50 {
+						w.Deliver("a", ticked{})
+					}
+				},
+			}, {
+				Name:  "count",
+				Drain: true,
+				Run: func(w *sim.World[event, effect], _ int, _ any) {
+					for _, e := range w.Log() {
+						if _, tick := e.Event.(ticked); tick {
+							taken++
+						}
+					}
+					switch {
+					case fed == 0:
+					case taken > 2*fed:
+						fast, fastFed, fastTaken = fast+1, fastFed+fed, fastTaken+taken
+					default:
+						slow, slowFed, slowTaken = slow+1, slowFed+fed, slowTaken+taken
+					}
+				},
+			}}
+			prop.ForAll(t, "each case feeds the store a", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Hermetic(), prop.Seed(1), prop.Store(""), prop.Workers(1))
+			assert.CloseTo(t, float64(fastTaken)/float64(fastFed), 4, 0.5,
+				"the cases of fast deliveries take four for each feed")
+			assert.CloseTo(t, float64(slowTaken)/float64(slowFed), 1, 0.5,
+				"the cases of slow deliveries take one for each feed")
+			assert.CloseTo(t, float64(fast)/float64(fast+slow), 0.5, 0.2, "about half of the cases deliver fast")
+		})
+
+		t.Run("advances the time in every case that arms a timer", func(t *testing.T) {
+			t.Parallel()
+
+			var armed, advanced int
+			var arms bool
+			s := simulation()
+			s.System = fixed(func(w *sim.World[event, effect]) {
+				arms = false
+				w.Spawn("a", newStore)
+			})
+			s.Actions = []sim.Action[event, effect]{{
+				Name: "arm",
+				Run: func(w *sim.World[event, effect], _ int, _ any) {
+					arms = true
+					w.After(w.Process("a"), time.Second, ticked{})
+				},
+			}, {
+				Name:  "count",
+				Drain: true,
+				Run: func(w *sim.World[event, effect], _ int, _ any) {
+					if arms {
+						armed++
+					}
+					if arms && w.Now().After(sim.Start) {
+						advanced++
+					}
+				},
+			}}
+			prop.ForAll(t, "each case arms a timer of the store a", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Hermetic(), prop.Seed(1), prop.Store(""), prop.Workers(1))
+			assert.True(t, 4*advanced >= 3*armed, "the time advances in at least three of four cases that arm a timer")
 		})
 
 		t.Run("builds the world of a case from the inputs that its system takes from the case", func(t *testing.T) {
@@ -1826,6 +1913,23 @@ func TestRun(t *testing.T) {
 			s.Require = map[sim.Fault]float64{sim.FaultCrash: 0.01}
 			s.Scenarios = []sim.Scenario[event, effect]{{Name: "put", Run: putOnA}}
 			sim.Test(t, s)
+		})
+
+		// A step of the action count makes 12 choices: its flag, its index and
+		// ten digits. 8,192 choices then cover 682 steps.
+		t.Run("gives a case 82 choices for each step of MaxSteps", func(t *testing.T) {
+			t.Parallel()
+
+			s, steps := counting()
+			s.MeanSteps, s.MaxSteps = 900, 1000
+			s.Actions[0].Input = func(c *prop.Case) any {
+				for range 10 {
+					c.Draw(prop.Integer(0, 9), "digit")
+				}
+				return nil
+			}
+			sim.Test(t, s)
+			assert.True(t, steps.most > 8192/12, "a case takes more steps than 8,192 choices of 12 for each step allow")
 		})
 
 		t.Run("fails a passing run whose replay observes another checksum", func(t *testing.T) {

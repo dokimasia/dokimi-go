@@ -39,6 +39,12 @@ const (
 	// bytes that full media take before they refuse a write.
 	maxTear = 64
 	maxFill = 64
+	// engineChoices is the most choices of a case of the property engine by
+	// default. stepChoices is the most choices of a case for each step of
+	// MaxSteps: the 8,192 choices of the engine for the 100 steps of the
+	// package stateful, rounded up.
+	engineChoices = 8192
+	stepChoices   = 82
 )
 
 // kinds are the kinds of the faults that Tolerate and Require name, in the
@@ -101,7 +107,9 @@ type Simulation[E, F, S any] struct {
 	// and the mean of the package stateful, 30, for 0.
 	MeanSteps int
 	// MaxSteps is the most steps of the active phase of a case, and the most
-	// of the package stateful, 100, for 0.
+	// of the package stateful, 100, for 0. Test, Prove and Fuzz give a case 82
+	// choices for each of these steps, and at least the 8,192 choices of the
+	// property engine.
 	MaxSteps int
 	// Strategy chooses the next process. The zero Strategy is PCT(3).
 	Strategy Strategy
@@ -172,8 +180,13 @@ const (
 // Run runs one case of s on a new world: the active phase of the actions and
 // the faults as the steps of a machine of the package stateful of the assert
 // library, with the mean and the most steps of MeanSteps and MaxSteps, then
-// the recovery and the final phase. It checks the rules against
-// each step of a machine before the world performs the effects of the step.
+// the recovery and the final phase. Every case keeps the delivery deliver at
+// the weight 1 and the advance of time. Half of the cases also keep the
+// delivery deliver fast, at the weight of the other actions of the active
+// phase together. A property that calls Run with a MaxSteps above 100 passes
+// prop.MaxChoices with 82 choices for each step, as Test does. It checks the
+// rules against each step of a machine before the world performs the effects
+// of the step.
 // After every step it waits for the quiescence of the components and checks
 // the invariants. After every step at which no client has an open call, it
 // also checks the history against the spec, partitioned by the keys of the
@@ -217,7 +230,7 @@ const simplest = "prop1:"
 // replay observes another checksum of a step as flaky.
 func Test[E, F, S any](tb assert.TB, s Simulation[E, F, S]) {
 	tb.Helper()
-	opts := append(s.around(), prop.Confirm(confirmEvery))
+	opts := append(s.options(), prop.Confirm(confirmEvery))
 	for _, kind := range kinds {
 		if share, required := s.Require[kind]; required {
 			opts = append(opts, prop.Require(string(kind), share))
@@ -283,7 +296,7 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 	seed := seedOf(check)
 	contract := fmt.Sprintf("the planted defect fails the check %s at the seed %d", check, seed)
 	got := assert.Rejects(tb, contract, func(tb assert.TB) {
-		opts := append(s.around(), prop.Hermetic(), prop.Seed(seed), prop.Store(""), prop.Shrink(0))
+		opts := append(s.options(), prop.Hermetic(), prop.Seed(seed), prop.Store(""), prop.Shrink(0))
 		prop.ForAll(tb, statement, func(c *prop.Case) { Run(c, d) }, opts...)
 		for _, sc := range scenarios {
 			prop.ForAll(tb, statement, func(c *prop.Case) {
@@ -307,16 +320,24 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 // Fuzz registers the choices of a run of s as the input of the fuzz target f.
 func Fuzz[E, F, S any](f *testing.F, s Simulation[E, F, S]) {
 	f.Helper()
-	prop.Fuzz(f, "the simulation finds no failure", func(c *prop.Case) { Run(c, s) }, s.around()...)
+	prop.Fuzz(f, "the simulation finds no failure", func(c *prop.Case) { Run(c, s) }, s.options()...)
 }
 
-// around returns the option that runs each case of s inside its environment,
-// and no option for s without one.
-func (s Simulation[E, F, S]) around() []prop.Option {
-	if s.Around == nil {
-		return nil
+// options returns the options of each property of s: the most choices of a
+// case, and the environment of each case for s with one.
+func (s Simulation[E, F, S]) options() []prop.Option {
+	opts := []prop.Option{prop.MaxChoices(s.maxChoices())}
+	if s.Around != nil {
+		opts = append(opts, prop.Around(s.Around))
 	}
-	return []prop.Option{prop.Around(s.Around)}
+	return opts
+}
+
+// maxChoices returns the most choices of a case of s: the choices of the
+// property engine, or stepChoices for each step of MaxSteps where those are
+// more.
+func (s Simulation[E, F, S]) maxChoices() int {
+	return max(engineChoices, stepChoices*s.MaxSteps)
 }
 
 // alone returns s without the spec of its calls and its oracles, for the
@@ -347,7 +368,7 @@ func scenario[E, F, S any](tb assert.TB, s Simulation[E, F, S], sc Scenario[E, F
 		r.check()
 		r.checkHistory()
 		steps = r.w.steps
-	}, append(s.around(), prop.Replay(simplest), prop.Store(""))...)
+	}, append(s.options(), prop.Replay(simplest), prop.Store(""))...)
 	return steps
 }
 
@@ -373,10 +394,13 @@ type run[E, F, S any] struct {
 
 // linearizable is the statement of the checks of the history of a run, and
 // undecidedLabel the label of a case whose history the checker could not
-// decide.
+// decide. deliverName and fastName are the names of the two deliveries of
+// the active phase.
 const (
 	linearizable   = "the history of the calls of the clients is linearizable"
 	undecidedLabel = "undecided"
+	deliverName    = "deliver"
+	fastName       = "deliver fast"
 )
 
 // stepped returns the action a, whose run the settle of the components, the
@@ -543,17 +567,24 @@ func fault[I any](
 // actions returns the actions of the active phase of the run: the delivery
 // and the advance of time, the cancel of a call, the faults within the
 // bounds of Tolerate and their ends, and the actions of the consumer that are
-// not final. The settle of the components and the checks follow each action,
-// and a delivery checks the invariants through its step. A
-// world with a component advances by 1 µs to 10 s while no machine has a
-// timer, and cancels a call of a component without the cancelled event of
-// the anatomy.
+// not final. Every case keeps the delivery deliver and the advance. The
+// delivery deliver fast delivers as deliver does, at the weight of the actions
+// other than the two deliveries together, and the swarm of a case keeps it
+// with odds of 1 in 2. A case that keeps it takes a delivery in at least half
+// of its steps. The settle of the components and the checks follow each
+// action, and a delivery checks the invariants through its step. A world with
+// a component advances by 1 µs to 10 s while no machine has a timer, and
+// cancels a call of a component without the cancelled event of the anatomy.
 func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 	w := r.w
+	delivery := func(name string) stateful.Action[struct{}] {
+		return r.stepped(act(name, func() bool { return len(w.runnable()) > 0 },
+			func(*prop.Case) string { return r.pick.pick(w.runnable()).name }, func(to string) { w.Step(to) }),
+			false)
+	}
 	out := []stateful.Action[struct{}]{
-		r.stepped(act("deliver", func() bool { return len(w.runnable()) > 0 },
-			func(*prop.Case) string { return r.pick.pick(w.runnable()).name }, func(name string) { w.Step(name) }),
-			false),
+		delivery(deliverName),
+		delivery(fastName),
 		act("advance", func() bool {
 			_, pending := w.Next()
 			return pending || w.network != nil
@@ -600,9 +631,10 @@ func (r *run[E, F, S]) actions() []stateful.Action[struct{}] {
 			})
 		}
 	}
-	for i := 1; i < len(out); i++ {
+	for i := 2; i < len(out); i++ {
 		out[i] = r.stepped(out[i], true)
 	}
+	out[0].Keep, out[1].Weight, out[2].Keep = true, len(out)-2, true
 	return out
 }
 
