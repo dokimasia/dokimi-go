@@ -21,8 +21,8 @@ const perMille = 1000
 // Clock is the virtual clock of one host. It advances when the run advances
 // time, at the rate of its drift. The faults of a clock move the time that
 // Now returns by a jump or by the offset of a strobe. They do not move the
-// timers of the processes of the host, which wait for the clock to advance,
-// as the timers on the monotonic clock of an operating system do.
+// time that Monotonic returns, for which the timers of the processes of the
+// host wait, as the timers on the monotonic clock of an operating system do.
 type Clock struct {
 	elapsed time.Duration
 	rate    int64
@@ -38,15 +38,15 @@ func newClock(offset int) *Clock {
 // Now returns the time of the clock: Start, the time of the run that the
 // clock has advanced through times its drift, its jumps and the offset of
 // its strobe.
-func (c *Clock) Now() time.Time { return Start.Add(c.advanced() + c.jumps + c.strobe) }
+func (c *Clock) Now() time.Time { return Start.Add(c.Monotonic() + c.jumps + c.strobe) }
+
+// Monotonic returns the time since the start of the host on its monotonic
+// clock: the time of the run that the clock has advanced through times its
+// drift. The jumps and the strobe of the clock do not move it.
+func (c *Clock) Monotonic() time.Duration { return c.scaled(c.elapsed) }
 
 // advance advances the clock through the time d of the run.
 func (c *Clock) advance(d time.Duration) { c.elapsed += d }
-
-// advanced returns the time by which the clock has advanced: the time of the
-// run that it has advanced through times its drift, without its jumps and
-// the offset of its strobe.
-func (c *Clock) advanced() time.Duration { return c.scaled(c.elapsed) }
 
 // scaled returns the time of the clock after the time d of the run.
 func (c *Clock) scaled(d time.Duration) time.Duration {
@@ -57,7 +57,7 @@ func (c *Clock) scaled(d time.Duration) time.Duration {
 // runTime returns the shortest time of the run after which the clock has
 // advanced by at least d from its time now, and 0 for a clock that is there.
 func (c *Clock) runTime(d time.Duration) time.Duration {
-	target := int64(c.advanced() + d)
+	target := int64(c.Monotonic() + d)
 	run := time.Duration(target/c.rate*perMille + (target%c.rate*perMille+c.rate-1)/c.rate)
 	return max(run-c.elapsed, 0)
 }

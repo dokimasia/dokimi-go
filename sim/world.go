@@ -351,9 +351,9 @@ func (w *World[E, F]) After(p *Process[E, F], d time.Duration, ev E) {
 	w.at(p, d, func() { p.queue = append(p.queue, queued[E]{ev: ev, epoch: epoch}) })
 }
 
-// at calls run once the clock of the process p has advanced by d.
+// at calls run once the monotonic clock of the process p has advanced by d.
 func (w *World[E, F]) at(p *Process[E, F], d time.Duration, run func()) {
-	w.timers = append(w.timers, timer[E, F]{at: p.host.clock.advanced() + d, process: p, run: run})
+	w.timers = append(w.timers, timer[E, F]{at: p.host.clock.Monotonic() + d, process: p, run: run})
 }
 
 // Pending returns the names of the processes that run and have an event of
@@ -759,7 +759,7 @@ func (w *World[E, F]) Advance(d time.Duration) {
 	w.advanceHosts(d)
 	var ready []timer[E, F]
 	w.timers = slices.DeleteFunc(w.timers, func(t timer[E, F]) bool {
-		if t.process.host.clock.advanced() < t.at {
+		if t.process.host.clock.Monotonic() < t.at {
 			return false
 		}
 		ready = append(ready, t)
@@ -780,7 +780,7 @@ func (w *World[E, F]) Next() (time.Duration, bool) {
 	next, found := time.Duration(math.MaxInt64), false
 	for _, t := range w.timers {
 		if c := t.process.host.clock; !t.process.host.paused {
-			next, found = min(next, c.runTime(t.at-c.advanced())), true
+			next, found = min(next, c.runTime(t.at-c.Monotonic())), true
 		}
 	}
 	if !found {
