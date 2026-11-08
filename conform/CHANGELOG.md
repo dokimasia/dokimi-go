@@ -1,5 +1,11 @@
 # go.dokimi.dev/conform
 
+## 0.16.2
+
+### Patch Changes
+
+- 933642e: Fix the watchdog of `conform.Bubble` to take a wait for a semaphore of the runtime, such as a goroutine profile, as no stall.
+
 ## 0.16.1
 
 ### Patch Changes

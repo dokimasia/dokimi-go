@@ -1,5 +1,18 @@
 # go.dokimi.dev/sim
 
+## 0.8.0
+
+### Minor Changes
+
+- b7033ce: Add `Simulation.MeanSteps` and `Simulation.MaxSteps` for the mean and the most steps of the active phase of a case.
+- b7033ce: **Breaking:** End each process of the host of a machine that stops with an error, and mark the host as exited.
+- b7033ce: Restart an exited host through `World.Restart`, `World.Recover` and the action `restart`.
+
+### Patch Changes
+
+- Updated dependencies [933642e]
+  - go.dokimi.dev/conform@0.16.2
+
 ## 0.7.0
 
 ### Minor Changes
