@@ -941,6 +941,68 @@ func TestWorld(t *testing.T) {
 		})
 	})
 
+	t.Run("AfterFunc", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("polls each wait once the clock of the process has advanced by the duration", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				f := &feed{}
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				w.Step("store")
+				w.AfterFunc(w.Process("store"), time.Second, func() {
+					f.items = []event{fed{item: "renewed", token: 5}}
+				})
+				w.Advance(time.Second / 4)
+				expect.Empty(c, w.Pending(), "the timer is not due after a quarter of its duration")
+				w.Advance(time.Hour)
+				expect.Equal(c, w.Pending(), []string{"store"}, "the poll after the function queues the item")
+				expect.Length(c, w.Log(), 2, "the timer queues no event of its own")
+			})
+		})
+
+		t.Run("calls no function of a process that restarted before its timer is due", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				called := false
+				w.AfterFunc(w.Process("store"), time.Second, func() { called = true })
+				w.Crash("store")
+				w.Restart("store")
+				w.Advance(time.Hour)
+				expect.False(c, called, "the timer of the old epoch calls no function")
+			})
+		})
+
+		t.Run("calls no function of a crashed process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				called := false
+				w.AfterFunc(w.Process("store"), time.Second, func() { called = true })
+				w.Crash("store")
+				w.Advance(time.Hour)
+				expect.False(c, called, "the timer of a process that does not run calls no function")
+			})
+		})
+
+		t.Run("fails the case for a component, which takes no event", func(t *testing.T) {
+			t.Parallel()
+
+			got := failsInBubble(t, still, func(c *prop.Case) {
+				w, _, _ := cells(c)
+				w.AfterFunc(w.Process("a"), time.Second, func() {})
+			})
+
+			assert.Equal(t, got.Contract, `sim: the process "a" is a component, which takes no event`,
+				"the failure names the component")
+		})
+	})
+
 	t.Run("Pending", func(t *testing.T) {
 		t.Parallel()
 

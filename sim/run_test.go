@@ -243,6 +243,15 @@ func (ledger) Step(ev event, out []effect) []effect {
 
 func (ledger) Err() error { return nil }
 
+// periodic is a machine that sets a timer of every at each event.
+type periodic struct{ every time.Duration }
+
+func (m periodic) Step(_ event, out []effect) []effect {
+	return append(out, timer{token: 1, after: m.every})
+}
+
+func (periodic) Err() error { return nil }
+
 // timed is a machine that sets one timer of after on its start.
 type timed struct{ after time.Duration }
 
@@ -918,6 +927,24 @@ func TestRun(t *testing.T) {
 			got := failure(t, func(c *prop.Case) { sim.Run(c, s) })
 			expect.Equal(t, got.Contract, "sim: the system takes more than 10000 steps to settle",
 				"the failure names the limit of the final phase")
+		})
+
+		// A timer of 10 ms at each event takes an advance and a delivery for each
+		// 10 ms of the 100 s of the convergence, about 20,000 steps.
+		t.Run("settles a system of more than 10,000 steps within the bound of its convergence", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			every := func(*sim.Clock) sim.Machine[event, effect] { return periodic{every: 10 * time.Millisecond} }
+			s.System = fixed(func(w *sim.World[event, effect]) { w.Spawn("a", every) })
+			s.Actions, s.Rules = nil, nil
+			s.Converges = []sim.Convergence[event, effect]{{
+				Statement: "the timers keep their period",
+				Within:    100 * time.Second,
+				Check:     func(*sim.Check, *sim.World[event, effect]) {},
+			}}
+			prop.ForAll(t, "the final phase passes the bound", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Cases(1), prop.Seed(1), prop.Store(""))
 		})
 
 		t.Run("fails the case of a history that the spec does not explain", func(t *testing.T) {

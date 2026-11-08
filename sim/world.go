@@ -351,6 +351,21 @@ func (w *World[E, F]) After(p *Process[E, F], d time.Duration, ev E) {
 	w.at(p, d, func() { p.queue = append(p.queue, queued[E]{ev: ev, epoch: epoch}) })
 }
 
+// AfterFunc calls f once the clock of the process p has advanced by d, and then
+// polls each wait, as the world polls the waits after a step. A jump or a
+// strobe of the clock does not move the timer. The world calls f only while p
+// runs in the epoch in which AfterFunc armed the timer. AfterFunc fails the
+// case for a component process, which takes no event.
+func (w *World[E, F]) AfterFunc(p *Process[E, F], d time.Duration, f func()) {
+	epoch := w.machineProcess(p).epoch
+	w.at(p, d, func() {
+		if p.epoch == epoch && p.runs() {
+			f()
+			w.poll()
+		}
+	})
+}
+
 // at calls run once the monotonic clock of the process p has advanced by d.
 func (w *World[E, F]) at(p *Process[E, F], d time.Duration, run func()) {
 	w.timers = append(w.timers, timer[E, F]{at: p.host.clock.Monotonic() + d, process: p, run: run})

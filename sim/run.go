@@ -28,8 +28,11 @@ const (
 	defaultClients = 3
 	// pickLimit is the most picks within which a change point of PCT falls.
 	pickLimit = 200
-	// settleLimit is the most steps of the final phase.
+	// settleLimit is the fewest steps of the limit of the final phase, and
+	// settleRate the steps of the limit for each second of the longest Within
+	// of the convergences of a simulation.
 	settleLimit = 10_000
+	settleRate  = 1_000
 	// maxJump is the largest jump of a clock and the largest offset of a
 	// strobe, in either direction.
 	maxJump = time.Hour
@@ -663,13 +666,15 @@ func (r *run[E, F, S]) input(c *prop.Case, a Action[E, F]) input {
 
 // settleDown delivers each pending event and advances the time until the
 // bound of each convergence has passed. It fails the case for a system that
-// does not settle within settleLimit steps.
+// does not settle within its limit of steps: settleLimit, or settleRate for
+// each whole second of the longest Within where those are more.
 func (r *run[E, F, S]) settleDown() {
-	bound := r.w.elapsed
+	bound, within := r.w.elapsed, time.Duration(0)
 	for _, cv := range r.s.Converges {
-		bound = max(bound, r.w.elapsed+cv.Within)
+		bound, within = max(bound, r.w.elapsed+cv.Within), max(within, cv.Within)
 	}
-	for range settleLimit {
+	limit := max(settleLimit, settleRate*int(within.Seconds()))
+	for range limit {
 		if pending := r.w.runnable(); len(pending) > 0 {
 			r.w.Step(r.pick.pick(pending).name)
 			continue
@@ -684,7 +689,7 @@ func (r *run[E, F, S]) settleDown() {
 		}
 		r.w.Advance(min(gap, left))
 	}
-	r.c.Fatalf("sim: the system takes more than %d steps to settle", settleLimit)
+	r.c.Fatalf("sim: the system takes more than %d steps to settle", limit)
 }
 
 // check observes the checksum and the fingerprint, and checks each
