@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.9.0
+
+### Minor Changes
+
+- 8c0c0c3: Add `Clock.Monotonic` for the time since the start of a host at the drift of its clock.
+
 ## 0.8.0
 
 ### Minor Changes
