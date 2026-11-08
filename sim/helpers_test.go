@@ -597,6 +597,99 @@ func ending() sim.Anatomy[event, effect] {
 	return a
 }
 
+// place makes the agent start the store name on its host within timeout, with
+// a call that parks where parks is set.
+type place struct {
+	name    string
+	token   uint64
+	timeout time.Duration
+	parks   bool
+}
+
+// unplace makes the agent stop the store name.
+type unplace struct {
+	name  string
+	token uint64
+}
+
+func (place) event()   {}
+func (unplace) event() {}
+
+// launch starts the store name on the host of its process within timeout,
+// with a call that parks where parks is set.
+type launch struct {
+	name    string
+	token   uint64
+	timeout time.Duration
+	parks   bool
+}
+
+// halt stops the store name.
+type halt struct {
+	name  string
+	token uint64
+}
+
+func (launch) effect() {}
+func (halt) effect()   {}
+
+// agent is a machine that starts and stops the stores of its host.
+type agent struct{}
+
+func (agent) Step(ev event, out []effect) []effect {
+	switch ev := ev.(type) {
+	case started:
+		return append(out, reply{to: ev.reply})
+	case place:
+		return append(out, launch(ev))
+	case unplace:
+		return append(out, halt(ev))
+	default:
+		return out
+	}
+}
+
+func (agent) Err() error { return nil }
+
+// newAgent returns an agent machine.
+func newAgent(*sim.Clock) sim.Machine[event, effect] { return agent{} }
+
+// starting returns the anatomy of the specs whose performer also performs the
+// launches and the halts of an agent. A launch starts a store whose
+// dependencies are its name and its token. A halt queues the tick of its token
+// after the stop.
+func starting() sim.Anatomy[event, effect] {
+	a := anatomy
+	a.Timeout = func(f effect) time.Duration {
+		if l, ok := f.(launch); ok {
+			return l.timeout
+		}
+		return anatomy.Timeout(f)
+	}
+	a.Perform = func(w *sim.World[event, effect], p *sim.Process[event, effect], f effect) sim.Outcome[event, effect] {
+		switch f := f.(type) {
+		case launch:
+			return sim.Outcome[event, effect]{Launch: &sim.Launch[event, effect]{
+				Machine: newStore,
+				Call: func(r uint64) event {
+					if f.parks {
+						return park{reply: r}
+					}
+					return put{key: "k", value: "v", reply: r}
+				},
+				Result: func(value any, err error) event { return called{value: value, err: err, token: f.token} },
+				Name:   f.name,
+				Deps:   []any{f.name, f.token},
+			}}
+		case halt:
+			return sim.Outcome[event, effect]{Event: ticked{token: f.token}, Stop: f.name}
+		default:
+			return anatomy.Perform(w, p, f)
+		}
+	}
+	return a
+}
+
 // fixed returns the system without inputs that build builds.
 func fixed[E, F any](build func(w *sim.World[E, F])) sim.System[E, F] {
 	return func(*prop.Case) func(w *sim.World[E, F]) { return build }

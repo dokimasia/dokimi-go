@@ -42,14 +42,13 @@ type await[E, F any] struct {
 	done    bool
 }
 
-// send sends the message m of the effect f of the process p, and bounds the
-// wait of p with the timeout of f. A message across a partition does not
-// arrive. A message to a crashed process fails with ErrCrashed, and a
-// message to a stopped process with ErrRunEnded. It fails the case for a
-// name that no process has.
-func (w *World[E, F]) send(p *Process[E, F], f F, m *Message[E]) {
+// send sends the message m of an effect of the process p, whose reply
+// completes the await a. A message across a partition does not arrive. A
+// message to a crashed process fails with ErrCrashed, and a message to a
+// stopped process with ErrRunEnded. It fails the case for a name that no
+// process has.
+func (w *World[E, F]) send(p *Process[E, F], m *Message[E], a *await[E, F]) {
 	to := w.named(m.To)
-	a := w.awaiting(p, f, m.Result)
 	switch {
 	case w.cut(p, to):
 	case to.state == crashed:
@@ -62,8 +61,15 @@ func (w *World[E, F]) send(p *Process[E, F], f F, m *Message[E]) {
 }
 
 // awaiting returns the await of the result of the effect f of the process p,
-// whose event result builds, and expires it at the timeout of f.
-func (w *World[E, F]) awaiting(p *Process[E, F], f F, result func(value any, err error) E) *await[E, F] {
+// whose event result builds, and expires it at the timeout of f. Where lost is
+// set, a loss after the effect has taken the result: the await has its result
+// already, so a reply to it returns to no process.
+func (w *World[E, F]) awaiting(
+	p *Process[E, F], f F, result func(value any, err error) E, lost bool,
+) *await[E, F] {
+	if lost {
+		return &await[E, F]{done: true}
+	}
 	a := &await[E, F]{result: result, process: p, epoch: p.epoch}
 	if d := w.a.Timeout(f); d > 0 {
 		w.at(p, d, func() { w.expire(a) })

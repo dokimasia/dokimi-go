@@ -40,6 +40,34 @@ func stored(d disk, key string) func(w *sim.World[event, effect]) {
 	}
 }
 
+// losing returns the anatomy of the agent whose launches and halts have the
+// dependency host, and whose calls have the dependency peer. The failure of a
+// launch or a halt is the event called.
+func losing() sim.Anatomy[event, effect] {
+	a := starting()
+	a.Dependency = func(f effect) (string, bool) {
+		switch f.(type) {
+		case launch, halt:
+			return "host", true
+		case call:
+			return "peer", true
+		default:
+			return anatomy.Dependency(f)
+		}
+	}
+	a.Fail = func(f effect, err error) (event, bool) {
+		switch f := f.(type) {
+		case launch:
+			return called{err: err, token: f.token}, true
+		case halt:
+			return called{err: err, token: f.token}, true
+		default:
+			return anatomy.Fail(f, err)
+		}
+	}
+	return a
+}
+
 func TestFault(t *testing.T) {
 	t.Parallel()
 
@@ -383,6 +411,62 @@ func TestFault(t *testing.T) {
 					"the store takes the loss of its wait, and no item of it")
 			})
 		})
+
+		t.Run("stops the process of the stop of the effect that it loses before the failure", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, losing())
+				w.Spawn("agent", newAgent)
+				w.Deliver("agent", place{name: "cell", token: 7, parks: true})
+				drain(w)
+				w.LoseAfter("host")
+				w.Deliver("agent", unplace{name: "cell", token: 8})
+				drain(w)
+				expect.Equal(c, events(w, "cell"), []event{park{reply: 2}, stopped{}},
+					"the cell takes the stop event of the lost halt")
+				expect.Equal(c, events(w, "agent")[3:],
+					[]event{called{err: errStopped, token: 7}, called{err: sim.ErrLost, token: 8}},
+					"the agent takes the reply of the stop event before the failure of the halt")
+			})
+		})
+
+		t.Run("starts the machine of the launch of the effect that it loses without a reply to the effect",
+			func(t *testing.T) {
+				t.Parallel()
+
+				inCase(t, func(c *prop.Case) {
+					w := sim.New(c, losing())
+					w.Spawn("agent", newAgent)
+					w.LoseAfter("host")
+					w.Deliver("agent", place{name: "cell", token: 7})
+					drain(w)
+					expect.Equal(c, events(w, "cell"),
+						[]event{put{key: "k", value: "v", reply: 2}, committed{token: 1}},
+						"the cell takes the call of the lost launch")
+					expect.Equal(c, events(w, "agent")[2:], []event{called{err: sim.ErrLost, token: 7}},
+						"the agent takes the failure of the launch and no reply of the cell")
+				})
+			})
+
+		t.Run("passes the message of the effect that it loses to its receiver without a reply to the effect",
+			func(t *testing.T) {
+				t.Parallel()
+
+				inCase(t, func(c *prop.Case) {
+					w := sim.New(c, losing())
+					w.Spawn("a", newStore)
+					w.Spawn("b", newStore)
+					w.LoseAfter("peer")
+					w.Deliver("a", forward{to: "b", key: "k", token: 7, timeout: time.Second})
+					drain(w)
+					expect.Equal(c, events(w, "b")[1:],
+						[]event{put{key: "k", value: "v", reply: 3}, committed{token: 1}},
+						"b takes the call of the lost message")
+					expect.Equal(c, events(w, "a")[2:], []event{called{err: sim.ErrLost, token: 7}},
+						"a takes the failure of the call and no reply of b")
+				})
+			})
 	})
 
 	t.Run("Outage", func(t *testing.T) {

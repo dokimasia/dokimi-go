@@ -41,6 +41,7 @@ type Outcome[E, F any] struct {
 	Next func() (ev E, ok, done bool)
 	// Message is the inbound call that the effect sends to another process,
 	// whose reply is the result of the effect, and nil for any other effect.
+	// At a loss after the effect, the reply returns to no process.
 	Message *Message[E]
 	// Launch is the machine that the effect starts on the host of its
 	// process, and nil for any other effect.
@@ -49,20 +50,22 @@ type Outcome[E, F any] struct {
 	// candidacy of a campaign or the session of a join, as a runtime ends it
 	// when it cancels the context of the call of the effect. It is nil for an
 	// effect without such an end. The world calls it at most once: at a loss
-	// after the effect, which drops the outcome, and for a wait at an outage of
-	// its dependency, at an effect that ends the wait and at the stop of its
-	// process. A crash does not call it, because the dependencies keep what
+	// after the effect, which drops the result and the wait, and for a wait at
+	// an outage of its dependency, at an effect that ends the wait and at the
+	// stop of its process. A crash does not call it, because the dependencies keep what
 	// they applied.
 	Cancel func()
 	// Stop is the name of a process that an effect started and that this
 	// effect stops with the stop event, and empty for any other effect. The
-	// world stops the process before it queues Event.
+	// world stops the process before it queues Event, or the event of the
+	// failure at a loss after the effect.
 	Stop string
 }
 
 // Launch is a machine that an effect starts on the host of its process. The
 // first event of the machine is an inbound call, whose reply returns to the
-// process of the effect as the result of the effect.
+// process of the effect as the result of the effect. At a loss after the
+// effect, the machine starts and the reply returns to no process.
 type Launch[E, F any] struct {
 	// Machine builds the machine from the clock of the host.
 	Machine func(clock *Clock) Machine[E, F]
@@ -511,7 +514,7 @@ func (w *World[E, F]) step(p *Process[E, F], ev E, replies bool) {
 			continue
 		}
 		if !w.faulted(p, f) {
-			w.apply(p, f)
+			w.apply(p, f, false)
 		}
 		if token, ends := w.ends(f); ends {
 			w.cancelWait(p, token)
@@ -563,13 +566,33 @@ func (w *World[E, F]) reply(p *Process[E, F], to uint64, value any, err error) {
 
 // apply performs the effect f of the process p: it stops the process of the
 // stop of the outcome, queues the event of the result for a later step of p,
-// starts the wait, sends the message and starts the machine of the launch. A
-// wait whose outcome has an event has delivered that event.
-func (w *World[E, F]) apply(p *Process[E, F], f F) {
+// starts the wait, sends the message and starts the machine of the launch.
+// Where lost is set, a loss after the effect has taken the result: apply calls
+// the cancel of the outcome in place of the event and the wait, and the
+// replies to the message and to the launch return to no process.
+func (w *World[E, F]) apply(p *Process[E, F], f F, lost bool) {
 	o := w.a.Perform(w, p, f)
 	if o.Stop != "" {
 		w.halt(p, o.Stop)
 	}
+	switch {
+	case !lost:
+		w.result(p, f, o)
+	case o.Cancel != nil:
+		o.Cancel()
+	}
+	if o.Message != nil {
+		w.send(p, o.Message, w.awaiting(p, f, o.Message.Result, lost))
+	}
+	if o.Launch != nil {
+		w.launch(p, o.Launch, w.awaiting(p, f, o.Launch.Result, lost))
+	}
+}
+
+// result queues the event of the outcome o of the effect f of the process p
+// for a later step of p, and starts the wait of o. A wait whose outcome has an
+// event has delivered that event.
+func (w *World[E, F]) result(p *Process[E, F], f F, o Outcome[E, F]) {
 	evented := !reflect.ValueOf(&o.Event).Elem().IsZero()
 	if evented {
 		p.queue = append(p.queue, queued[E]{ev: o.Event, epoch: p.epoch})
@@ -582,21 +605,14 @@ func (w *World[E, F]) apply(p *Process[E, F], f F) {
 			delivered: evented,
 		})
 	}
-	if o.Message != nil {
-		w.send(p, f, o.Message)
-	}
-	if o.Launch != nil {
-		w.launch(p, f, o.Launch)
-	}
 }
 
 // launch starts the machine s on the host of the process p, the process of
-// the effect f. The process of s takes a new machine in a new epoch, and the
-// call of s as its first event. The reply to the call returns to p as the
-// event of the result of s, within the timeout of f. launch fails the case
-// for a process of another host, for a process that Spawn added and for a
-// process that runs.
-func (w *World[E, F]) launch(p *Process[E, F], f F, s *Launch[E, F]) {
+// the effect of s. The process of s takes a new machine in a new epoch, and
+// the call of s as its first event. The reply to the call completes the await
+// a. launch fails the case for a process of another host, for a process that
+// Spawn added and for a process that runs.
+func (w *World[E, F]) launch(p *Process[E, F], s *Launch[E, F], a *await[E, F]) {
 	q := w.Process(s.Name)
 	switch {
 	case q == nil:
@@ -613,7 +629,6 @@ func (w *World[E, F]) launch(p *Process[E, F], f F, s *Launch[E, F]) {
 		q.newMachine, q.deps = s.Machine, s.Deps
 	}
 	w.incarnate(q)
-	a := w.awaiting(p, f, s.Result)
 	token := w.token()
 	w.calls[token] = inbound[E, F]{process: q, await: a, build: s.Call}
 	q.queue = append(q.queue, queued[E]{ev: s.Call(token), epoch: q.epoch})

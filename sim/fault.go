@@ -32,7 +32,8 @@ const (
 	FaultRepair Fault = "repair"
 	// FaultLoseBefore loses an effect before its dependency applies it.
 	FaultLoseBefore Fault = "lose-before"
-	// FaultLoseAfter loses an effect after its dependency applies it.
+	// FaultLoseAfter loses the result of an effect after its dependency applies
+	// it.
 	FaultLoseAfter Fault = "lose-after"
 	// FaultOutage loses each effect of a dependency.
 	FaultOutage Fault = "outage"
@@ -245,8 +246,12 @@ func (w *World[E, F]) LoseBefore(dependency string) {
 }
 
 // LoseAfter arms a loss of the next effect of the dependency named
-// dependency, after the dependency applies it. The loss calls the Cancel of
-// the outcome that it drops.
+// dependency, after the dependency applies it. The loss takes the result of
+// the effect: the world applies the stop, the message and the launch of the
+// outcome, and the process of the effect takes the event of the failure in
+// place of the event of the outcome. The replies to the message and to the
+// launch return to no process, and the loss calls the Cancel of the outcome in
+// place of its wait.
 func (w *World[E, F]) LoseAfter(dependency string) {
 	d := w.dependency(dependency)
 	d.armed = append(d.armed, FaultLoseAfter)
@@ -326,7 +331,7 @@ func (w *World[E, F]) restore(d *dependency[E, F]) {
 	for _, s := range d.stalls {
 		if !s.done {
 			s.done = true
-			w.apply(s.process, s.f)
+			w.apply(s.process, s.f, false)
 		}
 	}
 }
@@ -640,9 +645,7 @@ func (w *World[E, F]) faulted(p *Process[E, F], f F) bool {
 		kind := d.armed[0]
 		d.armed = d.armed[1:]
 		if kind == FaultLoseAfter {
-			if o := w.a.Perform(w, p, f); o.Cancel != nil {
-				o.Cancel()
-			}
+			w.apply(p, f, true)
 		}
 		w.lose(p, f, w.lost(f))
 		w.strike(kind)
