@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.10.2
+
+### Patch Changes
+
+- be74e71: Fix `sim.Run` to start a host that exits in the final phase again, at once and then after a delay that doubles from 10 s to 5 minutes.
+
 ## 0.10.1
 
 ### Patch Changes
