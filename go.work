@@ -16,12 +16,12 @@ use (
 	./stub
 )
 
-replace go.dokimi.dev/fault v0.2.3 => ./fault
+replace go.dokimi.dev/fault v0.2.4 => ./fault
 
-replace go.dokimi.dev/medium v0.2.0 => ./medium
+replace go.dokimi.dev/medium v0.2.1 => ./medium
 
-replace go.dokimi.dev/spec v0.5.0 => ./spec
+replace go.dokimi.dev/spec v0.5.1 => ./spec
 
-replace go.dokimi.dev/conform v0.16.2 => ./conform
+replace go.dokimi.dev/conform v0.16.3 => ./conform
 
-replace go.dokimi.dev/host v0.2.0 => ./host
+replace go.dokimi.dev/host v0.2.1 => ./host

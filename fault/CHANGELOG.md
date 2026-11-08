@@ -1,5 +1,11 @@
 # go.dokimi.dev/fault
 
+## 0.2.4
+
+### Patch Changes
+
+- 207b7f0: Require `go.dokimi.dev/assert` v0.20.0.
+
 ## 0.2.3
 
 ### Patch Changes
