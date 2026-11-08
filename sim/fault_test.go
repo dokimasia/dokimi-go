@@ -980,6 +980,19 @@ func TestFault(t *testing.T) {
 			})
 		})
 
+		t.Run("restarts each exited host", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				w.Deliver("store", put{key: "k", reply: 9})
+				w.Step("store")
+				w.Recover()
+				expect.Equal(c, w.Process("store").Epoch(), uint64(2), "the process that the exit stopped restarts")
+				expect.Empty(c, w.Faults(), "no exit remains after the recovery")
+			})
+		})
+
 		t.Run("leaves the hosts of a stopped world stopped", func(t *testing.T) {
 			t.Parallel()
 
@@ -1049,6 +1062,17 @@ func TestFault(t *testing.T) {
 				w.Outage("disk")
 				w.Slow("feed")
 				expect.Equal(c, w.Faults(), []string{"outage:disk", "slow:feed"}, "each dependency has its own faults")
+			})
+		})
+
+		t.Run("lists an exited host under the kind exit", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				w.Deliver("store", put{key: "k", reply: 9})
+				w.Step("store")
+				expect.Equal(c, w.Faults(), []string{"exit:store"}, "the exit of the host is apart from a crash")
 			})
 		})
 

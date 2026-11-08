@@ -114,6 +114,31 @@ func unstopped() sim.Invariant[event, effect] {
 	}
 }
 
+// tally is the count of the steps of the cases of a simulation: the steps of
+// every case, and the most steps of one case.
+type tally struct {
+	total, most int
+}
+
+// counting returns a simulation without processes whose one action counts the
+// steps of its cases into the tally. Its system starts the count of a case at
+// 0.
+func counting() (sim.Simulation[event, effect, int], *tally) {
+	var steps int
+	t := &tally{}
+	s := simulation()
+	s.System = fixed(func(*sim.World[event, effect]) { steps = 0 })
+	s.Actions = []sim.Action[event, effect]{{
+		Name: "count",
+		Run: func(*sim.World[event, effect], int, any) {
+			steps++
+			t.total++
+			t.most = max(t.most, steps)
+		},
+	}}
+	return s, t
+}
+
 // observe passes the effects that only the faults of a run cause to h as
 // labels: a partition after a repair, a message to the store b that b never
 // takes, takes twice or takes out of order, and a step on a clock before the
@@ -373,6 +398,47 @@ func TestRun(t *testing.T) {
 			}}
 			prop.ForAll(t, "one host at most is down", func(c *prop.Case) { sim.Run(c, s) },
 				prop.Require("the host node is down", 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
+		})
+
+		t.Run("restarts an exited host through the action restart", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Actions = append(s.Actions, sim.Action[event, effect]{
+				Name: "empty",
+				Call: true,
+				Run: func(w *sim.World[event, effect], client int, _ any) {
+					w.Call(client, "a", "Put", nil, nil, func(r uint64) event { return put{key: "k", reply: r} })
+				},
+			})
+			s.Tolerate = map[sim.Fault]int{sim.FaultRestart: 1}
+			prop.ForAll(t, "the action restart starts the exited store", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Require(string(sim.FaultRestart), 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
+		})
+
+		t.Run("takes at most MaxSteps steps in the active phase of a case", func(t *testing.T) {
+			t.Parallel()
+
+			s, steps := counting()
+			s.MaxSteps = 3
+			prop.ForAll(t, "each case counts its steps", func(c *prop.Case) { sim.Run(c, s) },
+				prop.Hermetic(), prop.Seed(1), prop.Store(""), prop.Workers(1))
+			assert.True(t, steps.most <= 3, "no case of the simulation takes more than three steps")
+		})
+
+		t.Run("takes a mean of MeanSteps steps in the active phase of a case", func(t *testing.T) {
+			t.Parallel()
+
+			long, longSteps := counting()
+			long.MeanSteps, long.MaxSteps = 300, 1000
+			base, baseSteps := counting()
+			base.MaxSteps = 1000
+			for _, s := range []sim.Simulation[event, effect, int]{long, base} {
+				prop.ForAll(t, "each case counts its steps", func(c *prop.Case) { sim.Run(c, s) },
+					prop.Hermetic(), prop.Seed(1), prop.Store(""), prop.Workers(1))
+			}
+			assert.True(t, longSteps.total > baseSteps.total,
+				"the cases of a mean of 300 steps take more steps than the cases of the default mean of 30")
 		})
 
 		t.Run("builds the world of a case from the inputs that its system takes from the case", func(t *testing.T) {
@@ -970,8 +1036,11 @@ func TestRun(t *testing.T) {
 					"a value\n" +
 					"step 9: b, epoch 1, clock 0s, faults [partition]: sim_test.stopped{}, error store: a put " +
 					"without a value\n" +
-					"step 10: a, epoch 2, clock 0s: sim_test.stopped{} -> sim_test.reply{value:<nil> " +
-					"err:store: stopped to:4}",
+					"step 10: b, epoch 2, clock 0s: sim_test.started{reply:7} -> sim_test.reply{value:<nil> " +
+					"err:<nil> to:7}\n" +
+					"step 11: a, epoch 2, clock 0s: sim_test.stopped{} -> sim_test.reply{value:<nil> " +
+					"err:store: stopped to:4}\n" +
+					"step 12: b, epoch 2, clock 0s: sim_test.stopped{}",
 				"the history of the calls:\n" +
 					"event 0: client 0 invoke Park []\n" +
 					"event 1: client 1 invoke Put []\n" +

@@ -65,6 +65,10 @@ const (
 	FaultDiskReplacement Fault = "disk-replacement"
 )
 
+// exitKind is the kind of the exit of a host in the faults in force, which is
+// no kind of Fault.
+const exitKind = "exit"
+
 // ErrLost is the error of an effect that a fault of its dependency loses,
 // for a dependency whose directive fault does not declare an error.
 var ErrLost = errors.New("sim: a fault of the dependency lost the call")
@@ -455,7 +459,8 @@ func media[E, F any](p *Process[E, F]) []*medium.Memory {
 	return out
 }
 
-// Recover ends each fault in force and restarts each crashed host.
+// Recover ends each fault in force, and restarts each crashed host and each
+// exited host.
 func (w *World[E, F]) Recover() {
 	for _, h := range w.hosts {
 		if h.paused {
@@ -465,7 +470,7 @@ func (w *World[E, F]) Recover() {
 		if h.full {
 			unfill(h)
 		}
-		if h.state == crashed {
+		if h.state == crashed || h.state == exited {
 			w.restart(h)
 		}
 	}
@@ -551,22 +556,27 @@ func (w *World[E, F]) link(a, b string) [2]string {
 	return [2]string{a, b}
 }
 
-// Faults returns the faults in force: the crash or the disk replacement, the
-// pause, the strobe and the full media of each host in the order of their
-// additions, the partition, the slow links in the order of their strikes, and
-// the outage, the slowness and the armed losses of each dependency in the
-// order in which the world first saw it. Each fault is its kind and its
-// target, such as pause:store or slow-link:a,b, and the partition is its kind
-// alone.
+// Faults returns the faults in force: the crash, the disk replacement or the
+// exit, the pause, the strobe and the full media of each host in the order of
+// their additions, the partition, the slow links in the order of their
+// strikes, and the outage, the slowness and the armed losses of each
+// dependency in the order in which the world first saw it. Each fault is its
+// kind and its target, such as pause:store or slow-link:a,b, and the
+// partition is its kind alone. The kind of the exit of a host is exit, which
+// is no kind of Fault, so the bounds of Tolerate do not count it.
 func (w *World[E, F]) Faults() []string {
 	var out []string
 	for _, h := range w.hosts {
-		if h.state == crashed {
+		switch h.state {
+		case exited:
+			out = append(out, exitKind+":"+h.name)
+		case crashed:
 			kind := FaultCrash
 			if h.replaced {
 				kind = FaultDiskReplacement
 			}
 			out = append(out, string(kind)+":"+h.name)
+		case running, stopped:
 		}
 		if h.paused {
 			out = append(out, string(FaultPause)+":"+h.name)

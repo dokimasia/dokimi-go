@@ -12,7 +12,9 @@ import (
 // Host is a machine of a world on which processes run. The processes of a
 // host share its clock. A crash, a restart, a pause, a jump and a strobe strike
 // each process of the host at once, and a fault of a medium strikes the media
-// of each of them. A component runs alone on a host of its own.
+// of each of them. The error of the machine of a process ends each process of
+// its host, and the host exits until a restart. A component runs alone on a
+// host of its own.
 type Host[E, F any] struct {
 	w      *World[E, F]
 	clock  *Clock

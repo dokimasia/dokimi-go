@@ -272,6 +272,24 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
+		t.Run("stops each other process of the host of a machine that stops itself", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Deliver("cache", put{key: "k", reply: 9})
+				w.Step("cache")
+				expect.Equal(c, events(w, "store")[1:], []event{stopped{}}, "the store takes its stop event")
+				log := w.Log()
+				expect.Equal(c, []string{log[len(log)-2].Process, log[len(log)-1].Process}, []string{"cache", "store"},
+					"the machine that stopped itself takes its stop event first")
+				for _, name := range []string{"store", "cache", "other"} {
+					w.Deliver(name, ticked{token: 1})
+				}
+				expect.Equal(c, w.Pending(), []string{"other"}, "the processes of the exited host take no event")
+			})
+		})
+
 		t.Run("queues the next event of each wait after every step until the wait ends", func(t *testing.T) {
 			t.Parallel()
 
@@ -1087,6 +1105,23 @@ func TestWorld(t *testing.T) {
 				"the failure names the process, which no host has")
 		})
 
+		t.Run("crashes the media of an exited host", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, anatomy)
+				m := mediumWith("data")
+				w.Spawn("store", newStore, disk{}, m)
+				w.Step("store")
+				assert.NoError(c, write(c, m, "lost"), "the medium takes the write")
+				w.Deliver("store", put{key: "k", reply: 9})
+				w.Step("store")
+				w.Crash("store")
+				expect.Equal(c, contentOf(c, m), "data", "the crash drops the write that no sync covered")
+				expect.Equal(c, w.Faults(), []string{"crash:store"}, "the crash of the exited host is in force")
+			})
+		})
+
 		t.Run("crashes each process of the host and leaves the other hosts running", func(t *testing.T) {
 			t.Parallel()
 
@@ -1251,7 +1286,7 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
-		t.Run("fails the case for a host that has not crashed", func(t *testing.T) {
+		t.Run("fails the case for a host that runs", func(t *testing.T) {
 			t.Parallel()
 
 			got := failure(t, func(c *prop.Case) {
@@ -1259,7 +1294,8 @@ func TestWorld(t *testing.T) {
 				w.Spawn("store", newStore)
 				w.Restart("store")
 			})
-			expect.Equal(t, got.Contract, `sim: the host "store" has not crashed`, "the failure names the host")
+			expect.Equal(t, got.Contract, `sim: the host "store" has neither crashed nor exited`,
+				"the failure names the host")
 		})
 
 		t.Run("starts each process of the host that Spawn added in a new epoch", func(t *testing.T) {
@@ -1275,7 +1311,22 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
-		t.Run("leaves a process that stopped before the crash of its host stopped", func(t *testing.T) {
+		t.Run("starts each process of an exited host that Spawn added in a new epoch", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := node(c)
+				w.Deliver("cache", put{key: "k", reply: 9})
+				w.Step("cache")
+				w.Restart("node")
+				expect.Equal(c, w.Pending(), []string{"store", "cache"},
+					"each process of the exited host takes its start")
+				expect.Equal(c, []uint64{w.Process("store").Epoch(), w.Process("cache").Epoch()}, []uint64{2, 2},
+					"the restart raises the epoch of each process of the host")
+			})
+		})
+
+		t.Run("starts each process of a crashed host that its exit stopped", func(t *testing.T) {
 			t.Parallel()
 
 			inCase(t, func(c *prop.Case) {
@@ -1284,8 +1335,7 @@ func TestWorld(t *testing.T) {
 				w.Step("cache")
 				w.Crash("node")
 				w.Restart("node")
-				expect.Equal(c, w.Pending(), []string{"store"}, "the restart starts the store alone")
-				expect.Equal(c, w.Process("cache").Epoch(), uint64(1), "the stopped cache keeps its epoch")
+				expect.Equal(c, w.Pending(), []string{"store", "cache"}, "the restart starts each process of the host")
 			})
 		})
 

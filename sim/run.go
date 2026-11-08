@@ -97,6 +97,12 @@ type Simulation[E, F, S any] struct {
 
 	// Clients is the number of clients that make calls, and 3 for 0.
 	Clients int
+	// MeanSteps is the mean number of steps of the active phase of a case,
+	// and the mean of the package stateful, 30, for 0.
+	MeanSteps int
+	// MaxSteps is the most steps of the active phase of a case, and the most
+	// of the package stateful, 100, for 0.
+	MaxSteps int
 	// Strategy chooses the next process. The zero Strategy is PCT(3).
 	Strategy Strategy
 	// Isolation is the isolation level of the transactions of the clients,
@@ -165,7 +171,8 @@ const (
 
 // Run runs one case of s on a new world: the active phase of the actions and
 // the faults as the steps of a machine of the package stateful of the assert
-// library, then the recovery and the final phase. It checks the rules against
+// library, with the mean and the most steps of MeanSteps and MaxSteps, then
+// the recovery and the final phase. It checks the rules against
 // each step of a machine before the world performs the effects of the step.
 // After every step it waits for the quiescence of the components and checks
 // the invariants. After every step at which no client has an open call, it
@@ -182,10 +189,17 @@ const (
 // runs after the end of its case.
 func Run[E, F, S any](c *prop.Case, s Simulation[E, F, S]) {
 	r := begin(c, s)
+	var opts []stateful.Option
+	if s.MeanSteps > 0 {
+		opts = append(opts, stateful.Mean(s.MeanSteps))
+	}
+	if s.MaxSteps > 0 {
+		opts = append(opts, stateful.Max(s.MaxSteps))
+	}
 	stateful.Steps(c, stateful.Machine[struct{}]{
 		Actions: r.actions(),
 		Settle:  func(*prop.Case, struct{}) { r.settle() },
-	})
+	}, opts...)
 }
 
 // confirmEvery is the count of the passing cases of Test after which it
@@ -763,7 +777,7 @@ func (r *run[E, F, S]) faults() []stateful.Action[struct{}] {
 	}
 	machine := func(h *Host[E, F]) bool { return h.component() == nil }
 	hosted := func(h *Host[E, F]) bool { return h.component() != nil && h.state == running }
-	down := func(h *Host[E, F]) bool { return h.state == crashed }
+	down := func(h *Host[E, F]) bool { return h.state == crashed || h.state == exited }
 	asleep := func(h *Host[E, F]) bool { return h.paused }
 	seen := func(*dependency[E, F]) bool { return true }
 	calm := func(d *dependency[E, F]) bool { return !d.outage }

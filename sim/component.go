@@ -148,7 +148,7 @@ func (w *World[E, F]) Invoke(
 	case stopped:
 		invoked.Unknown(ErrRunEnded)
 		return
-	case running:
+	default:
 	}
 	ctx, cancel := context.WithCancel(p.comp.env.Lifetime())
 	in := &invocation{call: invoked, cancel: cancel, process: process, client: client}

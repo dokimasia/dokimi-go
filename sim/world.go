@@ -400,8 +400,8 @@ func (w *World[E, F]) callers() []int {
 // Step makes the process named name step on its oldest event, and drops each
 // event of an earlier epoch before it, with an entry of the log for each. It
 // returns false for a process without such an event, and for a process that
-// does not run. The world stops a process whose machine reports an error
-// after the step, and takes the next event of each wait after the step. An
+// does not run. The world ends the host of a process whose machine reports an
+// error after the step, and takes the next event of each wait after the step. An
 // effect that ends a wait cancels the wait of the process with its token,
 // after the world has performed the effect, and the world takes the events of
 // the wait until its Next reports its end.
@@ -441,7 +441,8 @@ func (w *World[E, F]) Step(name string) bool {
 }
 
 // take makes the process p take the event ev, at the offset of the strobe of
-// its host, and stops p when its machine reports an error after the step.
+// its host, and ends the host of p when its machine reports an error after
+// the step.
 func (w *World[E, F]) take(p *Process[E, F], ev E) {
 	h := p.host
 	if h.strobe.left > 0 {
@@ -452,8 +453,23 @@ func (w *World[E, F]) take(p *Process[E, F], ev E) {
 	w.step(p, ev, false)
 	h.clock.strobe = 0
 	if p.machine.Err() != nil {
-		w.stop(p)
+		w.exit(p)
 	}
+}
+
+// exit ends the host of the process p, whose machine reported an error: it
+// stops p, then each other process of the host that runs, in the order of
+// their spawns, and the host exits until a restart. The pause and the strobe
+// of the host end, as at a crash.
+func (w *World[E, F]) exit(p *Process[E, F]) {
+	h := p.host
+	w.stop(p)
+	for _, q := range h.procs {
+		if q.state == running {
+			w.stop(q)
+		}
+	}
+	h.state, h.paused, h.strobe = exited, false, strobe{}
 }
 
 // step makes p apply ev, records the step, judges the rules of a run, and
@@ -632,8 +648,9 @@ func (w *World[E, F]) poll() {
 // process until its restart has the old epoch, so the restarted machine never
 // takes it. A component process crashes its incarnation by a process crash or
 // by a power loss, which the case chooses and which shrinks to a process
-// crash. Its open calls end as unknown with medium.ErrCrashed. Crash fails
-// the case for a name that no host has, and for a host that does not run.
+// crash. Its open calls end as unknown with medium.ErrCrashed. A crash of an
+// exited host crashes its media alone. Crash fails the case for a name that
+// no host has, and for a host that has crashed or stopped.
 func (w *World[E, F]) Crash(name string) {
 	h := w.down(name)
 	for _, p := range h.procs {
@@ -653,39 +670,39 @@ func (w *World[E, F]) Crash(name string) {
 
 // down marks the host named name as crashed and returns it: its pause and its
 // strobe are gone. It fails the case for a name that no host has, and for a
-// host that does not run.
+// host that has crashed or stopped.
 func (w *World[E, F]) down(name string) *Host[E, F] {
 	h := w.hostNamed(name)
-	if h.state != running {
+	if h.state != running && h.state != exited {
 		w.c.Fatalf("sim: the host %q does not run", name)
 	}
 	h.state, h.paused, h.strobe = crashed, false, strobe{}
 	return h
 }
 
-// Restart restarts the crashed host named name. Each process of the host that
-// the crash crashed and that Spawn added takes a new machine in a new epoch,
-// and its start. A component process starts a new incarnation and opens its
-// value. A process that an effect started remains crashed until an effect
-// starts it again. Restart fails the case for a name that no host has, and
-// for a host that has not crashed.
+// Restart restarts the crashed or exited host named name. Each process of the
+// host that the crash crashed or the exit stopped, and that Spawn added, takes
+// a new machine in a new epoch, and its start. A component process starts a
+// new incarnation and opens its value. A process that an effect started
+// remains down until an effect starts it again. Restart fails the case for a
+// name that no host has, and for a host that has neither crashed nor exited.
 func (w *World[E, F]) Restart(name string) {
 	h := w.hostNamed(name)
-	if h.state != crashed {
-		w.c.Fatalf("sim: the host %q has not crashed", name)
+	if h.state != crashed && h.state != exited {
+		w.c.Fatalf("sim: the host %q has neither crashed nor exited", name)
 	}
 	w.restart(h)
 	w.strike(FaultRestart)
 }
 
-// restart starts the crashed host h again, and each process of h that the
-// crash crashed and that Spawn added: a machine through start, and a
-// component through startComponent.
+// restart starts the crashed or exited host h again, and each process of h
+// that Spawn added: a machine through start, and a component through
+// startComponent. Each such process of a host that is down is down too.
 func (w *World[E, F]) restart(h *Host[E, F]) {
 	h.state, h.replaced = running, false
 	for _, p := range h.procs {
 		switch {
-		case p.state != crashed || p.started:
+		case p.started:
 		case p.comp != nil:
 			w.startComponent(p)
 		default:

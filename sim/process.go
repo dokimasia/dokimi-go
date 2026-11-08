@@ -52,12 +52,16 @@ const (
 	// running is a process that takes events, while its host is not paused,
 	// and a host that runs.
 	running state = iota
-	// stopped is a process that took the stop event, or whose machine stopped
-	// itself, and a host after the stop of the world.
+	// stopped is a process that took the stop event, at the stop of the world,
+	// at the exit of its host or at the stop by an effect, and a host after
+	// the stop of the world.
 	stopped
 	// crashed is a process whose machine is gone until a restart, and a host
 	// that crashed.
 	crashed
+	// exited is a host whose processes the error of the machine of one of
+	// them stopped, until a restart.
+	exited
 )
 
 // Name returns the name of the process.
