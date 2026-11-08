@@ -33,6 +33,11 @@ const (
 	// of the convergences of a simulation.
 	settleLimit = 10_000
 	settleRate  = 1_000
+	// restartBase is the delay of the second restart of a host in the final
+	// phase, and restartCap the longest delay of a restart. They are the
+	// defaults of the CrashLoopBackOff of the kubelet.
+	restartBase = 10 * time.Second
+	restartCap  = 5 * time.Minute
 	// maxJump is the largest jump of a clock and the largest offset of a
 	// strobe, in either direction.
 	maxJump = time.Hour
@@ -187,9 +192,11 @@ const (
 // the weight 1 and the advance of time. Half of the cases also keep the
 // delivery deliver fast, at the weight of the other actions of the active
 // phase together. A property that calls Run with a MaxSteps above 100 passes
-// prop.MaxChoices with 82 choices for each step, as Test does. It checks the
-// rules against each step of a machine before the world performs the effects
-// of the step.
+// prop.MaxChoices with 82 choices for each step, as Test does. The final phase
+// starts each host that exits again, at once for its first exit and after a
+// delay that doubles from 10 s up to 5 minutes for each later one. It checks
+// the rules against each step of a machine before the world performs the
+// effects of the step.
 // After every step it waits for the quiescence of the components and checks
 // the invariants. After every step at which no client has an open call, it
 // also checks the history against the spec, partitioned by the keys of the
@@ -665,16 +672,19 @@ func (r *run[E, F, S]) input(c *prop.Case, a Action[E, F]) input {
 }
 
 // settleDown delivers each pending event and advances the time until the
-// bound of each convergence has passed. It fails the case for a system that
-// does not settle within its limit of steps: settleLimit, or settleRate for
-// each whole second of the longest Within where those are more.
+// bound of each convergence has passed, and starts each host that exits again
+// through supervise. It fails the case for a system that does not settle
+// within its limit of steps: settleLimit, or settleRate for each whole second
+// of the longest Within where those are more.
 func (r *run[E, F, S]) settleDown() {
 	bound, within := r.w.elapsed, time.Duration(0)
 	for _, cv := range r.s.Converges {
 		bound, within = max(bound, r.w.elapsed+cv.Within), max(within, cv.Within)
 	}
 	limit := max(settleLimit, settleRate*int(within.Seconds()))
+	backoffs := map[*Host[E, F]]backoff{}
 	for range limit {
+		r.supervise(backoffs)
 		if pending := r.w.runnable(); len(pending) > 0 {
 			r.w.Step(r.pick.pick(pending).name)
 			continue
@@ -690,6 +700,40 @@ func (r *run[E, F, S]) settleDown() {
 		r.w.Advance(min(gap, left))
 	}
 	r.c.Fatalf("sim: the system takes more than %d steps to settle", limit)
+}
+
+// backoff is the restart state of a host in the final phase: the delay of its
+// next restart, the time of its last restart on its monotonic clock, and
+// whether a restart is due.
+type backoff struct {
+	delay time.Duration
+	since time.Duration
+	armed bool
+}
+
+// supervise arms a restart of each host that has exited in the final phase, as
+// a supervisor starts a process that exits. The first restart of a host is due
+// at once, and each later one after the delay of its backoff on the monotonic
+// clock of the host. The delay is restartBase for the second restart, and
+// doubles for each later one up to restartCap. A host that ran for more than
+// twice restartCap after its last restart starts again at once.
+func (r *run[E, F, S]) supervise(backoffs map[*Host[E, F]]backoff) {
+	for _, h := range r.w.hosts {
+		b := backoffs[h]
+		if h.state != exited || b.armed {
+			continue
+		}
+		wait := b.delay
+		if h.clock.Monotonic()-b.since > 2*restartCap {
+			wait = 0
+		}
+		b.armed = true
+		backoffs[h] = b
+		r.w.at(h.procs[0], wait, func() {
+			r.w.restart(h)
+			backoffs[h] = backoff{delay: min(max(restartBase, 2*wait), restartCap), since: h.clock.Monotonic()}
+		})
+	}
 }
 
 // check observes the checksum and the fingerprint, and checks each

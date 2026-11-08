@@ -252,6 +252,32 @@ func (m periodic) Step(_ event, out []effect) []effect {
 
 func (periodic) Err() error { return nil }
 
+// errFragile is the error with which a fragile machine stops itself.
+const errFragile storeError = "fragile: the machine stopped"
+
+// fragile is a machine that stops itself with errFragile once it has run for
+// life after its start, and at its start for a life of 0.
+type fragile struct {
+	err  error
+	life time.Duration
+}
+
+func (m *fragile) Step(ev event, out []effect) []effect {
+	switch ev := ev.(type) {
+	case started:
+		if m.life == 0 {
+			m.err = errFragile
+			return out
+		}
+		return append(out, reply{to: ev.reply}, timer{token: 1, after: m.life})
+	case ticked:
+		m.err = errFragile
+	}
+	return out
+}
+
+func (m *fragile) Err() error { return m.err }
+
 // timed is a machine that sets one timer of after on its start.
 type timed struct{ after time.Duration }
 
@@ -946,6 +972,71 @@ func TestRun(t *testing.T) {
 			prop.ForAll(t, "the final phase passes the bound", func(c *prop.Case) { sim.Run(c, s) },
 				prop.Cases(1), prop.Seed(1), prop.Store(""))
 		})
+
+		restarts := []struct {
+			name       string
+			giveLife   time.Duration
+			giveWithin time.Duration
+			wantGaps   []time.Duration
+		}{
+			{
+				name:       "backs off the restarts of a host whose machine stops at each start",
+				giveWithin: 1000 * time.Second,
+				wantGaps: []time.Duration{
+					0, 10 * time.Second, 20 * time.Second, 40 * time.Second, 80 * time.Second, 160 * time.Second,
+					5 * time.Minute, 5 * time.Minute,
+				},
+			},
+			{
+				name:       "restarts a host at once that ran for more than ten minutes after its restart",
+				giveLife:   11 * time.Minute,
+				giveWithin: 25 * time.Minute,
+				wantGaps:   []time.Duration{0, 0},
+			},
+			{
+				name:       "backs off the restart of a host that ran for ten minutes after its restart",
+				giveLife:   10 * time.Minute,
+				giveWithin: 25 * time.Minute,
+				wantGaps:   []time.Duration{0, 10 * time.Second},
+			},
+		}
+		// The host b takes a step each second, so the final phase takes steps
+		// between an exit of the host a and its restart.
+		for _, tt := range restarts {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				var got []time.Duration
+				s := simulation()
+				s.System = fixed(func(w *sim.World[event, effect]) {
+					w.Spawn("a", func(*sim.Clock) sim.Machine[event, effect] { return &fragile{life: tt.giveLife} })
+					w.Spawn("b", func(*sim.Clock) sim.Machine[event, effect] { return periodic{every: time.Second} })
+				})
+				s.Actions, s.Rules = nil, nil
+				s.Converges = []sim.Convergence[event, effect]{{
+					Statement: "the host a starts again after each exit",
+					Within:    tt.giveWithin,
+					Check: func(_ *sim.Check, w *sim.World[event, effect]) {
+						var exit time.Time
+						exited := false
+						for _, e := range w.Log() {
+							if e.Process != "a" {
+								continue
+							}
+							if _, start := e.Event.(started); start && exited {
+								got, exited = append(got, e.Time.Sub(exit)), false
+							}
+							if e.Err != nil {
+								exit, exited = e.Time, true
+							}
+						}
+					},
+				}}
+				prop.ForAll(t, "the final phase starts the host a again", func(c *prop.Case) { sim.Run(c, s) },
+					prop.Replay("prop1:"), prop.Store(""))
+				expect.Equal(t, got, tt.wantGaps, "the host a starts again after the delays of its backoff")
+			})
+		}
 
 		t.Run("fails the case of a history that the spec does not explain", func(t *testing.T) {
 			t.Parallel()
