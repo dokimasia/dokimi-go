@@ -367,6 +367,22 @@ func TestFault(t *testing.T) {
 				expect.Empty(c, w.Faults(), "the loss is not in force after it strikes")
 			})
 		})
+
+		t.Run("cancels the outcome of the effect that it loses", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("store", newStore)
+				f := &feed{items: []event{fed{item: "x", token: 5}}}
+				w.LoseAfter("feed")
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				drain(w)
+				expect.Equal(c, f.cancels, 1, "the loss cancels the wait that the feed registered")
+				expect.Equal(c, events(w, "store")[2:], []event{fed{err: sim.ErrLost, token: 5}},
+					"the store takes the loss of its wait, and no item of it")
+			})
+		})
 	})
 
 	t.Run("Outage", func(t *testing.T) {
@@ -427,6 +443,65 @@ func TestFault(t *testing.T) {
 				expect.Equal(c, events(w, "store")[4:], []event{
 					fed{err: sim.ErrLost, token: 5}, fed{err: sim.ErrLost, token: 7}, fed{item: "y", token: 6},
 				}, "the waits of the feed end in the order of their starts, and the wait of the other dependency goes on")
+			})
+		})
+
+		t.Run("ends a wait that has delivered an event with its end event, and cancels each wait", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("store", newStore)
+				f, quiet := &feed{items: []event{fed{item: "x", token: 5}}}, &feed{}
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				w.Deliver("store", subscribe{feed: quiet, token: 6})
+				drain(w)
+				w.Outage("feed")
+				drain(w)
+				expect.Equal(c, events(w, "store")[3:], []event{
+					fed{item: "x", token: 5}, ended{err: sim.ErrLost, token: 5}, fed{err: sim.ErrLost, token: 6},
+				}, "the wait that delivered an item takes its end event, and the other wait the event of its failure")
+				expect.Equal(c, []int{f.cancels, quiet.cancels}, []int{1, 1}, "the outage cancels both waits")
+			})
+		})
+
+		t.Run("counts the event of the outcome of a wait as an event that the wait delivered", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				a := ending()
+				a.Perform = func(w *sim.World[event, effect], p *sim.Process[event, effect], f effect,
+				) sim.Outcome[event, effect] {
+					o := ending().Perform(w, p, f)
+					if wt, ok := f.(watch); ok {
+						o.Event = fed{item: "first", token: wt.token}
+					}
+					return o
+				}
+				w := sim.New(c, a)
+				w.Spawn("store", newStore)
+				w.Deliver("store", subscribe{feed: &feed{}, token: 5})
+				drain(w)
+				w.Outage("feed")
+				drain(w)
+				expect.Equal(c, events(w, "store")[2:], []event{
+					fed{item: "first", token: 5}, ended{err: sim.ErrLost, token: 5},
+				}, "the wait whose outcome delivered an event takes its end event")
+			})
+		})
+
+		t.Run("ends a wait without an end event with the event of its failure", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := single(c)
+				w.Deliver("store", subscribe{feed: &feed{items: []event{fed{item: "x", token: 5}}}, token: 5})
+				drain(w)
+				w.Outage("feed")
+				drain(w)
+				expect.Equal(c, events(w, "store")[2:], []event{
+					fed{item: "x", token: 5}, fed{err: sim.ErrLost, token: 5},
+				}, "the anatomy has no end event, so the wait takes the event of its failure after its item")
 			})
 		})
 	})

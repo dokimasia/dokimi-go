@@ -343,6 +343,79 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
+		t.Run("cancels the wait whose token an effect ends, and polls it until it ends", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("store", newStore)
+				f := &feed{closing: []event{fed{item: "last", token: 5}}}
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				w.Deliver("store", unsubscribe{token: 5})
+				drain(w)
+				f.items = []event{fed{item: "late", token: 5}}
+				w.Deliver("store", ticked{token: 1})
+				drain(w)
+				expect.Equal(c, f.cancels, 1, "the unwatch cancels the wait of its token")
+				expect.Equal(c, events(w, "store")[3:], []event{fed{item: "last", token: 5}, ticked{token: 1}},
+					"the wait delivers the items of its cancel, and no item after its end")
+			})
+		})
+
+		t.Run("cancels no wait for a token that no wait of the process has", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				f, other := &feed{}, &feed{}
+				w.Deliver("a", subscribe{feed: f, token: 5})
+				w.Deliver("b", subscribe{feed: other, token: 6})
+				w.Deliver("b", unsubscribe{token: 5})
+				drain(w)
+				f.items = []event{fed{item: "x", token: 5}}
+				w.Deliver("b", ticked{token: 1})
+				drain(w)
+				expect.Equal(c, []int{f.cancels, other.cancels}, []int{0, 0},
+					"the unwatch of b ends no wait of a, and b has no wait of the token")
+				expect.Equal(c, events(w, "a")[2:], []event{fed{item: "x", token: 5}}, "the wait of a goes on")
+			})
+		})
+
+		t.Run("cancels the waits of a machine that stops itself, and no other wait", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				f, other := &feed{}, &feed{}
+				w.Deliver("a", subscribe{feed: f, token: 5})
+				w.Deliver("b", subscribe{feed: other, token: 6})
+				drain(w)
+				w.Deliver("a", put{key: "k", reply: 9})
+				drain(w)
+				expect.Equal(c, []int{f.cancels, other.cancels}, []int{1, 0},
+					"the stop of a cancels its wait, and the wait of b goes on")
+			})
+		})
+
+		t.Run("cancels a wait once", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("store", newStore)
+				f := &feed{closing: []event{fed{item: "x", token: 5}, fed{item: "y", token: 5}}}
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				w.Deliver("store", unsubscribe{token: 5})
+				w.Deliver("store", unsubscribe{token: 5})
+				drain(w)
+				expect.Equal(c, f.cancels, 1, "the second unwatch finds the wait cancelled")
+			})
+		})
+
 		t.Run("starts the machine of a launch on the host of its process with its call", func(t *testing.T) {
 			t.Parallel()
 
@@ -981,6 +1054,20 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
+		t.Run("cancels no wait of the crashed process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("store", newStore)
+				f := &feed{}
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				drain(w)
+				w.Crash("store")
+				expect.Equal(c, f.cancels, 0, "the dependency keeps the wait of the crashed process")
+			})
+		})
+
 		t.Run("fails the case for a host that does not run", func(t *testing.T) {
 			t.Parallel()
 
@@ -1390,6 +1477,23 @@ func TestWorld(t *testing.T) {
 				expect.Equal(c, w.Log()[0].Effects, []effect{commit{disk: d, key: "k", value: "v", token: 1}},
 					"the log records the commit of the stop event")
 				expect.Empty(c, d, "the world does not perform the commit of the stop event")
+			})
+		})
+
+		t.Run("cancels each wait of each process", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				f, other := &feed{}, &feed{}
+				w.Deliver("a", subscribe{feed: f, token: 5})
+				w.Deliver("b", subscribe{feed: other, token: 6})
+				drain(w)
+				w.Stop()
+				expect.Equal(c, []int{f.cancels, other.cancels}, []int{1, 1},
+					"the stop of the world cancels both waits")
 			})
 		})
 

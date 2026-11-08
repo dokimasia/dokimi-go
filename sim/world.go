@@ -45,6 +45,15 @@ type Outcome[E, F any] struct {
 	// Launch is the machine that the effect starts on the host of its
 	// process, and nil for any other effect.
 	Launch *Launch[E, F]
+	// Cancel ends what the effect left in its dependency, such as the
+	// candidacy of a campaign or the session of a join, as a runtime ends it
+	// when it cancels the context of the call of the effect. It is nil for an
+	// effect without such an end. The world calls it at most once: at a loss
+	// after the effect, which drops the outcome, and for a wait at an outage of
+	// its dependency, at an effect that ends the wait and at the stop of its
+	// process. A crash does not call it, because the dependencies keep what
+	// they applied.
+	Cancel func()
 	// Stop is the name of a process that an effect started and that this
 	// effect stops with the stop event, and empty for any other effect. The
 	// world stops the process before it queues Event.
@@ -99,6 +108,10 @@ type Anatomy[E, F any] struct {
 	// Token returns the token of an effect that starts a call or a wait, and
 	// false for any other effect, such as an unwatch or a reply.
 	Token func(f F) (token uint64, ok bool)
+	// Ends returns the token of the wait that the effect f ends, such as the
+	// token of the watch that an unwatch ends, and false for any other effect.
+	// It is nil for machines without such an effect.
+	Ends func(f F) (token uint64, ok bool)
 	// Dependency returns the name of the dependency that performs the effect
 	// f or that the function of its performer calls, such as store.Writer,
 	// and false for an effect without a dependency.
@@ -106,6 +119,11 @@ type Anatomy[E, F any] struct {
 	// Fail returns the event of the result of the effect f that failed with
 	// err, and false for an effect without a result.
 	Fail func(f F, err error) (ev E, ok bool)
+	// End returns the event that ends the wait of the effect f after the wait
+	// has delivered an event, such as the end of a term, with err in its field
+	// of the type error where the event has one. It reports false for an effect
+	// without such an event, and it is nil for machines without one.
+	End func(f F, err error) (ev E, ok bool)
 	// Errors returns the errors that the directive fault declares for the
 	// dependency of the effect f.
 	Errors func(f F) []error
@@ -148,7 +166,7 @@ type World[E, F any] struct {
 	procs  []*Process[E, F]
 	log    []Entry[E, F]
 	timers []timer[E, F]
-	waits  []wait[E, F]
+	waits  []*wait[E, F]
 	deps   []*dependency[E, F]
 	sides  [][]string
 
@@ -193,14 +211,28 @@ type timer[E, F any] struct {
 }
 
 // wait is a pending wait of a process, in the epoch of the process when the
-// wait started: the effect that started it, and the name of the dependency of
-// the effect, empty for an effect without one.
+// wait started: the effect that started it with its token, the cancel of its
+// outcome, and the name of the dependency of the effect, empty for an effect
+// without one. delivered reports a wait that has queued an event for its
+// process, and cancelled a wait whose cancel the world has called.
 type wait[E, F any] struct {
 	f          F
 	next       func() (E, bool, bool)
+	cancel     func()
 	process    *Process[E, F]
 	dependency string
+	token      uint64
 	epoch      uint64
+	delivered  bool
+	cancelled  bool
+}
+
+// cancelOnce calls the cancel of the outcome of the wait, once.
+func (wt *wait[E, F]) cancelOnce() {
+	if wt.cancel != nil && !wt.cancelled {
+		wt.cancelled = true
+		wt.cancel()
+	}
 }
 
 // New returns an empty world whose machines have the anatomy a, and which
@@ -369,7 +401,10 @@ func (w *World[E, F]) callers() []int {
 // event of an earlier epoch before it, with an entry of the log for each. It
 // returns false for a process without such an event, and for a process that
 // does not run. The world stops a process whose machine reports an error
-// after the step, and takes the next event of each wait after the step.
+// after the step, and takes the next event of each wait after the step. An
+// effect that ends a wait cancels the wait of the process with its token,
+// after the world has performed the effect, and the world takes the events of
+// the wait until its Next reports its end.
 func (w *World[E, F]) Step(name string) bool {
 	p := w.Process(name)
 	if p == nil || !p.runs() {
@@ -441,8 +476,33 @@ func (w *World[E, F]) step(p *Process[E, F], ev E, replies bool) {
 			w.reply(p, to, value, err)
 			continue
 		}
-		if !replies && !w.faulted(p, f) {
+		if replies {
+			continue
+		}
+		if !w.faulted(p, f) {
 			w.apply(p, f)
+		}
+		if token, ends := w.ends(f); ends {
+			w.cancelWait(p, token)
+		}
+	}
+}
+
+// ends returns the token of the wait that the effect f ends, and false for
+// any other effect and for an anatomy without such an effect.
+func (w *World[E, F]) ends(f F) (uint64, bool) {
+	if w.a.Ends == nil {
+		return 0, false
+	}
+	return w.a.Ends(f)
+}
+
+// cancelWait cancels the wait of the process p whose effect has the token.
+// The wait remains until its Next reports its end.
+func (w *World[E, F]) cancelWait(p *Process[E, F], token uint64) {
+	for _, wt := range w.waits {
+		if wt.process == p && wt.token == token {
+			wt.cancelOnce()
 		}
 	}
 }
@@ -472,18 +532,24 @@ func (w *World[E, F]) reply(p *Process[E, F], to uint64, value any, err error) {
 
 // apply performs the effect f of the process p: it stops the process of the
 // stop of the outcome, queues the event of the result for a later step of p,
-// starts the wait, sends the message and starts the machine of the launch.
+// starts the wait, sends the message and starts the machine of the launch. A
+// wait whose outcome has an event has delivered that event.
 func (w *World[E, F]) apply(p *Process[E, F], f F) {
 	o := w.a.Perform(w, p, f)
 	if o.Stop != "" {
 		w.halt(p, o.Stop)
 	}
-	if !reflect.ValueOf(&o.Event).Elem().IsZero() {
+	evented := !reflect.ValueOf(&o.Event).Elem().IsZero()
+	if evented {
 		p.queue = append(p.queue, queued[E]{ev: o.Event, epoch: p.epoch})
 	}
 	if o.Next != nil {
 		name, _ := w.a.Dependency(f)
-		w.waits = append(w.waits, wait[E, F]{f: f, next: o.Next, process: p, dependency: name, epoch: p.epoch})
+		token, _ := w.a.Token(f)
+		w.waits = append(w.waits, &wait[E, F]{
+			f: f, next: o.Next, cancel: o.Cancel, process: p, dependency: name, token: token, epoch: p.epoch,
+			delivered: evented,
+		})
 	}
 	if o.Message != nil {
 		w.send(p, f, o.Message)
@@ -544,10 +610,11 @@ func (w *World[E, F]) halt(p *Process[E, F], name string) {
 // poll queues the next event of each wait that has one, in the order in which
 // the waits started, and ends each wait that has ended.
 func (w *World[E, F]) poll() {
-	w.waits = slices.DeleteFunc(w.waits, func(wt wait[E, F]) bool {
+	w.waits = slices.DeleteFunc(w.waits, func(wt *wait[E, F]) bool {
 		ev, ok, done := wt.next()
 		if ok {
 			wt.process.queue = append(wt.process.queue, queued[E]{ev: ev, epoch: wt.epoch})
+			wt.delivered = true
 		}
 		return done
 	})
@@ -559,7 +626,8 @@ func (w *World[E, F]) poll() {
 // of a crashed process end as unknown with ErrCrashed, the sender of each
 // message to it takes ErrCrashed, and the receiver of each message that it
 // sent takes the cancel of the call. The dependencies keep what they applied,
-// and each medium.Memory among the dependencies of each process of the host
+// so the world calls the Cancel of no wait of the crashed processes. Each
+// medium.Memory among the dependencies of each process of the host
 // crashes: it loses each write that a sync did not cover. An event for a
 // process until its restart has the old epoch, so the restarted machine never
 // takes it. A component process crashes its incarnation by a process crash or
@@ -706,7 +774,8 @@ func (w *World[E, F]) Next() (time.Duration, bool) {
 
 // Stop passes the stop event to each process that has not stopped or
 // crashed, performs the replies that it returns, and ends each open call of
-// the history as unknown with ErrRunEnded. It ends the incarnation of each
+// the history as unknown with ErrRunEnded. It calls the Cancel of each wait of
+// such a process before the wait ends. It ends the incarnation of each
 // component process that runs by a process crash, and fails the case for a
 // goroutine of the incarnation that is alive after quiescence. Each host that
 // runs stops, so no fault of a host strikes it afterwards.
@@ -730,11 +799,16 @@ func (w *World[E, F]) Stop() {
 }
 
 // stop passes the stop event to p, performs the replies that it returns, and
-// stops p. Its open calls end as unknown with ErrRunEnded, and its waits and
-// its messages end.
+// stops p. Its open calls end as unknown with ErrRunEnded, its waits end after
+// their cancel, and its messages end.
 func (w *World[E, F]) stop(p *Process[E, F]) {
 	w.step(p, w.a.Stopped(), true)
 	p.state = stopped
+	for _, wt := range w.waits {
+		if wt.process == p {
+			wt.cancelOnce()
+		}
+	}
 	w.forget(p, ErrRunEnded)
 }
 
@@ -742,7 +816,7 @@ func (w *World[E, F]) stop(p *Process[E, F]) {
 // its waits, the effects that a slow dependency keeps for it, its open calls
 // with err, and the messages that it sent.
 func (w *World[E, F]) forget(p *Process[E, F], err error) {
-	w.waits = slices.DeleteFunc(w.waits, func(wt wait[E, F]) bool { return wt.process == p })
+	w.waits = slices.DeleteFunc(w.waits, func(wt *wait[E, F]) bool { return wt.process == p })
 	for _, d := range w.deps {
 		for _, s := range d.stalls {
 			if s.process == p {

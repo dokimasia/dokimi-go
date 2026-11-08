@@ -281,17 +281,28 @@ type fed struct {
 // park is an inbound call that the store replies to on its stop event alone.
 type park struct{ reply uint64 }
 
-func (started) event()   {}
-func (stopped) event()   {}
-func (cancelled) event() {}
-func (put) event()       {}
-func (committed) event() {}
-func (ticked) event()    {}
-func (forward) event()   {}
-func (called) event()    {}
-func (subscribe) event() {}
-func (fed) event()       {}
-func (park) event()      {}
+// unsubscribe makes the store end the wait token.
+type unsubscribe struct{ token uint64 }
+
+// ended is the end of the wait token after the wait has delivered an event.
+type ended struct {
+	err   error
+	token uint64
+}
+
+func (started) event()     {}
+func (stopped) event()     {}
+func (cancelled) event()   {}
+func (put) event()         {}
+func (committed) event()   {}
+func (ticked) event()      {}
+func (forward) event()     {}
+func (called) event()      {}
+func (subscribe) event()   {}
+func (fed) event()         {}
+func (park) event()        {}
+func (unsubscribe) event() {}
+func (ended) event()       {}
 
 // effect is an effect of the machine of the specs.
 type effect interface{ effect() }
@@ -332,21 +343,28 @@ type watch struct {
 	token uint64
 }
 
-func (reply) effect()  {}
-func (commit) effect() {}
-func (timer) effect()  {}
-func (call) effect()   {}
-func (watch) effect()  {}
+// unwatch ends the wait token.
+type unwatch struct{ token uint64 }
+
+func (reply) effect()   {}
+func (commit) effect()  {}
+func (timer) effect()   {}
+func (call) effect()    {}
+func (watch) effect()   {}
+func (unwatch) effect() {}
 
 // disk is the dependency of a store: the value of each key that a commit
 // applied.
 type disk map[string]string
 
 // feed is the stream of a wait that a spec fills: the items that the wait has
-// not passed yet, and whether the stream has ended.
+// not passed yet, and whether the stream has ended. closing are the items that
+// the stream passes after its cancel, and cancels counts its cancels.
 type feed struct {
-	items []event
-	ended bool
+	items   []event
+	closing []event
+	cancels int
+	ended   bool
 }
 
 // next returns the next item of f without blocking.
@@ -357,6 +375,14 @@ func (f *feed) next() (event, bool, bool) {
 	ev := f.items[0]
 	f.items = f.items[1:]
 	return ev, true, false
+}
+
+// cancel counts a cancel of f, and ends the stream after the items of
+// closing.
+func (f *feed) cancel() {
+	f.cancels++
+	f.items = append(f.items, f.closing...)
+	f.ended = true
 }
 
 // storeError is an error of the stores of the specs. Its kind is string, so
@@ -435,6 +461,8 @@ func (s *store) Step(ev event, out []effect) []effect {
 		return append(out, call(ev))
 	case subscribe:
 		return append(out, watch(ev))
+	case unsubscribe:
+		return append(out, unwatch(ev))
 	case stopped:
 		for _, p := range s.waiting {
 			out = append(out, reply{to: p.reply, err: errStopped})
@@ -543,6 +571,30 @@ var anatomy = sim.Anatomy[event, effect]{
 		}
 		return sim.Outcome[event, effect]{}
 	},
+}
+
+// ending returns the anatomy of a store whose unwatch ends the wait of its
+// token, and whose watch has the end event ended and the cancel of its feed.
+func ending() sim.Anatomy[event, effect] {
+	a := anatomy
+	a.Ends = func(f effect) (uint64, bool) {
+		u, ok := f.(unwatch)
+		return u.token, ok
+	}
+	a.End = func(f effect, err error) (event, bool) {
+		if wt, ok := f.(watch); ok {
+			return ended{err: err, token: wt.token}, true
+		}
+		return nil, false
+	}
+	a.Perform = func(w *sim.World[event, effect], p *sim.Process[event, effect], f effect) sim.Outcome[event, effect] {
+		o := anatomy.Perform(w, p, f)
+		if wt, ok := f.(watch); ok {
+			o.Cancel = wt.feed.cancel
+		}
+		return o
+	}
+	return a
 }
 
 // fixed returns the system without inputs that build builds.

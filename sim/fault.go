@@ -241,7 +241,8 @@ func (w *World[E, F]) LoseBefore(dependency string) {
 }
 
 // LoseAfter arms a loss of the next effect of the dependency named
-// dependency, after the dependency applies it.
+// dependency, after the dependency applies it. The loss calls the Cancel of
+// the outcome that it drops.
 func (w *World[E, F]) LoseAfter(dependency string) {
 	d := w.dependency(dependency)
 	d.armed = append(d.armed, FaultLoseAfter)
@@ -249,17 +250,18 @@ func (w *World[E, F]) LoseAfter(dependency string) {
 
 // Outage loses each effect of the dependency named dependency before the
 // dependency applies it, until Restore. It ends each wait of an effect of the
-// dependency with the event of the failure of the effect, in the order in
-// which the waits started. It fails the case for a dependency with an
-// outage.
+// dependency, in the order in which the waits started, and calls the Cancel
+// of each. A wait that has delivered an event takes the end event of its
+// effect, and any other wait the event of the failure of its effect. It fails
+// the case for a dependency with an outage.
 func (w *World[E, F]) Outage(dependency string) {
 	d := w.dependency(dependency)
 	if d.outage {
 		w.c.Fatalf("sim: the dependency %q has an outage", dependency)
 	}
 	d.outage = true
-	var ended []wait[E, F]
-	w.waits = slices.DeleteFunc(w.waits, func(wt wait[E, F]) bool {
+	var ended []*wait[E, F]
+	w.waits = slices.DeleteFunc(w.waits, func(wt *wait[E, F]) bool {
 		if wt.dependency != dependency {
 			return false
 		}
@@ -267,9 +269,26 @@ func (w *World[E, F]) Outage(dependency string) {
 		return true
 	})
 	for _, wt := range ended {
-		w.lose(wt.process, wt.f, w.lost(wt.f))
+		wt.cancelOnce()
+		err := w.lost(wt.f)
+		if ev, ok := w.endEvent(wt.f, err); ok && wt.delivered {
+			wt.process.queue = append(wt.process.queue, queued[E]{ev: ev, epoch: wt.epoch})
+			continue
+		}
+		w.lose(wt.process, wt.f, err)
 	}
 	w.strike(FaultOutage)
+}
+
+// endEvent returns the event that ends the wait of the effect f with err
+// after the wait has delivered an event, and false for an effect without such
+// an event and for an anatomy without one.
+func (w *World[E, F]) endEvent(f F, err error) (E, bool) {
+	if w.a.End == nil {
+		var zero E
+		return zero, false
+	}
+	return w.a.End(f, err)
 }
 
 // Slow keeps each effect of the dependency named dependency in flight until
@@ -611,7 +630,9 @@ func (w *World[E, F]) faulted(p *Process[E, F], f F) bool {
 		kind := d.armed[0]
 		d.armed = d.armed[1:]
 		if kind == FaultLoseAfter {
-			w.a.Perform(w, p, f)
+			if o := w.a.Perform(w, p, f); o.Cancel != nil {
+				o.Cancel()
+			}
 		}
 		w.lose(p, f, w.lost(f))
 		w.strike(kind)
