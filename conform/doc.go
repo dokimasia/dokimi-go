@@ -103,7 +103,7 @@
 //
 // The package imports go.dokimi.dev/assert, go.dokimi.dev/assert/bench,
 // go.dokimi.dev/assert/history, go.dokimi.dev/assert/prop,
-// go.dokimi.dev/assert/stateful, go.dokimi.dev/fault, go.dokimi.dev/host,
-// go.dokimi.dev/medium, go.dokimi.dev/spec and the Go stdlib, testing among
-// it.
+// go.dokimi.dev/assert/stateful, go.dokimi.dev/conform/internal/dump,
+// go.dokimi.dev/fault, go.dokimi.dev/host, go.dokimi.dev/medium,
+// go.dokimi.dev/spec and the Go stdlib, testing among it.
 package conform

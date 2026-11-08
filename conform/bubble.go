@@ -13,15 +13,13 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"go.dokimi.dev/conform/internal/dump"
 )
 
 // samplePeriod is the period of the samples of the watchdog of [Bubble]. It
 // sets how soon a stall shows, and limits no run.
 const samplePeriod = time.Second
-
-// bubbleMark precedes the identity of the bubble of a goroutine in the header
-// of its stack, as in [chan receive (durable), synctest bubble 3].
-const bubbleMark = ", synctest bubble "
 
 // stallLimit is the text of the report of a stall: the limit of
 // testing/synctest, and the options of a subject that keep a world out of it.
@@ -52,7 +50,9 @@ type bubble struct {
 // through [RecordStep]. A stall is two samples with the same stacks and the
 // same count of steps in which no goroutine of the bubble can run and one or
 // more goroutines wait for a mutex or a system call. The bubble cannot
-// advance its clock past such a wait. The watchdog then writes a report of
+// advance its clock past such a wait. A wait for a semaphore of the runtime,
+// such as the goroutine profile of another goroutine, ends without the clock
+// of the bubble, so it is no stall. The watchdog then writes a report of
 // the stall to standard error and ends the test binary with the exit status
 // 2. The report states the limit of testing/synctest, and lists the
 // goroutines that do not wait durably and then the goroutines that wait
@@ -97,8 +97,7 @@ func RecordStep() {
 // the header of its stack, and an empty identity outside a bubble.
 func bubbleID() string {
 	buf := make([]byte, 256)
-	_, id, _ := strings.Cut(bracketOf(string(buf[:runtime.Stack(buf, false)])), bubbleMark)
-	return id
+	return dump.Bubble(string(buf[:runtime.Stack(buf, false)]))
 }
 
 // watch samples the goroutines of the bubble that started sends, once a period
@@ -120,7 +119,7 @@ func watch(started <-chan *bubble, stop <-chan struct{}) {
 		now := b.steps.Load()
 		stacks := goroutinesOf(b.id)
 		sample := strings.Join(stacks, "\n\n")
-		if stalled(stacks) && sample == last && now == steps {
+		if dump.Stalled(stacks) && sample == last && now == steps {
 			stall(stacks)
 		}
 		last, steps = sample, now
@@ -130,30 +129,10 @@ func watch(started <-chan *bubble, stop <-chan struct{}) {
 // goroutinesOf returns the stacks of the goroutines of the bubble id, in the
 // order of a stack dump of every goroutine.
 func goroutinesOf(id string) []string {
-	var dump strings.Builder
+	var text strings.Builder
 	// A write to a strings.Builder does not fail.
-	_ = pprof.Lookup("goroutine").WriteTo(&dump, 2)
-	var stacks []string
-	for stack := range strings.SplitSeq(strings.TrimSuffix(dump.String(), "\n"), "\n\n") {
-		if strings.HasSuffix(bracketOf(stack), bubbleMark+id) {
-			stacks = append(stacks, stack)
-		}
-	}
-	return stacks
-}
-
-// stalled reports whether no goroutine of stacks can run and one or more of
-// them do not wait durably.
-func stalled(stacks []string) bool {
-	outside := false
-	for _, stack := range stacks {
-		if statusOf(stack) == "runnable" {
-			return false
-		}
-		//dokimi:mutate-skip lcr-true: a sample without a runnable goroutine has a goroutine that does not wait durably, because the runtime readies the goroutine of synctest.Run once every other goroutine of the bubble waits durably
-		outside = outside || !durable(stack)
-	}
-	return outside
+	_ = pprof.Lookup("goroutine").WriteTo(&text, 2)
+	return dump.Stacks(text.String(), id)
 }
 
 // stall writes the report of the stall of the bubble whose goroutines have
@@ -163,7 +142,7 @@ func stalled(stacks []string) bool {
 func stall(stacks []string) {
 	var outside, durably []string
 	for _, stack := range stacks {
-		if durable(stack) {
+		if dump.Durable(stack) {
 			durably = append(durably, stack)
 		} else {
 			outside = append(outside, stack)
@@ -174,24 +153,4 @@ func stall(stacks []string) {
 		"\n\nThe goroutines that do not wait durably:\n\n" + strings.Join(outside, "\n\n") +
 		"\n\nThe goroutines that wait durably:\n\n" + strings.Join(durably, "\n\n") + "\n")
 	os.Exit(2)
-}
-
-// durable reports whether the goroutine of stack waits durably.
-func durable(stack string) bool {
-	return strings.HasSuffix(statusOf(stack), "(durable)")
-}
-
-// statusOf returns the status of the goroutine of stack, such as chan receive
-// (durable).
-func statusOf(stack string) string {
-	status, _, _ := strings.Cut(bracketOf(stack), ",")
-	return status
-}
-
-// bracketOf returns the text between the brackets of the header of stack, such
-// as chan receive (durable), synctest bubble 3.
-func bracketOf(stack string) string {
-	_, rest, _ := strings.Cut(stack, "[")
-	bracket, _, _ := strings.Cut(rest, "]")
-	return bracket
 }
