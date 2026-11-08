@@ -1,5 +1,25 @@
 # go.dokimi.dev/sim
 
+## 0.10.0
+
+### Minor Changes
+
+- 2873955: Give a case of `sim.Test`, `Simulation.Prove` and `sim.Fuzz` 82 choices for each step of `Simulation.MaxSteps`.
+- 2873955: **Breaking:** Add the action `deliver fast` to `sim.Run`, at the weight of the other actions of the active phase in the half of the cases whose swarm keeps it.
+- 2873955: **Breaking:** Keep the actions `deliver` and `advance` in every case of `sim.Run`.
+- 4028586: Add `World.AfterFunc` to call a function after a duration on the clock of a process and then poll each wait.
+
+### Patch Changes
+
+- 207b7f0: Require `go.dokimi.dev/assert` v0.20.0.
+- 4028586: Fix `sim.Run` to give the final phase 1,000 steps for each second of the longest `Within` and at least 10,000 steps.
+- Updated dependencies [207b7f0]
+  - go.dokimi.dev/conform@0.16.3
+  - go.dokimi.dev/fault@0.2.4
+  - go.dokimi.dev/host@0.2.1
+  - go.dokimi.dev/medium@0.2.1
+  - go.dokimi.dev/spec@0.5.1
+
 ## 0.9.0
 
 ### Minor Changes
