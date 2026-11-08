@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.10.1
+
+### Patch Changes
+
+- 83af074: Fix `World.LoseAfter` to apply the stop, the message and the launch of the outcome of the effect that it loses.
+
 ## 0.10.0
 
 ### Minor Changes
