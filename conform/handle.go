@@ -148,6 +148,12 @@ type Handle[S any] struct {
 	kept     *firsts
 	injector *Injector
 
+	// env is the environment of the first incarnation of the host of the
+	// handle and disk the disk of that host, both nil before the first subject
+	// of the option Hosted. hostMu guards both.
+	env  *host.Env
+	disk *medium.Memory
+
 	// expected is the reason that the probe set last, and nil before the
 	// first call of Expect.
 	expected atomic.Pointer[spec.ReasonID]
@@ -163,6 +169,7 @@ type Handle[S any] struct {
 	media   []mediumOfSubject
 	mu      sync.Mutex
 	mediaMu sync.Mutex
+	hostMu  sync.Mutex
 	built   bool
 
 	building  atomic.Int32
@@ -184,18 +191,68 @@ func newHandle[S any](
 	if pc, isCase := tb.(*prop.Case); isCase {
 		h.random = pc.Rand()
 	} else {
-		seed := seedOf(string(c.ID))
-		if cfg.seeded {
-			seed = cfg.seed
-		}
-		h.random = rand.NewPCG(seed, seed)
+		h.random = seededSource(c, cfg)
 	}
 	return h
 }
 
+// seededSource returns the random source of a handle of the check c that runs
+// once: a source of the seed of cfg, or of the identity of c without a seed.
+func seededSource[S any](c *Check[S], cfg *config[S]) rand.Source {
+	seed := seedOf(string(c.ID))
+	if cfg.seeded {
+		seed = cfg.seed
+	}
+	return rand.NewPCG(seed, seed)
+}
+
+// hostName is the name of the host that the case of a handle starts for the
+// subjects of the option Hosted.
+const hostName = "subject"
+
+// hosted returns a subject of the door Host of the option Hosted, on the
+// environment of the first incarnation of the host of the handle. It keeps the
+// disk of the host as the medium of the subject, so the doors Restart and
+// Crash of the option Durable open the subject again over the disk.
+func (h *Handle[S]) hosted() S {
+	env, disk := h.incarnation()
+	if env == nil {
+		var zero S
+		return zero
+	}
+	return h.withMedium(disk, h.config.host(h, env))
+}
+
+// incarnation returns the environment of the first incarnation of the host of
+// the handle, and the disk of the host. The case of the handle starts the host
+// at the first call, without a network and without a scheduler, and the end of
+// the case ends the lifetime of the incarnation. On a handle without a case,
+// incarnation ends the check with a fault that wraps [ErrConfig], and returns a
+// nil environment to a seat that takes the fault and goes on.
+func (h *Handle[S]) incarnation() (*host.Env, *medium.Memory) {
+	h.Helper()
+	h.hostMu.Lock()
+	defer h.hostMu.Unlock()
+	if h.env != nil {
+		return h.env, h.disk
+	}
+	c, isCase := h.seat.(*prop.Case)
+	if !isCase {
+		assert.Fault(h, fmt.Errorf("%w: %s builds a subject of the option conform.Hosted on a handle without a "+
+			"case of the property engine, and only a case starts the host of the subject", ErrConfig, h.check.ID))
+		return nil, nil
+	}
+	machine := host.New(c, hostName, nil, nil)
+	_, env := machine.Start()
+	h.env, h.disk = env, machine.Disk()
+	return h.env, h.disk
+}
+
 // Subject returns the subject of the check. The first call builds the
 // subject, and every later call returns the same subject. Under falsification
-// the subject is the planted defect of the check.
+// the subject is the planted defect of the check. Under the option [Hosted]
+// without the option [Tasks], the first call opens the subject through the
+// door Host on the host of the handle.
 //
 // A factory of the subjects must not call Subject.
 func (h *Handle[S]) Subject() S {
@@ -208,15 +265,19 @@ func (h *Handle[S]) Subject() S {
 }
 
 // New returns a fresh subject from the factory of the subject, for a check
-// that needs more than one subject.
+// that needs more than one subject. Under the option [Hosted] without the
+// option [Tasks], it opens the subject through the door Host on the
+// incarnation of the other subjects of the handle.
 func (h *Handle[S]) New() S {
 	return h.build(h.source)
 }
 
 // Fresh returns a fresh subject from the factory of the application, also
-// under falsification, where Subject and New return the planted defect. The
-// planted defect of a derived check wraps it. Fresh builds the subject of a
-// check of the machinery call-that-fails-on-demand through the door Faults.
+// under falsification, where Subject and New return the planted defect. Under
+// the option [Hosted] without the option [Tasks], the factory of the
+// application opens each subject through the door Host. The planted defect of
+// a derived check wraps it. Fresh builds the subject of a check of the
+// machinery call-that-fails-on-demand through the door Faults.
 // Without a factory, as under [Falsify], Fresh ends the check with a fault that
 // wraps [ErrOption], and it returns the zero value to a seat that takes the
 // fault and goes on.
@@ -622,9 +683,8 @@ func (h *Handle[S]) Skipf(format string, args ...any) {
 
 // TempDir returns a new directory of the check, which the run removes when
 // the seat of the check ends, or when the case ends under a property check.
-// Each call
-// returns another directory, so a factory builds each subject on a directory
-// of its own.
+// Each call returns another directory, so a factory builds each subject on a
+// separate directory.
 //
 // TempDir makes the directory in the directory of temporary files, and
 // registers its removal through [Handle.Cleanup]. It ends the check with a

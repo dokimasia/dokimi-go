@@ -503,6 +503,57 @@ func TestSuite(t *testing.T) {
 		}
 	})
 
+	t.Run("Hosted", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("opens the subject of a check through the door in place of the factory", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isDisk := h.Subject().(*disk)
+				assert.True(h, isDisk, "the subject is the subject of the door Host")
+				apply(h)
+			}
+			c.Run(t, func(*conform.Handle[Store]) Store {
+				built.Add(1)
+				return newMemory()
+			}, conform.Hosted(openHost))
+			assert.Equal(t, built.Load(), int32(0), "the factory builds no subject")
+		})
+
+		t.Run("restarts a subject of the door over the disk of its host", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Apply = func(h *conform.Handle[Store]) {
+				h.Engage()
+				s := h.Subject()
+				s.Put("k", "v")
+				got, _ := h.Restart(s).Get("k")
+				assert.Equal(h, got, "v", "the restarted subject reads the disk of the host")
+			}
+			c.Run(t, newStore, conform.Durable(openDisk), conform.Hosted(openHost))
+		})
+
+		t.Run("leaves the subject of a check to the factory under the option Tasks", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isMemory := h.Subject().(*memory)
+				assert.True(h, isMemory, "the subject is the subject of the factory")
+				_, isCase := h.Unwrap().(*prop.Case)
+				assert.False(h, isCase, "the check runs once on the seat of its test")
+				apply(h)
+			}
+			c.Run(t, newStore, conform.Hosted(openHost), conform.Tasks[Store]())
+		})
+	})
+
 	t.Run("Isolate", func(t *testing.T) {
 		t.Parallel()
 

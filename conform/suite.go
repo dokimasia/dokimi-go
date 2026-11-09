@@ -267,6 +267,22 @@ func Durable[S any](open func(h *Handle[S], m medium.FS) S) Option[S] {
 // planted defect. The world of a check opens each incarnation of the subject
 // through the door, and opens a subject without it over the disk of the
 // incarnation through the door Open of [Durable].
+//
+// [Run] and [Check.Run] open the subject of each check of the application
+// through the door, as Durable opens it over a medium, and the factory of the
+// application builds no subject of a check. The handle of a check starts a
+// host from its case at its first subject, without a network and without a
+// scheduler, and each subject of the handle opens on the first incarnation of
+// that host. The handle of a check with Apply starts the host before the check
+// runs. The disk of the host is the medium of each such subject for the
+// doors Restart and Crash of Durable, and the end of the case ends the
+// lifetime of the incarnation. Each check of the application runs in [Bubble]
+// unless it has an Around, and a check with Apply runs in one case of the
+// property engine, the replay of its simplest case. [Fuzz], [RunBudgets],
+// [FalsifyAllocs] and [Bench] build their subjects through the factory. An
+// application with the option [Tasks] keeps the factory for each check, because
+// a subject of Tasks waits through the task scheduler that only the world of a
+// check runs.
 func Hosted[S any](open func(h *Handle[S], env *host.Env) S) Option[S] {
 	return Option[S]{set: func(c *config[S]) { c.doors.Host, c.host = open, open }}
 }
@@ -511,6 +527,26 @@ func (c *config[S]) factory(newSubject func(h *Handle[S]) S) func(h *Handle[S]) 
 		return newSubject
 	}
 	return func(h *Handle[S]) S { return h.FreshOpen(medium.NewMemory()) }
+}
+
+// subjects returns the factory of the subjects of the checks of an
+// application: under the option Hosted a factory that opens each subject
+// through the door Host on the host of its handle, and the factory of factory
+// otherwise.
+func (c *config[S]) subjects(newSubject func(h *Handle[S]) S) func(h *Handle[S]) S {
+	if !c.hosts() {
+		return c.factory(newSubject)
+	}
+	return (*Handle[S]).hosted
+}
+
+// hosts reports whether the handle of each check of an application opens its
+// subjects on a host that the case of the handle starts: under the option
+// Hosted, and without the option Tasks. A subject of Tasks waits through the
+// task scheduler that the world of a check runs, and a check without a world
+// does not run one.
+func (c *config[S]) hosts() bool {
+	return c.host != nil && c.mode != spec.ModeTasks
 }
 
 // runOptions returns the options of a property run of an application: the

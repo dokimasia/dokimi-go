@@ -20,6 +20,11 @@ import (
 	"go.dokimi.dev/spec"
 )
 
+// simplest is the replay token of a case without recorded choices, in the
+// format of the property engine of the assert library. A replay of the token
+// takes the simplest value of each choice of the case.
+const simplest = "prop1:"
+
 // Check is one check of a suite over subjects of the type S. A check has a
 // function Apply or a function Property, and not both.
 //
@@ -130,10 +135,12 @@ type Check[S any] struct {
 }
 
 // Run applies the check on tb to a subject that newSubject builds on the
-// handle of the check. The doors of the handle and a property run read the
-// options in opts. A derived check is first falsified on its planted defect,
-// whose [Handle.Fresh] returns a subject of newSubject, and Run applies it to
-// the subject once the defect fails it with the reason of its claim. Run fails
+// handle of the check, or under the option [Hosted] without the option [Tasks]
+// to a subject of the door Host on a host of the check. The doors of the handle
+// and a property run read the options in opts. A derived check is first
+// falsified on its planted defect, whose [Handle.Fresh] returns a subject of
+// newSubject, and Run applies it to the subject once the defect fails it with
+// the reason of its claim. Run fails
 // tb for a check that passes without engaging its claim, as [Handle.Engage]
 // states, and names the vacuous condition of the check. A run on the subject
 // that panics fails tb with the value and the stack of the panic, and a
@@ -150,7 +157,7 @@ func (c Check[S]) Run(tb assert.TB, newSubject func(h *Handle[S]) S, opts ...Opt
 		assert.Fault(tb, fmt.Errorf("%w: %s", ErrConfig, invalid[0]))
 		return
 	}
-	newSubject = cfg.factory(newSubject)
+	newSubject = cfg.subjects(newSubject)
 	cfg.fresh = newSubject
 	c.apply(tb, newSubject, cfg, cfg.checks, new(verdict), new(verdict))
 }
@@ -272,7 +279,7 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S],
 	if c.faults() {
 		source = (*Handle[S]).faulty
 	}
-	env, ok := c.environment(tb)
+	env, ok := c.environment(tb, cfg)
 	if !ok {
 		return
 	}
@@ -371,19 +378,36 @@ func (c *Check[S]) vacuity() string {
 }
 
 // exercise applies the check on seat to subjects of source. A check with
-// Apply runs once on one handle, which registers its cleanups with seat. A
-// check with Property runs the property engine on seat with opts, and each
-// case has a handle of its own, which registers its cleanups with the case.
-// guard runs the body of the check and of each case. Each handle keeps the
-// message of the first failure outside an assertion in kept, and the run
-// keeps its result there.
+// Apply runs once on one handle, which registers its cleanups with seat. Under
+// the option [Hosted] without the option [Tasks], it runs in the one case of
+// the replay of the simplest case instead, so its handle has a case that
+// starts its host. The handle starts the host before the check runs, so the
+// case chooses the drift of the clock of the host. The property engine ends a
+// run in which no case makes a choice as vacuous. That handle takes its random
+// values from the seed of the check as well. A check with Property runs the
+// property engine on seat with opts, and each case has a separate handle,
+// which registers its cleanups with the case. guard runs
+// the body of the check and of each case. Each handle keeps the message of the
+// first failure outside an assertion in kept, and the run keeps its result
+// there.
 func (c *Check[S]) exercise(
 	seat assert.TB, source func(h *Handle[S]) S, cfg *config[S], opts []prop.Option, kept *firsts,
 	guard func(tb assert.TB, kept *firsts, body func()),
 ) {
 	seat.Helper()
-	if c.Property == nil {
+	switch {
+	case c.Property == nil && !cfg.hosts():
 		guard(seat, kept, func() { c.Apply(newHandle(seat, c, source, cfg, kept)) })
+		return
+	case c.Property == nil:
+		prop.ForAll(seat, c.Statement, func(pc *prop.Case) {
+			guard(pc, kept, func() {
+				h := newHandle(pc, c, source, cfg, kept)
+				h.random = seededSource(c, cfg)
+				h.incarnation()
+				c.Apply(h)
+			})
+		}, prop.Hermetic(), prop.Replay(simplest), prop.Store(""))
 		return
 	}
 	prop.ForAll(seat, c.Statement, func(pc *prop.Case) {
@@ -433,7 +457,7 @@ func unguarded(_ assert.TB, _ *firsts, body func()) { body() }
 // reason that the probe set and the other check of an isolation or an edge.
 func (c Check[S]) falsify(tb assert.TB, cfg *config[S], others []Check[S], v *verdict) bool {
 	tb.Helper()
-	env, ok := c.environment(tb)
+	env, ok := c.environment(tb, cfg)
 	if !ok {
 		return false
 	}
@@ -606,7 +630,7 @@ func (c Check[S]) isolate(tb assert.TB, cfg *config[S], others []Check[S], v *ve
 
 			continue
 		}
-		env, ok := o.environment(tb)
+		env, ok := o.environment(tb, cfg)
 		if !ok {
 			return false
 		}
@@ -680,7 +704,7 @@ func (c Check[S]) edges(
 			fail(resultNotDeeper, s.ID, fmt.Sprintf("%s passes on the planted defect of %s, which it entails, so it "+
 				"is not deeper", c.ID, s.ID))
 		}
-		shallower, ok := s.environment(tb)
+		shallower, ok := s.environment(tb, cfg)
 		if !ok {
 			return false
 		}
@@ -778,12 +802,19 @@ type environment struct {
 	failed atomic.Pointer[string]
 }
 
-// environment returns the environment of the runs of the check on tb, and nil
-// for a check without Around. It ends tb with a fault that wraps [ErrConfig]
-// and reports false where the chain of tb has no *testing.T.
-func (c *Check[S]) environment(tb assert.TB) (*environment, bool) {
+// environment returns the environment of the runs of the check on tb under
+// cfg: its Around, or [Bubble] for a check without Around of an application
+// with the option [Hosted] and without the option [Tasks]. It returns nil for
+// any other check. It ends tb
+// with a fault that wraps [ErrConfig] and reports false where the chain of tb
+// has no *testing.T.
+func (c *Check[S]) environment(tb assert.TB, cfg *config[S]) (*environment, bool) {
 	tb.Helper()
-	if c.Around == nil {
+	around := c.Around
+	if around == nil && cfg.hosts() {
+		around = Bubble
+	}
+	if around == nil {
 		return nil, true
 	}
 	t, found := testOf(tb)
@@ -792,7 +823,7 @@ func (c *Check[S]) environment(tb assert.TB) (*environment, bool) {
 			"none", ErrConfig, c.ID))
 		return nil, false
 	}
-	return &environment{around: c.Around, t: t}, true
+	return &environment{around: around, t: t}, true
 }
 
 // misused returns the fault of a function Around of the check that misused

@@ -98,6 +98,96 @@ func TestHandle(t *testing.T) {
 			}
 			c.Falsify(t)
 		})
+
+		t.Run("opens the subject through the door Host on the first incarnation of a host under the option Hosted",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var envs []*host.Env
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					_, isDisk := h.Subject().(*disk)
+					assert.True(h, isDisk, "the subject is the subject of the door Host")
+					apply(h)
+				}
+				c.Run(t, newStore, conform.Hosted(func(h *conform.Handle[Store], env *host.Env) Store {
+					envs = append(envs, env)
+					return openHost(h, env)
+				}))
+				assert.Length(t, envs, 1, "the door opens the one subject of the check")
+				expect.Equal(t, envs[0].Incarnation(), 1, "the subject opens on the first incarnation of the host")
+			})
+
+		t.Run("opens the subject of each case of a property check through the door Host under the option Hosted",
+			func(t *testing.T) {
+				t.Parallel()
+
+				c := keepsEvery()
+				c.Property = func(h *conform.Handle[Store], _ *prop.Case) {
+					_, isDisk := h.Subject().(*disk)
+					assert.True(h, isDisk, h.Statement())
+				}
+				c.Run(t, newStore, conform.Hosted(openHost))
+			})
+
+		t.Run("ends the check with a fault for a subject of the option Hosted on a handle without a case",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var continued atomic.Bool
+				c := keepsEvery()
+				c.Options = func(h *conform.Handle[Store]) []prop.Option {
+					h.Subject()
+					continued.Store(true)
+					return nil
+				}
+				r := assert.NewRecorder().WithGoexit().WithTest(t)
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					c.Run(r, newStore, conform.Hosted(openHost))
+				}()
+				<-done
+				faults := r.Faults()
+				assert.Length(t, faults, 1, "Subject ends the check with one fault")
+				expect.ErrorIs(t, faults[0], conform.ErrConfig, "the fault is the fault of a configuration")
+				expect.Equal(t, faults[0].Error(), "conform: the application has an invalid setting: "+
+					"Store.Get/keeps-every-value builds a subject of the option conform.Hosted on a handle without a "+
+					"case of the property engine, and only a case starts the host of the subject",
+					"the fault names the check and the missing case")
+				expect.False(t, continued.Load(), "the check ends at Subject")
+			})
+
+		t.Run("ends the lifetime of the incarnation of the subject when the case ends", func(t *testing.T) {
+			t.Parallel()
+
+			var ended atomic.Bool
+			s := onTest(t)
+			keeps().Run(s, newStore, conform.Hosted(func(h *conform.Handle[Store], env *host.Env) Store {
+				env.Go(func() {
+					<-env.Lifetime().Done()
+					ended.Store(true)
+				})
+				return openHost(h, env)
+			}))
+			assert.Empty(t, s.Messages(), "the bubble of the check ends without a goroutine of the subject")
+			assert.True(t, ended.Load(), "the goroutine of the subject ends with its incarnation")
+		})
+
+		t.Run("returns the zero subject to a seat that goes on after the fault of a handle without a case",
+			func(t *testing.T) {
+				t.Parallel()
+
+				got := Store(newMemory())
+				c := keepsEvery()
+				c.Options = func(h *conform.Handle[Store]) []prop.Option {
+					got = h.Subject()
+					return nil
+				}
+				c.Run(assert.NewRecorder().WithTest(t), newStore, conform.Hosted(openHost))
+				assert.Nil(t, got, "Subject returns the zero subject")
+			})
 	})
 
 	t.Run("New", func(t *testing.T) {
@@ -115,6 +205,25 @@ func TestHandle(t *testing.T) {
 			}
 			c.Run(t, newStore)
 		})
+
+		t.Run("returns a fresh subject of the door Host on the environment of the subject under the option Hosted",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var envs []*host.Env
+				c := keeps()
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					assert.True(h, h.New() != h.Subject(), "New returns a fresh subject")
+					apply(h)
+				}
+				c.Run(t, newStore, conform.Hosted(func(h *conform.Handle[Store], env *host.Env) Store {
+					envs = append(envs, env)
+					return openHost(h, env)
+				}))
+				assert.Length(t, envs, 2, "the door opens both subjects")
+				expect.True(t, envs[0] == envs[1], "both subjects open on one environment")
+			})
 	})
 
 	tests := []struct {
@@ -773,6 +882,19 @@ func TestHandle(t *testing.T) {
 				assert.True(h, h.Fresh() != h.Fresh(), "Fresh returns a fresh subject")
 			}
 			c.Run(t, newStore)
+		})
+
+		t.Run("returns a subject of the door Host under the option Hosted", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isDisk := h.Fresh().(*disk)
+				assert.True(h, isDisk, "Fresh opens a subject through the door Host")
+				apply(h)
+			}
+			c.Run(t, newStore, conform.Hosted(openHost))
 		})
 
 		t.Run("ends the falsification with a fault without a factory", func(t *testing.T) {

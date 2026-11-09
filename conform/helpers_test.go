@@ -24,6 +24,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
@@ -519,6 +520,10 @@ type disk struct {
 // openDisk opens a disk that syncs over the medium m.
 func openDisk(_ *conform.Handle[Store], m medium.FS) Store { return &disk{m: m, sync: true} }
 
+// openHost is the door Host of the specs: a disk that syncs over the disk of
+// the environment env.
+func openHost(_ *conform.Handle[Store], env *host.Env) Store { return &disk{m: env.Disk(), sync: true} }
+
 // Put writes the value to the file of the key.
 func (d *disk) Put(key, value string) {
 	f, err := d.m.OpenFile(key, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
@@ -561,6 +566,24 @@ const nilDereference = "runtime error: invalid memory address or nil pointer der
 func crash() {
 	var gone *memory
 	gone.Put("k", "v")
+}
+
+// tested is a recorder of the test t. Its method Unwrap returns t, so a check
+// with Around runs inside the environment of t, and the recorder keeps what
+// conform reports on the seat.
+type tested struct {
+	*assert.Recorder
+
+	t *testing.T
+}
+
+// Unwrap returns the test of the recorder.
+func (s *tested) Unwrap() assert.TB { return s.t }
+
+// onTest returns a recorder of the test t.
+func onTest(t *testing.T) *tested {
+	t.Helper()
+	return &tested{Recorder: assert.NewRecorder(), t: t}
 }
 
 // recorded runs fn on a recorder that ends fn at its first fatal failure,

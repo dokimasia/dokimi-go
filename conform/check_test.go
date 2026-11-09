@@ -14,6 +14,7 @@ import (
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/medium"
 	"go.dokimi.dev/spec"
 )
 
@@ -26,24 +27,6 @@ func outsideCases(built *atomic.Int32) func(*conform.Handle[Store]) Store {
 		}
 		return newMemory()
 	}
-}
-
-// tested is a recorder of the test t. Its method Unwrap returns t, so a check
-// with Around runs inside the environment of t, and the recorder keeps what
-// conform reports on the seat.
-type tested struct {
-	*assert.Recorder
-
-	t *testing.T
-}
-
-// Unwrap returns the test of the recorder.
-func (s *tested) Unwrap() assert.TB { return s.t }
-
-// onTest returns a recorder of the test t.
-func onTest(t *testing.T) *tested {
-	t.Helper()
-	return &tested{Recorder: assert.NewRecorder(), t: t}
 }
 
 // strand starts a goroutine that blocks on a channel until the process ends.
@@ -282,6 +265,82 @@ func TestCheck(t *testing.T) {
 			bubbled(keeps()).Run(r, newStore)
 			expect.Empty(t, r.Faults(), "the check finds the test of its environment")
 		})
+
+		t.Run("runs a check of an application with the option Hosted inside a bubble", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				assert.NotPanics(h, synctest.Wait, "the check runs inside a bubble")
+				apply(h)
+			}
+			c.Run(t, newStore, conform.Hosted(openHost))
+		})
+
+		t.Run("runs a check of an application with the option Hosted inside the Around of the check",
+			func(t *testing.T) {
+				t.Parallel()
+
+				var wrapped atomic.Bool
+				c := keeps()
+				c.Around = func(t *testing.T, run func(*testing.T)) {
+					t.Helper()
+					wrapped.Store(true)
+					synctest.Test(t, run)
+				}
+				c.Run(t, newStore, conform.Hosted(openHost))
+				assert.True(t, wrapped.Load(), "the check runs inside its Around and not inside Bubble")
+			})
+
+		t.Run("runs a check without a property in one case under the option Hosted", func(t *testing.T) {
+			t.Parallel()
+
+			var runs atomic.Int32
+			c := keeps()
+			apply := c.Apply
+			c.Apply = func(h *conform.Handle[Store]) {
+				_, isCase := h.Unwrap().(*prop.Case)
+				assert.True(h, isCase, "the handle of the check is on a case")
+				runs.Add(1)
+				apply(h)
+			}
+			c.Run(t, newStore, conform.Hosted(openHost))
+			assert.Equal(t, runs.Load(), int32(1), "the check runs once")
+		})
+
+		t.Run("passes a check without a property that opens its subject over a medium under the option Hosted",
+			func(t *testing.T) {
+				t.Parallel()
+
+				c := keeps()
+				c.Apply = func(h *conform.Handle[Store]) {
+					s := h.Open(medium.NewMemory())
+					s.Put("k", "v")
+					got, _ := s.Get("k")
+					assert.Equal(h, got, "v", h.Statement())
+				}
+				c.Run(t, newStore, conform.Hosted(openHost), conform.Durable(openDisk))
+			})
+
+		t.Run("takes the random values of a check without a property from its seed under the option Hosted",
+			func(t *testing.T) {
+				t.Parallel()
+
+				first := func(opts ...conform.Option[Store]) uint64 {
+					var got uint64
+					c := keeps()
+					apply := c.Apply
+					c.Apply = func(h *conform.Handle[Store]) {
+						got = h.Rand().Uint64()
+						apply(h)
+					}
+					c.Run(t, newStore, opts...)
+					return got
+				}
+				assert.Equal(t, first(conform.Hosted(openHost)), first(),
+					"the handle takes its random values from the seed of the check")
+			})
 
 		t.Run("fails the seat when the environment of the check fails", func(t *testing.T) {
 			t.Parallel()

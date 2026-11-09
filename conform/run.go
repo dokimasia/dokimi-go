@@ -22,7 +22,9 @@ type T interface {
 }
 
 // Run applies each check of the suite, and each check that opts add, to a
-// fresh subject of newSubject.
+// fresh subject of newSubject. Under the option [Hosted] without the option
+// [Tasks], each subject of a check opens through the door Host on a host of
+// the check instead.
 //
 // Run reports every problem of the checks, the calls, the options and the seed
 // on t, and stops t when it finds one. An excusal may name any check of the application
@@ -59,7 +61,7 @@ func Run[S any](t T, suite Suite[S], newSubject func(h *Handle[S]) S, opts ...Op
 	cfg := configure(suite.overrides(t), suite.Checks, opts)
 	seed, faults := cfg.applicationSeed(name)
 	app := newApplication(&suite, name, seed, falsification, onSubject)
-	newSubject = app.factory(cfg.factory(newSubject))
+	newSubject = app.factory(cfg.subjects(newSubject))
 	cfg.fresh = newSubject
 	app.begin(t, append(validate(name, suite, cfg), faults...))
 	checks := append(slices.Clip(suite.Checks), cfg.checks...)
