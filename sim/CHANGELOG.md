@@ -1,5 +1,17 @@
 # go.dokimi.dev/sim
 
+## 0.11.0
+
+### Minor Changes
+
+- 837c2be: Complete a call of a component through `World.Invoke` as unknown for an error that `Anatomy.Unknown` reports.
+
+### Patch Changes
+
+- e23304b: Fix `sim.Run` to judge the rules of a runtime over each entry of the log once, in O(n) time for a case of n steps.
+- Updated dependencies [859f112]
+  - go.dokimi.dev/conform@0.17.0
+
 ## 0.10.2
 
 ### Patch Changes
