@@ -5,6 +5,7 @@ package sim_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -253,6 +254,40 @@ func TestComponent(t *testing.T) {
 
 				assert.Length(t, got, 1, "the call completes")
 				assert.Equal(t, got[0].kind, tt.want, "the error decides the completion")
+			})
+		}
+
+		unknowns := []struct {
+			give error
+			name string
+			want history.Kind
+		}{
+			{
+				name: "completes a call whose error the anatomy reports as unknown as unknown", give: errEmpty,
+				want: history.Unknown,
+			},
+			{
+				name: "completes a call whose error the anatomy does not report as failed", give: errDisk,
+				want: history.Fail,
+			},
+		}
+		for _, tt := range unknowns {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				var got []completion
+				inBubble(t, lone, func(c *prop.Case, _ bool) {
+					a := anatomy
+					a.Unknown = func(err error) bool { return errors.Is(err, errEmpty) }
+					w := sim.New(c, a)
+					sim.SpawnComponent(w, "a", openCell)
+					w.Invoke(0, "a", "Set", nil, nil, func(context.Context) (any, error) { return nil, tt.give })
+					synctest.Wait()
+					got = completions(w.History().Events())
+					w.Stop()
+				})
+
+				assert.Length(t, got, 1, "the call completes")
+				assert.Equal(t, got[0].kind, tt.want, "the anatomy decides the completion of the error")
 			})
 		}
 

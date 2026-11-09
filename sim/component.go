@@ -128,8 +128,8 @@ func (c *Component[T]) Value() T {
 // case with args and keys, and runs call on a goroutine of the incarnation of
 // the process. It completes the call as OK with its output for a nil error,
 // as unknown for an error that wraps context.Canceled,
-// context.DeadlineExceeded, medium.ErrCrashed or host.ErrReset, and as failed
-// for any other error. A call of a crashed process ends as unknown with
+// context.DeadlineExceeded, medium.ErrCrashed or host.ErrReset or that the
+// field Unknown of the anatomy reports, and as failed for any other error. A call of a crashed process ends as unknown with
 // medium.ErrCrashed, and a call of a stopped process as unknown with
 // ErrRunEnded. The context of call derives from the lifetime of the
 // incarnation. Invoke fails the case for a name that no component has.
@@ -165,7 +165,8 @@ func (w *World[E, F]) Invoke(
 		switch {
 		case err == nil:
 			in.call.OK(out)
-		case slices.ContainsFunc(unknown, func(cause error) bool { return errors.Is(err, cause) }):
+		case slices.ContainsFunc(unknown, func(cause error) bool { return errors.Is(err, cause) }),
+			w.a.Unknown != nil && w.a.Unknown(err):
 			in.call.Unknown(err)
 		default:
 			in.call.Fail(err)

@@ -103,10 +103,10 @@ type Anatomy[E, F any] struct {
 	// Reply returns the reply token, the value and the error of a reply, and
 	// false for any other effect.
 	Reply func(f F) (to uint64, value any, err error, ok bool)
-	// Unknown reports whether the error err of a reply leaves the outcome of
-	// its call unknown, such as the error of a stop that can follow the effect
-	// of the call. It is nil for machines whose every error of a reply fails
-	// its call.
+	// Unknown reports whether the error err of a reply, or of a call of a
+	// component through Invoke, leaves the outcome of its call unknown, such
+	// as the error of a stop that can follow the effect of the call. It is nil
+	// for machines whose every error of a reply fails its call.
 	Unknown func(err error) bool
 	// Token returns the token of an effect that starts a call or a wait, and
 	// false for any other effect, such as an unwatch or a reply.
