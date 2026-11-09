@@ -37,140 +37,172 @@ type life struct {
 	epoch   uint64
 }
 
-// judge returns the problems that the judge of the probe finds in the log,
-// and reports false for a probe without a judge.
-func judge[E, F any](probe spec.ProbeID, a Anatomy[E, F], log []Entry[E, F]) ([]string, bool) {
+// judge examines the entries of a log in their order, one entry at a time,
+// and keeps what it needs of the entries before. A run examines each entry
+// once, so the judges of a case of n steps take O(n) time.
+type judge[E, F any] interface {
+	// examine returns the problems of the entry e at the index i of the log.
+	examine(i int, e Entry[E, F]) []string
+}
+
+// judgeOf returns a new judge of the probe, which reads the entries through
+// the anatomy a, and nil for a probe without a judge.
+func judgeOf[E, F any](probe spec.ProbeID, a Anatomy[E, F]) judge[E, F] {
 	switch probe {
 	case spec.RepliesAtMostOnce:
-		return repliesTwice(a, log), true
+		return &repliesTwice[E, F]{a: a, seen: map[replied]bool{}}
 	case spec.RepliesOnStop:
-		return callsWithoutReply(a, log), true
+		return &callsWithoutReply[E, F]{a: a, open: map[life]map[uint64]bool{}}
 	case spec.OnlyRepliesAfterStop:
-		return effectsAfterStop(a, log), true
+		return &effectsAfterStop[E, F]{a: a}
 	case spec.NoEffectsAfterError:
-		return effectsAfterError(log), true
+		return &effectsAfterError[E, F]{failed: map[life]bool{}}
 	case spec.TokensDiffer:
-		return reusedTokens(a, log), true
+		return &reusedTokens[E, F]{a: a, seen: map[tokened]bool{}}
 	default:
-		return nil, false
+		return nil
 	}
 }
 
-// repliesTwice returns a problem for each reply of a machine to an inbound
-// call that it replied to before.
-func repliesTwice[E, F any](a Anatomy[E, F], log []Entry[E, F]) []string {
-	type reply struct {
+// replied is a reply of a machine to the inbound call to, and tokened an
+// effect of a machine with the token token.
+type (
+	replied struct {
 		life
 		to uint64
 	}
-	seen := map[reply]bool{}
-	var out []string
-	for i, e := range log {
-		for _, f := range e.Effects {
-			to, _, _, ok := a.Reply(f)
-			if !ok {
-				continue
-			}
-			key := reply{process: e.Process, epoch: e.Epoch, to: to}
-			if seen[key] {
-				out = append(out, fmt.Sprintf("step %d of %s replies to the call %d a second time", i, e.Process, to))
-			}
-			seen[key] = true
-		}
-	}
-	return out
-}
-
-// callsWithoutReply returns a problem for each stop step of a machine that
-// leaves an inbound call without a reply. A cancelled call needs no reply. A
-// dropped event of an earlier epoch opens a call of a machine that crashed,
-// which takes no stop event.
-func callsWithoutReply[E, F any](a Anatomy[E, F], log []Entry[E, F]) []string {
-	open := map[life]map[uint64]bool{}
-	var out []string
-	for i, e := range log {
-		key := life{process: e.Process, epoch: e.Epoch}
-		if open[key] == nil {
-			open[key] = map[uint64]bool{}
-		}
-		calls := open[key]
-		if reply, ok := a.Call(e.Event); ok {
-			calls[reply] = true
-		}
-		for token := range calls {
-			if a.Cancelled != nil && reflect.DeepEqual(e.Event, a.Cancelled(token)) {
-				delete(calls, token)
-			}
-		}
-		for _, f := range e.Effects {
-			if to, _, _, ok := a.Reply(f); ok {
-				delete(calls, to)
-			}
-		}
-		if len(calls) > 0 && reflect.DeepEqual(e.Event, a.Stopped()) {
-			out = append(out, fmt.Sprintf("step %d of %s takes the stop event and leaves %d calls without a reply",
-				i, e.Process, len(calls)))
-		}
-	}
-	return out
-}
-
-// effectsAfterStop returns a problem for each effect other than a reply that
-// a machine returns on the stop event.
-func effectsAfterStop[E, F any](a Anatomy[E, F], log []Entry[E, F]) []string {
-	var out []string
-	for i, e := range log {
-		if !reflect.DeepEqual(e.Event, a.Stopped()) {
-			continue
-		}
-		for _, f := range e.Effects {
-			if _, _, _, ok := a.Reply(f); !ok {
-				out = append(out, fmt.Sprintf("step %d of %s returns an effect other than a reply on the stop event",
-					i, e.Process))
-			}
-		}
-	}
-	return out
-}
-
-// effectsAfterError returns a problem for each step of a machine with an
-// effect after the step in which its error method returned an error.
-func effectsAfterError[E, F any](log []Entry[E, F]) []string {
-	failed := map[life]bool{}
-	var out []string
-	for i, e := range log {
-		key := life{process: e.Process, epoch: e.Epoch}
-		if failed[key] && len(e.Effects) > 0 {
-			out = append(out, fmt.Sprintf("step %d of %s returns effects after the error of its machine", i, e.Process))
-		}
-		if e.Err != nil {
-			failed[key] = true
-		}
-	}
-	return out
-}
-
-// reusedTokens returns a problem for each effect of a machine whose token an
-// earlier effect of the machine has.
-func reusedTokens[E, F any](a Anatomy[E, F], log []Entry[E, F]) []string {
-	type token struct {
+	tokened struct {
 		life
 		token uint64
 	}
-	seen := map[token]bool{}
+)
+
+// repliesTwice judges each reply of a machine to an inbound call that it
+// replied to before. seen contains the replies of each machine.
+type repliesTwice[E, F any] struct {
+	a    Anatomy[E, F]
+	seen map[replied]bool
+}
+
+// examine returns a problem for each reply of e to a call that the machine of
+// e replied to before.
+func (j *repliesTwice[E, F]) examine(i int, e Entry[E, F]) []string {
 	var out []string
-	for i, e := range log {
-		for _, f := range e.Effects {
-			t, ok := a.Token(f)
-			if !ok {
-				continue
-			}
-			key := token{process: e.Process, epoch: e.Epoch, token: t}
-			if seen[key] {
-				out = append(out, fmt.Sprintf("step %d of %s reuses the token %d", i, e.Process, t))
-			}
-			seen[key] = true
+	for _, f := range e.Effects {
+		to, _, _, ok := j.a.Reply(f)
+		if !ok {
+			continue
 		}
+		key := replied{process: e.Process, epoch: e.Epoch, to: to}
+		if j.seen[key] {
+			out = append(out, fmt.Sprintf("step %d of %s replies to the call %d a second time", i, e.Process, to))
+		}
+		j.seen[key] = true
+	}
+	return out
+}
+
+// callsWithoutReply judges each stop step of a machine that leaves an inbound
+// call without a reply. A cancelled call needs no reply. A dropped event of an
+// earlier epoch opens a call of a machine that crashed, which takes no stop
+// event. open contains the calls of each machine without a reply.
+type callsWithoutReply[E, F any] struct {
+	a    Anatomy[E, F]
+	open map[life]map[uint64]bool
+}
+
+// examine returns a problem for a stop step e that leaves a call of its
+// machine without a reply.
+func (j *callsWithoutReply[E, F]) examine(i int, e Entry[E, F]) []string {
+	key := life{process: e.Process, epoch: e.Epoch}
+	if j.open[key] == nil {
+		j.open[key] = map[uint64]bool{}
+	}
+	calls := j.open[key]
+	if reply, ok := j.a.Call(e.Event); ok {
+		calls[reply] = true
+	}
+	for token := range calls {
+		if j.a.Cancelled != nil && reflect.DeepEqual(e.Event, j.a.Cancelled(token)) {
+			delete(calls, token)
+		}
+	}
+	for _, f := range e.Effects {
+		if to, _, _, ok := j.a.Reply(f); ok {
+			delete(calls, to)
+		}
+	}
+	if len(calls) > 0 && reflect.DeepEqual(e.Event, j.a.Stopped()) {
+		return []string{fmt.Sprintf("step %d of %s takes the stop event and leaves %d calls without a reply",
+			i, e.Process, len(calls))}
+	}
+	return nil
+}
+
+// effectsAfterStop judges each effect other than a reply that a machine
+// returns on the stop event.
+type effectsAfterStop[E, F any] struct {
+	a Anatomy[E, F]
+}
+
+// examine returns a problem for each effect other than a reply of a stop step
+// e.
+func (j *effectsAfterStop[E, F]) examine(i int, e Entry[E, F]) []string {
+	if !reflect.DeepEqual(e.Event, j.a.Stopped()) {
+		return nil
+	}
+	var out []string
+	for _, f := range e.Effects {
+		if _, _, _, ok := j.a.Reply(f); !ok {
+			out = append(out, fmt.Sprintf("step %d of %s returns an effect other than a reply on the stop event",
+				i, e.Process))
+		}
+	}
+	return out
+}
+
+// effectsAfterError judges each step of a machine with an effect after the
+// step in which its error method returned an error. failed contains the
+// machines whose error method has returned an error.
+type effectsAfterError[E, F any] struct {
+	failed map[life]bool
+}
+
+// examine returns a problem for a step e with effects after the error of its
+// machine.
+func (j *effectsAfterError[E, F]) examine(i int, e Entry[E, F]) []string {
+	key := life{process: e.Process, epoch: e.Epoch}
+	var out []string
+	if j.failed[key] && len(e.Effects) > 0 {
+		out = []string{fmt.Sprintf("step %d of %s returns effects after the error of its machine", i, e.Process)}
+	}
+	if e.Err != nil {
+		j.failed[key] = true
+	}
+	return out
+}
+
+// reusedTokens judges each effect of a machine whose token an earlier effect
+// of the machine has. seen contains the tokens of the effects of each machine.
+type reusedTokens[E, F any] struct {
+	a    Anatomy[E, F]
+	seen map[tokened]bool
+}
+
+// examine returns a problem for each effect of e whose token an earlier effect
+// of its machine has.
+func (j *reusedTokens[E, F]) examine(i int, e Entry[E, F]) []string {
+	var out []string
+	for _, f := range e.Effects {
+		t, ok := j.a.Token(f)
+		if !ok {
+			continue
+		}
+		key := tokened{process: e.Process, epoch: e.Epoch, token: t}
+		if j.seen[key] {
+			out = append(out, fmt.Sprintf("step %d of %s reuses the token %d", i, e.Process, t))
+		}
+		j.seen[key] = true
 	}
 	return out
 }

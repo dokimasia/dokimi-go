@@ -390,16 +390,27 @@ func seedOf(key string) uint64 {
 	return h.Sum64()
 }
 
-// run is one case of a simulation: its world and its strategy, and the
-// searches of the last check of the history. undecided reports a check that
-// the checker could not decide, which ends the checks of the history.
+// run is one case of a simulation: its world and its strategy, the searches of
+// the last check of the history, and the judgement of each rule. undecided
+// reports a check that the checker could not decide, which ends the checks of
+// the history.
 type run[E, F, S any] struct {
-	c         *prop.Case
-	w         *World[E, F]
-	pick      *picker[E, F]
-	cp        history.Checkpoint[S]
-	s         Simulation[E, F, S]
-	undecided bool
+	c          *prop.Case
+	w          *World[E, F]
+	pick       *picker[E, F]
+	judgements []judgement[E, F]
+	cp         history.Checkpoint[S]
+	s          Simulation[E, F, S]
+	undecided  bool
+}
+
+// judgement is the state of the judge of a rule across the steps of a case:
+// the judge, the index of the next entry of the log that it examines, and the
+// problems that it has found.
+type judgement[E, F any] struct {
+	judge    judge[E, F]
+	problems []string
+	next     int
 }
 
 // linearizable is the statement of the checks of the history of a run, and
@@ -474,8 +485,9 @@ type input struct {
 	client int
 }
 
-// begin builds the world of the case c for s, checks it after every step, and
-// notes its log and its history once the case ends.
+// begin builds the world of the case c for s and a judge of each rule of s,
+// checks the world after every step, and notes its log and its history once
+// the case ends.
 func begin[E, F, S any](c *prop.Case, s Simulation[E, F, S]) *run[E, F, S] {
 	w := New(c, s.Anatomy)
 	w.plant = s.plant
@@ -484,6 +496,10 @@ func begin[E, F, S any](c *prop.Case, s Simulation[E, F, S]) *run[E, F, S] {
 		w.sched = stateful.NewScheduler(c, stateful.Uniform())
 	}
 	r := &run[E, F, S]{c: c, w: w, pick: newPicker[E, F](c, s.Strategy, pickLimit), s: s}
+	r.judgements = make([]judgement[E, F], len(s.Rules))
+	for i, rule := range s.Rules {
+		r.judgements[i].judge = judgeOf(rule.Probe, s.Anatomy)
+	}
 	w.after, w.judge = r.check, r.checkRules
 	c.Cleanup(w.shutdown)
 	c.Cleanup(r.report)
@@ -749,15 +765,20 @@ func (r *run[E, F, S]) check() {
 }
 
 // checkRules checks each rule against the log, once the world has recorded a
-// step of a machine. It fails the case for a rule whose probe has no judge.
+// step of a machine. The judge of a rule examines the entries that the world
+// has recorded since its last check, and keeps its state across the checks of
+// the case. checkRules fails the case for a rule whose probe has no judge.
 func (r *run[E, F, S]) checkRules() {
 	log := r.w.Log()
-	for _, rule := range r.s.Rules {
-		problems, known := judge(rule.Probe, r.s.Anatomy, log)
-		if !known {
+	for i, rule := range r.s.Rules {
+		g := &r.judgements[i]
+		if g.judge == nil {
 			r.c.Fatalf("sim: the probe %s of the rule %s has no judge", rule.Probe, rule.ID)
 		}
-		assert.Empty(r.c, problems, rule.Statement)
+		for ; g.next < len(log); g.next++ {
+			g.problems = append(g.problems, g.judge.examine(g.next, log[g.next])...)
+		}
+		assert.Empty(r.c, g.problems, rule.Statement)
 	}
 }
 
