@@ -1,5 +1,16 @@
 # go.dokimi.dev/sim
 
+## 0.12.0
+
+### Minor Changes
+
+- b5e4f07: **Breaking:** Prove each convergence of a simulation on the system `Convergence.Defect` in `sim.Falsify` and `Simulation.Prove`.
+
+### Patch Changes
+
+- b5e4f07: Fail `Simulation.Prove` for a name that two checks of the simulation share.
+- b5e4f07: Fail `Simulation.Prove` with a message that contains the check for an invariant or a convergence without a planted defect.
+
 ## 0.11.0
 
 ### Minor Changes
