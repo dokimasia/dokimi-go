@@ -114,6 +114,19 @@ func unstopped() sim.Invariant[event, effect] {
 	}
 }
 
+// eventless is a convergence that fails once a store has taken an event by the
+// end of the final phase. Its planted defect is the system of the simulation
+// of the specs, whose puts give the stores events.
+func eventless() sim.Convergence[event, effect] {
+	return sim.Convergence[event, effect]{
+		Statement: "the stores take no event once the faults end",
+		Check: func(h *sim.Check, w *sim.World[event, effect]) {
+			expect.Empty(h, w.Log(), h.Statement())
+		},
+		Defect: simulation().System,
+	}
+}
+
 // tally is the count of the steps of the cases of a simulation: the steps of
 // every case, and the most steps of one case.
 type tally struct {
@@ -2206,6 +2219,25 @@ func TestRun(t *testing.T) {
 			})
 			sim.Falsify(t, s)
 		})
+
+		t.Run("proves each convergence on its planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			var checked atomic.Int32
+			s := simulation()
+			s.Rules = nil
+			cv := eventless()
+			check := cv.Check
+			cv.Check = func(h *sim.Check, w *sim.World[event, effect]) {
+				checked.Add(1)
+				check(h, w)
+			}
+			s.Converges = []sim.Convergence[event, effect]{cv}
+			t.Cleanup(func() {
+				assert.True(t, checked.Load() > 0, "the falsification runs the proofs of the convergences")
+			})
+			sim.Falsify(t, s)
+		})
 	})
 
 	t.Run("Prove", func(t *testing.T) {
@@ -2216,8 +2248,22 @@ func TestRun(t *testing.T) {
 
 			s := simulation()
 			s.Invariants = []sim.Invariant[event, effect]{unstored()}
+			s.Converges = []sim.Convergence[event, effect]{eventless()}
 			expect.Equal(t, fatal(func(tb assert.TB) { s.Prove(tb, "Store/unknown") }),
 				`sim: the simulation has no check "Store/unknown"`, "the failure names the check")
+		})
+
+		t.Run("fails for a name that two checks share", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			cv := eventless()
+			cv.Statement = "no store replies to a put"
+			s.Invariants = []sim.Invariant[event, effect]{unstored()}
+			s.Converges = []sim.Convergence[event, effect]{cv}
+			expect.Equal(t, fatal(func(tb assert.TB) { s.Prove(tb, "no store replies to a put") }),
+				`sim: the simulation has two checks named "no store replies to a put"`,
+				"the failure contains the name of the two checks")
 		})
 
 		t.Run("fails for a planted defect that passes its check", func(t *testing.T) {
@@ -2286,6 +2332,50 @@ func TestRun(t *testing.T) {
 			s.Scenarios = []sim.Scenario[event, effect]{{Name: "put", Run: putOnA}}
 			s.Prove(t, "no store stops after it stores a put")
 		})
+
+		t.Run("proves a convergence on its planted defect", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Converges = []sim.Convergence[event, effect]{eventless()}
+			s.Prove(t, "the stores take no event once the faults end")
+		})
+
+		undefended := []struct {
+			name      string
+			give      func(s *sim.Simulation[event, effect, int])
+			giveCheck string
+		}{
+			{
+				name: "fails for an invariant without a planted defect",
+				give: func(s *sim.Simulation[event, effect, int]) {
+					inv := unstored()
+					inv.Defect = nil
+					s.Invariants = []sim.Invariant[event, effect]{inv}
+				},
+				giveCheck: "no store replies to a put",
+			},
+			{
+				name: "fails for a convergence without a planted defect",
+				give: func(s *sim.Simulation[event, effect, int]) {
+					cv := eventless()
+					cv.Defect = nil
+					s.Converges = []sim.Convergence[event, effect]{cv}
+				},
+				giveCheck: "the stores take no event once the faults end",
+			},
+		}
+		for _, tt := range undefended {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				s := simulation()
+				tt.give(&s)
+				expect.Equal(t, fatal(func(tb assert.TB) { s.Prove(tb, tt.giveCheck) }),
+					fmt.Sprintf("sim: the check %q has no planted defect", tt.giveCheck),
+					"the failure contains the check without a planted defect")
+			})
+		}
 	})
 }
 

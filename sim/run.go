@@ -138,9 +138,10 @@ type Invariant[E, F any] struct {
 }
 
 // Convergence is a liveness property that the run checks once the faults
-// have ended and Within has passed.
+// have ended and Within has passed, with the system of its planted defect.
 type Convergence[E, F any] struct {
 	Check     func(h *Check, w *World[E, F])
+	Defect    System[E, F]
 	Statement string
 	Within    time.Duration
 }
@@ -256,19 +257,12 @@ func Test[E, F, S any](tb assert.TB, s Simulation[E, F, S]) {
 	}
 }
 
-// Falsify proves each rule and each invariant of s on its planted defect, in
-// a parallel test of t named after the identity of the rule or the statement
-// of the invariant, as Prove proves it.
+// Falsify proves each rule, each invariant and each convergence of s on its
+// planted defect, in a parallel test of t named after the identity of the rule
+// or the statement of the invariant or the convergence, as Prove proves it.
 func Falsify[E, F, S any](t *testing.T, s Simulation[E, F, S]) {
 	t.Helper()
-	checks := make([]string, 0, len(s.Rules)+len(s.Invariants))
-	for _, rule := range s.Rules {
-		checks = append(checks, rule.ID)
-	}
-	for _, inv := range s.Invariants {
-		checks = append(checks, inv.Statement)
-	}
-	for _, check := range checks {
+	for _, check := range s.checks() {
 		t.Run(check, func(t *testing.T) {
 			t.Helper()
 			t.Parallel()
@@ -277,28 +271,57 @@ func Falsify[E, F, S any](t *testing.T, s Simulation[E, F, S]) {
 	}
 }
 
+// checks returns the names of the checks of s: the identities of the rules,
+// then the statements of the invariants and of the convergences.
+func (s Simulation[E, F, S]) checks() []string {
+	checks := make([]string, 0, len(s.Rules)+len(s.Invariants)+len(s.Converges))
+	for _, rule := range s.Rules {
+		checks = append(checks, rule.ID)
+	}
+	for _, inv := range s.Invariants {
+		checks = append(checks, inv.Statement)
+	}
+	for _, cv := range s.Converges {
+		checks = append(checks, cv.Statement)
+	}
+	return checks
+}
+
 // Prove proves the check named check on tb with its planted defect: the rule
-// whose identity is check on its defect form, or the invariant whose
-// statement is check on its defect system. The random runs of the defect,
-// and then the scenarios for an invariant, must fail at the seed of the
-// 64-bit FNV-1a hash of check. Their first failure must be the failure of the
-// assertion whose message is the statement of the check. Prove fails tb for
-// a check that s does not have.
+// whose identity is check on its defect form, or the invariant or the
+// convergence whose statement is check on its defect system. The random runs
+// of the defect, and then the scenarios for an invariant, must fail at the
+// seed of the 64-bit FNV-1a hash of check. Their first failure must be the
+// failure of the assertion whose message is the statement of the check. A
+// scenario ends without the final phase, so the proof of a convergence does
+// not run the scenarios. Prove fails tb for a check that s does not have, for
+// a name that two checks of s share, and for an invariant or a convergence
+// without a planted defect.
 func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 	tb.Helper()
+	if names := s.checks(); slices.Contains(names[slices.Index(names, check)+1:], check) {
+		tb.Fatalf("sim: the simulation has two checks named %q", check)
+		return
+	}
 	d := s.alone()
 	var statement string
 	var scenarios []Scenario[E, F]
 	rule := slices.IndexFunc(s.Rules, func(r Rule) bool { return r.ID == check })
 	inv := slices.IndexFunc(s.Invariants, func(i Invariant[E, F]) bool { return i.Statement == check })
+	cv := slices.IndexFunc(s.Converges, func(c Convergence[E, F]) bool { return c.Statement == check })
 	switch {
 	case rule >= 0:
 		form := s.Rules[rule].Form
 		d.Rules, statement = s.Rules[rule:rule+1], s.Rules[rule].Statement
 		d.plant = func(m Machine[E, F]) Machine[E, F] { return Plant(m, s.Anatomy, form) }
-	case inv >= 0:
+	case inv >= 0 && s.Invariants[inv].Defect != nil:
 		d.System, d.Invariants, statement = s.Invariants[inv].Defect, s.Invariants[inv:inv+1], check
 		scenarios = s.Scenarios
+	case cv >= 0 && s.Converges[cv].Defect != nil:
+		d.System, d.Converges, statement = s.Converges[cv].Defect, s.Converges[cv:cv+1], check
+	case inv >= 0 || cv >= 0:
+		tb.Fatalf("sim: the check %q has no planted defect", check)
+		return
 	default:
 		tb.Fatalf("sim: the simulation has no check %q", check)
 		return
