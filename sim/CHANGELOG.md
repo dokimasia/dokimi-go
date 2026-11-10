@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.13.1
+
+### Patch Changes
+
+- 00da191: Fix `Simulation.Prove` to settle each run of a proof for the longest `Within` of the convergences of the simulation, as `sim.Test` does.
+
 ## 0.13.0
 
 ### Minor Changes
