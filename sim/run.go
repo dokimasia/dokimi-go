@@ -119,6 +119,9 @@ type Simulation[E, F, S any] struct {
 	// choices for each of these steps, and at least the 8,192 choices of the
 	// property engine.
 	MaxSteps int
+	// final is the length of the final phase of a proof: the longest Within
+	// of the convergences that the copy of the proof leaves out.
+	final time.Duration
 	// Strategy chooses the next process. The zero Strategy is PCT(3).
 	Strategy Strategy
 	// Isolation is the isolation level of the transactions of the clients,
@@ -380,8 +383,12 @@ func (s Simulation[E, F, S]) maxChoices() int {
 }
 
 // alone returns s without the spec of its calls and its oracles, for the
-// proof of one check.
+// proof of one check. The copy keeps the length of the final phase of s, the
+// longest Within of its convergences.
 func (s Simulation[E, F, S]) alone() Simulation[E, F, S] {
+	for _, cv := range s.Converges {
+		s.final = max(s.final, cv.Within)
+	}
 	s.Spec = history.Spec[S]{}
 	s.Rules, s.Invariants, s.Converges = nil, nil, nil
 	return s
@@ -727,14 +734,17 @@ func (r *run[E, F, S]) input(c *prop.Case, a Action[E, F]) input {
 
 // settleDown delivers each pending event and advances the time until the
 // bound of each convergence has passed, and starts each host that exits again
-// through supervise. It fails the case for a system that does not settle
-// within its limit of steps: settleLimit, or settleRate for each whole second
-// of the longest Within where those are more.
+// through supervise. The run of a proof settles for the length of the final
+// phase that its copy of the simulation keeps, so its final phase lasts as
+// long as the final phase of Test. settleDown fails the case for a system
+// that does not settle within its limit of steps: settleLimit, or settleRate
+// for each whole second of the longest Within where those are more.
 func (r *run[E, F, S]) settleDown() {
-	bound, within := r.w.elapsed, time.Duration(0)
+	within := r.s.final
 	for _, cv := range r.s.Converges {
-		bound, within = max(bound, r.w.elapsed+cv.Within), max(within, cv.Within)
+		within = max(within, cv.Within)
 	}
+	bound := r.w.elapsed + within
 	limit := max(settleLimit, settleRate*int(within.Seconds()))
 	backoffs := map[*Host[E, F]]backoff{}
 	for range limit {

@@ -2496,6 +2496,27 @@ func TestRun(t *testing.T) {
 			s.Prove(t, "the stores take no event once the faults end")
 		})
 
+		t.Run("proves an invariant in the final phase of the longest convergence", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Actions = nil
+			s.Converges = []sim.Convergence[event, effect]{{
+				Statement: "the stores settle within two minutes",
+				Check:     func(*sim.Check, *sim.World[event, effect]) {},
+				Defect:    s.System,
+				Within:    2 * time.Minute,
+			}}
+			s.Invariants = []sim.Invariant[event, effect]{{
+				Statement: "the run ends within a minute",
+				Check: func(h *sim.Check, w *sim.World[event, effect]) {
+					expect.True(h, w.Now().Before(sim.Start.Add(time.Minute)), h.Statement())
+				},
+				Defect: s.System,
+			}}
+			s.Prove(t, "the run ends within a minute")
+		})
+
 		undefended := []struct {
 			name      string
 			give      func(s *sim.Simulation[event, effect, int])
