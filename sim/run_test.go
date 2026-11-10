@@ -4,6 +4,7 @@
 package sim_test
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -2186,6 +2187,120 @@ func TestRun(t *testing.T) {
 			expect.Equal(t, got[0].Contract, "the scenario put finds no failure with a crash after step 3",
 				"the crash after the reply of the store fails")
 		})
+
+		t.Run("checks the invariants after each call of a scenario of a world of components", func(t *testing.T) {
+			t.Parallel()
+
+			s := cellScenario(sim.Invariant[sim.None, sim.None]{
+				Statement: "the cell c keeps the empty value",
+				Check: func(h *sim.Check, w *sim.World[sim.None, sim.None]) {
+					if v, runs := cellValue(h, w); runs {
+						expect.Equal(h, v, "", h.Statement())
+					}
+				},
+			})
+			got := assert.Rejects(t, "the scenario fails the test", func(tb assert.TB) { sim.Test(tb, s) })
+			inner, _ := got[0].CaseFailure()
+			expect.Equal(t, []string{got[0].Contract, inner.Contract},
+				[]string{"the scenario set finds no failure", "the cell c keeps the empty value"},
+				"the invariant fails after the call of the scenario, while the cell runs")
+		})
+
+		t.Run("fails at a crash point before a call of a scenario of a world of components", func(t *testing.T) {
+			t.Parallel()
+
+			s := cellScenario(sim.Invariant[sim.None, sim.None]{
+				Statement: "the cell c keeps its first epoch",
+				Check: func(h *sim.Check, w *sim.World[sim.None, sim.None]) {
+					expect.Equal(h, w.Process("c").Epoch(), uint64(1), h.Statement())
+				},
+			})
+			got := assert.Rejects(t, "the crash point fails the test", func(tb assert.TB) { sim.Test(tb, s) })
+			inner, _ := got[0].CaseFailure()
+			expect.Equal(t, []string{got[0].Contract, inner.Contract},
+				[]string{
+					"the scenario set finds no failure with a crash before step 1", "the cell c keeps its first epoch",
+				},
+				"the first crash point fails the invariant")
+		})
+
+		t.Run("ends the call of a scenario as unknown with medium.ErrCrashed at a crash before it", func(t *testing.T) {
+			t.Parallel()
+
+			var lost atomic.Pointer[[]history.Event]
+			s := cellScenario(sim.Invariant[sim.None, sim.None]{
+				Statement: "the history of the first run with a restart is read",
+				Check: func(_ *sim.Check, w *sim.World[sim.None, sim.None]) {
+					if w.Process("c").Epoch() > 1 {
+						events := slices.Clone(w.History().Events())
+						lost.CompareAndSwap(nil, &events)
+					}
+				},
+			})
+			sim.Test(t, s)
+			events := lost.Load()
+			assert.NotNil(t, events, "a crash point restarts the cell c")
+			expect.True(t, slices.ContainsFunc(*events, func(e history.Event) bool {
+				return errors.Is(e.Error, medium.ErrCrashed)
+			}), "the history records the call that the crash loses as unknown with medium.ErrCrashed")
+		})
+
+		t.Run("fails at a crash point after a call of a scenario of a world of components", func(t *testing.T) {
+			t.Parallel()
+
+			s := cellScenario(sim.Invariant[sim.None, sim.None]{
+				Statement: "the cell c does not restart after it stores the value v",
+				Check: func(h *sim.Check, w *sim.World[sim.None, sim.None]) {
+					v, runs := cellValue(h, w)
+					expect.False(h, runs && v == "v" && w.Process("c").Epoch() > 1, h.Statement())
+				},
+			})
+			got := assert.Rejects(t, "the crash point fails the test", func(tb assert.TB) { sim.Test(tb, s) })
+			inner, _ := got[0].CaseFailure()
+			expect.Equal(t, []string{got[0].Contract, inner.Contract},
+				[]string{
+					"the scenario set finds no failure with a crash after step 1",
+					"the cell c does not restart after it stores the value v",
+				},
+				"the crash before the call loses the call, and the crash after the call keeps its value")
+		})
+
+		t.Run("counts no step for a call of a crashed component in a scenario", func(t *testing.T) {
+			t.Parallel()
+
+			s := cellScenario()
+			crashed := func(w *sim.World[sim.None, sim.None]) {
+				w.Crash("c")
+				setOnC(w, 0)
+			}
+			s.Scenarios = []sim.Scenario[sim.None, sim.None]{{Name: "crashed", Run: crashed}}
+			sim.Test(t, s)
+		})
+
+		t.Run("checks the invariants of the active phase after the action that calls a component", func(t *testing.T) {
+			t.Parallel()
+
+			var acting, checkedInside atomic.Bool
+			s := cellScenario(sim.Invariant[sim.None, sim.None]{
+				Statement: "the run checks after the action",
+				Check: func(*sim.Check, *sim.World[sim.None, sim.None]) {
+					if acting.Load() {
+						checkedInside.Store(true)
+					}
+				},
+			})
+			s.Scenarios = nil
+			s.Actions = []sim.Action[sim.None, sim.None]{{
+				Name: "set", Call: true,
+				Run: func(w *sim.World[sim.None, sim.None], client int, _ any) {
+					acting.Store(true)
+					setOnC(w, client)
+					acting.Store(false)
+				},
+			}}
+			sim.Test(t, s)
+			assert.False(t, checkedInside.Load(), "the call of the component is part of the step of its action")
+		})
 	})
 
 	t.Run("Falsify", func(t *testing.T) {
@@ -2301,6 +2416,23 @@ func TestRun(t *testing.T) {
 				"the failure names the message of the defect and the statement of the check")
 		})
 
+		t.Run("fails for a planted defect whose runs end without a failing case", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			inv := unstored()
+			inv.Defect = func(c *prop.Case) func(*sim.World[event, effect]) {
+				c.Assume(false)
+				return func(*sim.World[event, effect]) {}
+			}
+			s.Invariants = []sim.Invariant[event, effect]{inv}
+			expect.Equal(t, fatal(func(tb assert.TB) { s.Prove(tb, "no store replies to a put") }),
+				`the runs of the planted defect of no store replies to a put end as rejected, without a failing `+
+					`case. Its proof needs a failure of the assertion whose message is the statement `+
+					`"no store replies to a put".`,
+				"the failure contains the outcome of the runs and the statement of the check")
+		})
+
 		t.Run("proves a rule apart from the other checks of the simulation", func(t *testing.T) {
 			t.Parallel()
 
@@ -2407,6 +2539,39 @@ func putTwiceOnA(w *sim.World[event, effect]) {
 	for pending := w.Pending(); len(pending) > 0; pending = w.Pending() {
 		w.Step(pending[0])
 	}
+}
+
+// cellScenario returns the simulation of the cell c inside conform.Bubble,
+// with the invariants invs, no action and the scenario set, whose client 0
+// sets the value v on c.
+func cellScenario(invs ...sim.Invariant[sim.None, sim.None]) sim.Simulation[sim.None, sim.None, []history.Operation] {
+	return sim.Simulation[sim.None, sim.None, []history.Operation]{
+		System:     fixed(func(w *sim.World[sim.None, sim.None]) { sim.SpawnComponent(w, "c", openCell) }),
+		Around:     conform.Bubble,
+		Invariants: invs,
+		Scenarios: []sim.Scenario[sim.None, sim.None]{{Name: "set", Run: func(w *sim.World[sim.None, sim.None]) {
+			setOnC(w, 0)
+		}}},
+	}
+}
+
+// setOnC sets the value v on the cell c in a call of client.
+func setOnC(w *sim.World[sim.None, sim.None], client int) {
+	c := sim.ComponentOf[*cell](w, "c")
+	w.Invoke(client, "c", "Set", []any{"c"}, []any{"c"}, func(ctx context.Context) (any, error) {
+		return nil, c.Value().Set(ctx, "v")
+	})
+}
+
+// cellValue returns the value of the cell c, and false while c does not run.
+func cellValue(h *sim.Check, w *sim.World[sim.None, sim.None]) (string, bool) {
+	c := sim.ComponentOf[*cell](w, "c")
+	if !c.Running() {
+		return "", false
+	}
+	v, err := c.Value().Get(w.Context())
+	expect.NoError(h, err, "the cell c reads its value")
+	return v, true
 }
 
 func FuzzRun(f *testing.F) {

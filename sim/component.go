@@ -129,10 +129,18 @@ func (c *Component[T]) Value() T {
 // the process. It completes the call as OK with its output for a nil error,
 // as unknown for an error that wraps context.Canceled,
 // context.DeadlineExceeded, medium.ErrCrashed or host.ErrReset or that the
-// field Unknown of the anatomy reports, and as failed for any other error. A call of a crashed process ends as unknown with
-// medium.ErrCrashed, and a call of a stopped process as unknown with
-// ErrRunEnded. The context of call derives from the lifetime of the
-// incarnation. Invoke fails the case for a name that no component has.
+// field Unknown of the anatomy reports, and as failed for any other error. A
+// call of a crashed process ends as unknown with medium.ErrCrashed, and a call
+// of a stopped process as unknown with ErrRunEnded. The context of call
+// derives from the lifetime of the incarnation. Invoke fails the case for a
+// name that no component has.
+//
+// In a run of a scenario, a call of a component that runs is a step of the
+// world. The world settles after the call, and the run checks the invariants,
+// as after a step of a machine. The crash point before the step crashes the
+// host of the component before the call, so the call ends as unknown with
+// medium.ErrCrashed, and the crash point after the step crashes the host after
+// the call. A restart of the host follows each crash.
 func (w *World[E, F]) Invoke(
 	client int, process, operation string, args, keys []any, call func(ctx context.Context) (any, error),
 ) {
@@ -140,6 +148,32 @@ func (w *World[E, F]) Invoke(
 	if p.comp == nil {
 		w.c.Fatalf("sim: the process %q is no component", process)
 	}
+	if !w.scripted || p.state != running {
+		w.invoke(p, client, operation, args, keys, call)
+		return
+	}
+	w.steps++
+	if w.crash == (point{step: w.steps}) {
+		w.Crash(p.host.name)
+		w.invoke(p, client, operation, args, keys, call)
+		w.Restart(p.host.name)
+	} else {
+		w.invoke(p, client, operation, args, keys, call)
+	}
+	w.settle()
+	if w.crash == (point{step: w.steps, after: true}) {
+		w.Crash(p.host.name)
+		w.Restart(p.host.name)
+	}
+	w.after()
+}
+
+// invoke records the invocation of operation by client on the component
+// process p, and runs call on a goroutine of its incarnation, as Invoke
+// states.
+func (w *World[E, F]) invoke(
+	p *Process[E, F], client int, operation string, args, keys []any, call func(ctx context.Context) (any, error),
+) {
 	invoked := w.c.History().Invoke(client, operation, args, keys...)
 	switch p.state {
 	case crashed:
@@ -151,7 +185,7 @@ func (w *World[E, F]) Invoke(
 	default:
 	}
 	ctx, cancel := context.WithCancel(p.comp.env.Lifetime())
-	in := &invocation{call: invoked, cancel: cancel, process: process, client: client}
+	in := &invocation{call: invoked, cancel: cancel, process: p.name, client: client}
 	w.mu.Lock()
 	w.invoked = append(w.invoked, in)
 	w.mu.Unlock()

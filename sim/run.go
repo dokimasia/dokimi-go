@@ -146,7 +146,8 @@ type Convergence[E, F any] struct {
 	Within    time.Duration
 }
 
-// Scenario is a fixed run, whose events the crash points cover. Each run of a
+// Scenario is a fixed run, whose steps the crash points cover: each step of a
+// machine, and each call of a component through Invoke. Each run of a
 // scenario is the simplest case of the property engine, whose draws take the
 // simplest value of each generator.
 type Scenario[E, F any] struct {
@@ -291,12 +292,13 @@ func (s Simulation[E, F, S]) checks() []string {
 // whose identity is check on its defect form, or the invariant or the
 // convergence whose statement is check on its defect system. The random runs
 // of the defect, and then the scenarios for an invariant, must fail at the
-// seed of the 64-bit FNV-1a hash of check. Their first failure must be the
-// failure of the assertion whose message is the statement of the check. A
-// scenario ends without the final phase, so the proof of a convergence does
-// not run the scenarios. Prove fails tb for a check that s does not have, for
-// a name that two checks of s share, and for an invariant or a convergence
-// without a planted defect.
+// seed of the 64-bit FNV-1a hash of check. Their first failure must be a
+// failing case, and the case must fail the assertion whose message is the
+// statement of the check. A run that ends without a failing case, such as a
+// run that rejects every case, proves nothing. A scenario ends without the
+// final phase, so the proof of a convergence does not run the scenarios.
+// Prove fails tb for a check that s does not have, for a name that two checks
+// of s share, and for an invariant or a convergence without a planted defect.
 func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 	tb.Helper()
 	if names := s.checks(); slices.Contains(names[slices.Index(names, check)+1:], check) {
@@ -332,21 +334,18 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 		opts := append(s.options(), prop.Hermetic(), prop.Seed(seed), prop.Store(""), prop.Shrink(0))
 		prop.ForAll(tb, statement, func(c *prop.Case) { Run(c, d) }, opts...)
 		for _, sc := range scenarios {
-			prop.ForAll(tb, statement, func(c *prop.Case) {
-				r := begin(c, d)
-				sc.Run(r.w)
-				r.w.Stop()
-				r.check()
-			}, append(slices.Clip(opts), prop.Replay(simplest))...)
+			prop.ForAll(tb, statement, func(c *prop.Case) { begin(c, d).script(sc) },
+				append(slices.Clip(opts), prop.Replay(simplest))...)
 		}
 	})
-	first := got[0]
-	if inner, isCase := first.CaseFailure(); isCase {
-		first = inner
-	}
-	if first.Contract != statement {
+	inner, isCase := got[0].CaseFailure()
+	switch {
+	case !isCase:
+		tb.Fatalf("the runs of the planted defect of %s end as %v, without a failing case. Its proof needs a failure "+
+			"of the assertion whose message is the statement %q.", check, got[0].Detail[outcomeField], statement)
+	case inner.Contract != statement:
 		tb.Fatalf("the planted defect of %s fails with the message %q. Its proof needs a failure of the assertion "+
-			"whose message is the statement %q.", check, first.Contract, statement)
+			"whose message is the statement %q.", check, inner.Contract, statement)
 	}
 }
 
@@ -396,13 +395,21 @@ func scenario[E, F, S any](tb assert.TB, s Simulation[E, F, S], sc Scenario[E, F
 	prop.ForAll(tb, contract, func(c *prop.Case) {
 		r := begin(c, s)
 		r.w.crash = at
-		sc.Run(r.w)
-		r.w.Stop()
-		r.check()
+		r.script(sc)
 		r.checkHistory()
 		steps = r.w.steps
 	}, append(s.options(), prop.Replay(simplest), prop.Store(""))...)
 	return steps
+}
+
+// script runs the scenario sc on the world of r as a run of a scenario, in
+// which each call of Invoke on a component that runs is a step. It then stops
+// the world and checks the invariants.
+func (r *run[E, F, S]) script(sc Scenario[E, F]) {
+	r.w.scripted = true
+	sc.Run(r.w)
+	r.w.Stop()
+	r.check()
 }
 
 // seedOf returns the seed of a proof from the key of its check: the 64-bit
@@ -498,8 +505,9 @@ func (r *run[E, F, S]) checks() []history.Option {
 	return append(slices.Clip(r.s.History), history.Resume(&r.cp))
 }
 
-// outcomeField is the field of the record of a check of history.Linearizable
-// that states how the check ended, as a history.Verdict.
+// outcomeField is the field of a record that contains how a check or a run
+// ended: a history.Verdict for a check of history.Linearizable, and a
+// prop.Outcome for a run of a property.
 const outcomeField = "outcome"
 
 // input is the input of an action of the consumer: its client and its value.

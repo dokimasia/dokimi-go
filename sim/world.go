@@ -194,8 +194,11 @@ type World[E, F any] struct {
 	// mu guards invoked, which the goroutines of the components complete.
 	mu sync.Mutex
 
-	// blockingOpt reports the option Blocking.
+	// blockingOpt reports the option Blocking, and scripted a run of a
+	// scenario, in which each call of Invoke on a component that runs is a
+	// step.
 	blockingOpt bool
+	scripted    bool
 }
 
 // point is a crash point of a scenario: the step whose host crashes and
