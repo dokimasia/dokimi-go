@@ -1,5 +1,11 @@
 # go.dokimi.dev/sim
 
+## 0.13.0
+
+### Minor Changes
+
+- c6af74d: Add `Simulation.Serial` to make `sim.Falsify` prove the checks one at a time, for an `Around` that changes the state of the process.
+
 ## 0.12.1
 
 ### Patch Changes
