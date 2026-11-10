@@ -1,5 +1,12 @@
 # go.dokimi.dev/sim
 
+## 0.12.1
+
+### Patch Changes
+
+- 94c171c: Fix `sim.Test` to count each call of `World.Invoke` in a scenario of a world of components as a step, with two crash points and a check of the invariants.
+- 94c171c: Fix `Simulation.Prove` to refuse the runs of a planted defect that end without a failing case, such as runs that reject every case.
+
 ## 0.12.0
 
 ### Minor Changes
