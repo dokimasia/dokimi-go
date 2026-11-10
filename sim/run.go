@@ -127,6 +127,10 @@ type Simulation[E, F, S any] struct {
 	// Blocking lets a world in native mode strike the blocking faults on its
 	// components. A world in Tasks mode strikes them without it.
 	Blocking bool
+	// Serial makes Falsify prove the checks one at a time, in subtests
+	// without t.Parallel, for an Around that changes the state of the
+	// process, such as one that calls cryptotest.SetGlobalRandom.
+	Serial bool
 }
 
 // Invariant is a safety property that the run checks after every step, with
@@ -259,14 +263,17 @@ func Test[E, F, S any](tb assert.TB, s Simulation[E, F, S]) {
 }
 
 // Falsify proves each rule, each invariant and each convergence of s on its
-// planted defect, in a parallel test of t named after the identity of the rule
-// or the statement of the invariant or the convergence, as Prove proves it.
+// planted defect, in a test of t named after the identity of the rule or the
+// statement of the invariant or the convergence, as Prove proves it. Each test
+// runs in parallel, and with s.Serial set it runs to its end before the next.
 func Falsify[E, F, S any](t *testing.T, s Simulation[E, F, S]) {
 	t.Helper()
 	for _, check := range s.checks() {
 		t.Run(check, func(t *testing.T) {
 			t.Helper()
-			t.Parallel()
+			if !s.Serial {
+				t.Parallel()
+			}
 			s.Prove(t, check)
 		})
 	}

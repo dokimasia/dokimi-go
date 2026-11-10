@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/cryptotest"
 	"testing/synctest"
 	"time"
 
@@ -2353,6 +2354,28 @@ func TestRun(t *testing.T) {
 			})
 			sim.Falsify(t, s)
 		})
+
+		t.Run("proves each check in a parallel subtest that runs once the test returns", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			s := simulation()
+			s.System = after(s.System, func(*sim.World[event, effect]) { built.Add(1) })
+			t.Cleanup(func() { assert.True(t, built.Load() > 0, "the proofs run once the test returns") })
+			sim.Falsify(t, s)
+			assert.Equal(t, built.Load(), int32(0), "each proof waits in its parallel subtest until the test returns")
+		})
+
+		t.Run("proves each check of a serial simulation in a subtest that ends before the next", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			s := simulation()
+			s.Serial = true
+			s.System = after(s.System, func(*sim.World[event, effect]) { built.Add(1) })
+			sim.Falsify(t, s)
+			assert.True(t, built.Load() > 0, "each proof runs to its end before Falsify returns")
+		})
 	})
 
 	t.Run("Prove", func(t *testing.T) {
@@ -2572,6 +2595,30 @@ func cellValue(h *sim.Check, w *sim.World[sim.None, sim.None]) (string, bool) {
 	v, err := c.Value().Get(w.Context())
 	expect.NoError(h, err, "the cell c reads its value")
 	return v, true
+}
+
+// TestRunProcess runs a serial simulation whose Around seeds crypto/rand
+// through cryptotest.SetGlobalRandom, which sets the source of the whole
+// process. Neither the test nor its subtests run in parallel.
+func TestRunProcess(t *testing.T) {
+	seeded := simulation()
+	seeded.Around = func(t *testing.T, run func(*testing.T)) {
+		t.Helper()
+		cryptotest.SetGlobalRandom(t, 1)
+		run(t)
+	}
+	seeded.Serial = true
+
+	t.Run("Test", func(t *testing.T) {
+		t.Run("passes a simulation whose Around seeds the global random source", func(t *testing.T) {
+			sim.Test(t, seeded)
+		})
+	})
+
+	t.Run("Falsify", func(t *testing.T) {
+		t.Run("proves each check of a serial simulation whose Around seeds the global random source",
+			func(t *testing.T) { sim.Falsify(t, seeded) })
+	})
 }
 
 func FuzzRun(f *testing.F) {
