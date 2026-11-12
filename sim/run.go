@@ -33,9 +33,9 @@ const (
 	// of the convergences of a simulation.
 	settleLimit = 10_000
 	settleRate  = 1_000
-	// restartBase is the delay of the second restart of a host in the final
-	// phase, and restartCap the longest delay of a restart. They are the
-	// defaults of the CrashLoopBackOff of the kubelet.
+	// restartBase is the delay of the second restart of a host, and
+	// restartCap the longest delay of a restart. They are the defaults of the
+	// CrashLoopBackOff of the kubelet.
 	restartBase = 10 * time.Second
 	restartCap  = 5 * time.Minute
 	// maxJump is the largest jump of a clock and the largest offset of a
@@ -201,8 +201,8 @@ const (
 // the weight 1 and the advance of time. Half of the cases also keep the
 // delivery deliver fast, at the weight of the other actions of the active
 // phase together. A property that calls Run with a MaxSteps above 100 passes
-// prop.MaxChoices with 82 choices for each step, as Test does. The final phase
-// starts each host that exits again, at once for its first exit and after a
+// prop.MaxChoices with 82 choices for each step, as Test does. Both phases
+// start each host that exits again, at once for its first exit and after a
 // delay that doubles from 10 s up to 5 minutes for each later one. It checks
 // the rules against each step of a machine before the world performs the
 // effects of the step.
@@ -439,9 +439,11 @@ func seedOf(key string) uint64 {
 // reports a check that the checker could not decide, which ends the checks of
 // the history.
 type run[E, F, S any] struct {
-	c          *prop.Case
-	w          *World[E, F]
-	pick       *picker[E, F]
+	c    *prop.Case
+	w    *World[E, F]
+	pick *picker[E, F]
+	// backoffs are the restart states of the hosts, which both phases share.
+	backoffs   map[*Host[E, F]]backoff
 	judgements []judgement[E, F]
 	cp         history.Checkpoint[S]
 	s          Simulation[E, F, S]
@@ -468,12 +470,14 @@ const (
 	fastName       = "deliver fast"
 )
 
-// stepped returns the action a, whose run the settle of the components, the
-// check of the invariants where check is set, and the check of the history
-// follow. The run checks the history only once no client has an open call.
+// stepped returns the action a, whose run the supervision of the exited hosts
+// precedes, and the settle of the components, the check of the invariants
+// where check is set, and the check of the history follow. The run checks the
+// history only once no client has an open call.
 func (r *run[E, F, S]) stepped(a stateful.Action[struct{}], check bool) stateful.Action[struct{}] {
 	run := a.Run
 	a.Run = func(c *prop.Case, client int, in any) {
+		r.supervise()
 		run(c, client, in)
 		r.w.settle()
 		if check {
@@ -540,7 +544,9 @@ func begin[E, F, S any](c *prop.Case, s Simulation[E, F, S]) *run[E, F, S] {
 	if s.Mode == spec.ModeTasks {
 		w.sched = stateful.NewScheduler(c, stateful.Uniform())
 	}
-	r := &run[E, F, S]{c: c, w: w, pick: newPicker[E, F](c, s.Strategy, pickLimit), s: s}
+	r := &run[E, F, S]{
+		c: c, w: w, pick: newPicker[E, F](c, s.Strategy, pickLimit), s: s, backoffs: map[*Host[E, F]]backoff{},
+	}
 	r.judgements = make([]judgement[E, F], len(s.Rules))
 	for i, rule := range s.Rules {
 		r.judgements[i].judge = judgeOf(rule.Probe, s.Anatomy)
@@ -746,9 +752,8 @@ func (r *run[E, F, S]) settleDown() {
 	}
 	bound := r.w.elapsed + within
 	limit := max(settleLimit, settleRate*int(within.Seconds()))
-	backoffs := map[*Host[E, F]]backoff{}
 	for range limit {
-		r.supervise(backoffs)
+		r.supervise()
 		if pending := r.w.runnable(); len(pending) > 0 {
 			r.w.Step(r.pick.pick(pending).name)
 			continue
@@ -766,24 +771,26 @@ func (r *run[E, F, S]) settleDown() {
 	r.c.Fatalf("sim: the system takes more than %d steps to settle", limit)
 }
 
-// backoff is the restart state of a host in the final phase: the delay of its
-// next restart, the time of its last restart on its monotonic clock, and
-// whether a restart is due.
+// backoff is the restart state of a host: the delay of its next restart, the
+// time of its last restart on its monotonic clock, and whether a restart is
+// due.
 type backoff struct {
 	delay time.Duration
 	since time.Duration
 	armed bool
 }
 
-// supervise arms a restart of each host that has exited in the final phase, as
+// supervise arms a restart of each host that has exited, in either phase, as
 // a supervisor starts a process that exits. The first restart of a host is due
 // at once, and each later one after the delay of its backoff on the monotonic
 // clock of the host. The delay is restartBase for the second restart, and
 // doubles for each later one up to restartCap. A host that ran for more than
-// twice restartCap after its last restart starts again at once.
-func (r *run[E, F, S]) supervise(backoffs map[*Host[E, F]]backoff) {
+// twice restartCap after its last restart starts again at once. A restart that
+// finds its host running, because the action restart started the host first,
+// does nothing, and the next exit of the host arms a restart again.
+func (r *run[E, F, S]) supervise() {
 	for _, h := range r.w.hosts {
-		b := backoffs[h]
+		b := r.backoffs[h]
 		if h.state != exited || b.armed {
 			continue
 		}
@@ -792,10 +799,15 @@ func (r *run[E, F, S]) supervise(backoffs map[*Host[E, F]]backoff) {
 			wait = 0
 		}
 		b.armed = true
-		backoffs[h] = b
+		r.backoffs[h] = b
 		r.w.at(h.procs[0], wait, func() {
+			if h.state != exited {
+				b.armed = false
+				r.backoffs[h] = b
+				return
+			}
 			r.w.restart(h)
-			backoffs[h] = backoff{delay: min(max(restartBase, 2*wait), restartCap), since: h.clock.Monotonic()}
+			r.backoffs[h] = backoff{delay: min(max(restartBase, 2*wait), restartCap), since: h.clock.Monotonic()}
 		})
 	}
 }

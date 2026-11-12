@@ -470,6 +470,99 @@ func TestRun(t *testing.T) {
 				prop.Require(string(sim.FaultRestart), 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
 		})
 
+		// The action observe runs in the active phase alone, so a second start of
+		// the host a that it sees is a restart of the active phase.
+		restarting := func(tolerate map[sim.Fault]int) sim.Simulation[event, effect, int] {
+			restarted := false
+			s := simulation()
+			s.System = fixed(func(w *sim.World[event, effect]) {
+				restarted = false
+				w.Spawn("a", func(*sim.Clock) sim.Machine[event, effect] { return &fragile{} })
+				w.Spawn("b", func(*sim.Clock) sim.Machine[event, effect] { return periodic{every: time.Second} })
+			})
+			s.Rules, s.Tolerate = nil, tolerate
+			s.Actions = []sim.Action[event, effect]{{
+				Name: "observe",
+				Run: func(w *sim.World[event, effect], _ int, _ any) {
+					starts := 0
+					for _, e := range w.Log() {
+						if _, start := e.Event.(started); start && e.Process == "a" {
+							starts++
+						}
+					}
+					restarted = restarted || starts > 1
+				},
+			}}
+			s.Invariants = []sim.Invariant[event, effect]{{
+				Statement: "the host a starts again in the active phase",
+				Check: func(h *sim.Check, _ *sim.World[event, effect]) {
+					if restarted {
+						h.Classify("restarted in the active phase")
+					}
+				},
+			}}
+			return s
+		}
+
+		t.Run("restarts a host that exits in the active phase", func(t *testing.T) {
+			t.Parallel()
+
+			s := restarting(nil)
+			prop.ForAll(t, "the supervisor starts the exited host a in the active phase",
+				func(c *prop.Case) { sim.Run(c, s) },
+				prop.Require("restarted in the active phase", 0.01), prop.Hermetic(), prop.Seed(1), prop.Store(""))
+		})
+
+		t.Run("restarts a host in the active phase beside the action restart", func(t *testing.T) {
+			t.Parallel()
+
+			s := restarting(map[sim.Fault]int{sim.FaultRestart: 1})
+			prop.ForAll(t, "the supervisor and the action restart start the exited host a",
+				func(c *prop.Case) { sim.Run(c, s) },
+				prop.Require("restarted in the active phase", 0.01), prop.Require(string(sim.FaultRestart), 0.01),
+				prop.Hermetic(), prop.Seed(1), prop.Store(""))
+		})
+
+		// The host a stops at each start. The supervisor arms the restart of a in
+		// the step after its exit, and the action restart starts a before an
+		// advance passes that restart. The host b sets a timer of a second at its
+		// start, so the advance after the second exit of a passes the restart
+		// that the supervisor arms in that step.
+		t.Run("restarts a host after its next exit when the action restart started it before the supervisor",
+			func(t *testing.T) {
+				t.Parallel()
+
+				s := simulation()
+				s.System = fixed(func(w *sim.World[event, effect]) {
+					w.Spawn("a", func(*sim.Clock) sim.Machine[event, effect] { return &fragile{} })
+					w.Spawn("b", func(*sim.Clock) sim.Machine[event, effect] { return periodic{every: time.Second} })
+				})
+				s.Actions, s.Rules, s.Strategy = nil, nil, sim.Uniform()
+				s.Tolerate = map[sim.Fault]int{sim.FaultRestart: 1}
+				var first *sim.World[event, effect]
+				var epochs []uint64
+				s.Invariants = []sim.Invariant[event, effect]{{
+					Statement: "the epoch of the host a in the first case is read",
+					Check: func(_ *sim.Check, w *sim.World[event, effect]) {
+						if first == nil {
+							first = w
+						}
+						if w == first {
+							epochs = append(epochs, w.Process("a").Epoch())
+						}
+					},
+				}}
+
+				runScript(t, s, scriptOf([]entry{drawn("drift.a", 0), drawn("drift.b", 0)},
+					stepOf("deliver", drawn("process", 0)), stepOf("deliver", drawn("process", 0)),
+					stepOf("restart", drawn("process", 0)), stepOf("advance", drawn("advance", 0)),
+					stepOf("deliver", drawn("process", 0)), stepOf("advance", drawn("advance", 0))))
+
+				assert.True(t, len(epochs) >= 6, "the run checks each step of the first case")
+				expect.Equal(t, epochs[:6], []uint64{1, 1, 2, 2, 2, 3},
+					"the supervisor does not restart the running host a, and restarts a after its next exit")
+			})
+
 		t.Run("takes at most MaxSteps steps in the active phase of a case", func(t *testing.T) {
 			t.Parallel()
 

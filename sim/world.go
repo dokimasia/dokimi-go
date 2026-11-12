@@ -85,6 +85,22 @@ type Launch[E, F any] struct {
 // Perform performs the effect f of the process p.
 type Perform[E, F any] func(w *World[E, F], p *Process[E, F], f F) Outcome[E, F]
 
+// Scope is the scope of a dependency. The world has one instance of a
+// dependency of the scope ScopeWorld, and each host has an instance of a
+// dependency of the scope ScopeHost. The world keeps a state of faults for
+// each instance.
+type Scope uint8
+
+const (
+	// ScopeWorld gives the world one instance of the dependency, as a
+	// database that every host calls.
+	ScopeWorld Scope = iota
+	// ScopeHost gives each host an instance of the dependency, as the
+	// storage of a member. The name of the instance is the name of its host,
+	// a slash and the name of the dependency, such as node-2/quorum.Storage.
+	ScopeHost
+)
+
 // Anatomy is how a world reads the events and the effects of its machines.
 // The generator sim writes it from the directives of a declaration.
 type Anatomy[E, F any] struct {
@@ -119,6 +135,9 @@ type Anatomy[E, F any] struct {
 	// f or that the function of its performer calls, such as store.Writer,
 	// and false for an effect without a dependency.
 	Dependency func(f F) (name string, ok bool)
+	// Scope returns the scope of the dependency named dependency. It is nil
+	// for machines whose every dependency has the scope ScopeWorld.
+	Scope func(dependency string) Scope
 	// Fail returns the event of the result of the effect f that failed with
 	// err, and false for an effect without a result.
 	Fail func(f F, err error) (ev E, ok bool)
@@ -601,7 +620,7 @@ func (w *World[E, F]) result(p *Process[E, F], f F, o Outcome[E, F]) {
 		p.queue = append(p.queue, queued[E]{ev: o.Event, epoch: p.epoch})
 	}
 	if o.Next != nil {
-		name, _ := w.a.Dependency(f)
+		name, _ := w.instance(p, f)
 		token, _ := w.a.Token(f)
 		w.waits = append(w.waits, &wait[E, F]{
 			f: f, next: o.Next, cancel: o.Cancel, process: p, dependency: name, token: token, epoch: p.epoch,

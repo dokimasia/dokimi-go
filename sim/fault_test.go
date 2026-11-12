@@ -40,6 +40,14 @@ func stored(d disk, key string) func(w *sim.World[event, effect]) {
 	}
 }
 
+// scoped returns the anatomy of the stores whose disk and feed have the scope
+// scope.
+func scoped(scope sim.Scope) sim.Anatomy[event, effect] {
+	a := anatomy
+	a.Scope = func(string) sim.Scope { return scope }
+	return a
+}
+
 // losing returns the anatomy of the agent whose launches and halts have the
 // dependency host, and whose calls have the dependency peer. The failure of a
 // launch or a halt is the event called.
@@ -586,6 +594,63 @@ func TestFault(t *testing.T) {
 				expect.Equal(c, events(w, "store")[2:], []event{
 					fed{item: "x", token: 5}, fed{err: sim.ErrLost, token: 5},
 				}, "the anatomy has no end event, so the wait takes the event of its failure after its item")
+			})
+		})
+
+		t.Run(
+			"fails the effects of the instance of a dependency of the scope host on its host alone",
+			func(t *testing.T) {
+				t.Parallel()
+
+				inCase(t, func(c *prop.Case) {
+					w := sim.New(c, scoped(sim.ScopeHost))
+					w.Spawn("a", newStore)
+					w.Spawn("b", newStore)
+					ofA, ofB := disk{}, disk{}
+					w.Outage("a/disk")
+					w.Deliver("a", put{disk: ofA, key: "k", value: "v", reply: 9})
+					w.Deliver("b", put{disk: ofB, key: "k", value: "v", reply: 9})
+					drain(w)
+					expect.Empty(c, ofA, "the outage of the instance of a fails the commit of a")
+					expect.Equal(c, ofB, disk{"k": "v"}, "the instance of b applies the commit of b")
+					expect.Equal(c, w.Faults(), []string{"outage:a/disk"}, "the faults list the instance of a")
+				})
+			},
+		)
+
+		t.Run("ends the waits of the instance of a dependency of the scope host on its host alone", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, scoped(sim.ScopeHost))
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				ofA, ofB := &feed{}, &feed{}
+				w.Deliver("a", subscribe{feed: ofA, token: 5})
+				w.Deliver("b", subscribe{feed: ofB, token: 5})
+				drain(w)
+				w.Outage("a/feed")
+				ofB.items = []event{fed{item: "y", token: 5}}
+				drain(w)
+				got := []event{events(w, "a")[len(events(w, "a"))-1], events(w, "b")[len(events(w, "b"))-1]}
+				expect.Equal(c, got, []event{fed{err: sim.ErrLost, token: 5}, fed{item: "y", token: 5}},
+					"the outage of the instance of a ends the wait of a, and the wait of b goes on")
+			})
+		})
+
+		t.Run("fails the effects of every host for a dependency of the scope world", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, scoped(sim.ScopeWorld))
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				ofA, ofB := disk{}, disk{}
+				w.Outage("disk")
+				w.Deliver("a", put{disk: ofA, key: "k", value: "v", reply: 9})
+				w.Deliver("b", put{disk: ofB, key: "k", value: "v", reply: 9})
+				drain(w)
+				expect.Equal(c, []disk{ofA, ofB}, []disk{{}, {}}, "the one instance of the disk fails both commits")
 			})
 		})
 	})

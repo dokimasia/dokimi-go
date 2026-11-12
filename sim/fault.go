@@ -74,9 +74,10 @@ const exitKind = "exit"
 // for a dependency whose directive fault does not declare an error.
 var ErrLost = errors.New("sim: a fault of the dependency lost the call")
 
-// dependency is the state of the faults of one dependency: its armed losses
-// in the order of their arming, the effects that its slowness keeps in
-// flight, and whether it has an outage or is slow.
+// dependency is the state of the faults of one instance of a dependency: its
+// armed losses in the order of their arming, the effects that its slowness
+// keeps in flight, and whether it has an outage or is slow. name is the name
+// of the instance.
 type dependency[E, F any] struct {
 	name   string
 	armed  []Fault
@@ -238,15 +239,17 @@ func (w *World[E, F]) behind(p *Process[E, F]) bool {
 	return at >= 0 && at < len(p.queue)-1
 }
 
-// LoseBefore arms a loss of the next effect of the dependency named
-// dependency, before the dependency applies it.
+// LoseBefore arms a loss of the next effect of the instance of a dependency
+// named dependency, before the dependency applies it. An instance has the
+// name of its dependency, or for a dependency of the scope ScopeHost the name
+// of its host, a slash and the name of the dependency.
 func (w *World[E, F]) LoseBefore(dependency string) {
 	d := w.dependency(dependency)
 	d.armed = append(d.armed, FaultLoseBefore)
 }
 
-// LoseAfter arms a loss of the next effect of the dependency named
-// dependency, after the dependency applies it. The loss takes the result of
+// LoseAfter arms a loss of the next effect of the instance of a dependency
+// named dependency, after the dependency applies it. The loss takes the result of
 // the effect: the world applies the stop, the message and the launch of the
 // outcome, and the process of the effect takes the event of the failure in
 // place of the event of the outcome. The replies to the message and to the
@@ -257,10 +260,10 @@ func (w *World[E, F]) LoseAfter(dependency string) {
 	d.armed = append(d.armed, FaultLoseAfter)
 }
 
-// Outage loses each effect of the dependency named dependency before the
-// dependency applies it, until Restore. It ends each wait of an effect of the
-// dependency, in the order in which the waits started, and calls the Cancel
-// of each. A wait that has delivered an event takes the end event of its
+// Outage loses each effect of the instance of a dependency named dependency
+// before the dependency applies it, until Restore. It ends each wait of an
+// effect of the instance, in the order in which the waits started, and calls
+// the Cancel of each. A wait that has delivered an event takes the end event of its
 // effect, and any other wait the event of the failure of its effect. It fails
 // the case for a dependency with an outage.
 func (w *World[E, F]) Outage(dependency string) {
@@ -300,8 +303,8 @@ func (w *World[E, F]) endEvent(f F, err error) (E, bool) {
 	return w.a.End(f, err)
 }
 
-// Slow keeps each effect of the dependency named dependency in flight until
-// Restore. An effect with a timeout fails with context.DeadlineExceeded once
+// Slow keeps each effect of the instance of a dependency named dependency in
+// flight until Restore. An effect with a timeout fails with context.DeadlineExceeded once
 // its timeout has passed on the clock of its process. It fails the case for a
 // slow dependency.
 func (w *World[E, F]) Slow(dependency string) {
@@ -313,8 +316,9 @@ func (w *World[E, F]) Slow(dependency string) {
 	w.strike(FaultSlow)
 }
 
-// Restore ends the outage and the slowness of the dependency named
-// dependency, and performs each effect that its slowness keeps in flight. It
+// Restore ends the outage and the slowness of the instance of a dependency
+// named dependency, and performs each effect that its slowness keeps in
+// flight. It
 // fails the case for a dependency without an outage that is not slow.
 func (w *World[E, F]) Restore(dependency string) {
 	d := w.dependency(dependency)
@@ -630,10 +634,27 @@ func (w *World[E, F]) dependency(name string) *dependency[E, F] {
 	return w.deps[at]
 }
 
-// faulted performs the effect f of the process p under the faults of its
-// dependency, and reports whether a fault of the dependency took the effect.
-func (w *World[E, F]) faulted(p *Process[E, F], f F) bool {
+// instance returns the name of the instance of the dependency of the effect f
+// of the process p, and false for an effect without a dependency. The
+// instance of a dependency of the scope ScopeHost has the name of the host of
+// p, a slash and the name of the dependency. Every other instance has the name
+// of the dependency.
+func (w *World[E, F]) instance(p *Process[E, F], f F) (string, bool) {
 	name, ok := w.a.Dependency(f)
+	if !ok {
+		return "", false
+	}
+	if w.a.Scope != nil && w.a.Scope(name) == ScopeHost {
+		return p.host.name + "/" + name, true
+	}
+	return name, true
+}
+
+// faulted performs the effect f of the process p under the faults of the
+// instance of its dependency, and reports whether a fault of the instance
+// took the effect.
+func (w *World[E, F]) faulted(p *Process[E, F], f F) bool {
+	name, ok := w.instance(p, f)
 	if !ok {
 		return false
 	}
