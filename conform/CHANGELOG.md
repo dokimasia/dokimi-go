@@ -1,5 +1,13 @@
 # go.dokimi.dev/conform
 
+## 0.17.1
+
+### Patch Changes
+
+- f34b053: Fix the edges of a check with `Around` to run the check on the planted defect of each shallower check inside a new environment.
+- Updated dependencies [a8e96ef]
+  - go.dokimi.dev/host@0.2.2
+
 ## 0.17.0
 
 ### Minor Changes

@@ -22,6 +22,6 @@ replace go.dokimi.dev/medium v0.2.1 => ./medium
 
 replace go.dokimi.dev/spec v0.5.1 => ./spec
 
-replace go.dokimi.dev/conform v0.17.0 => ./conform
+replace go.dokimi.dev/conform v0.17.1 => ./conform
 
-replace go.dokimi.dev/host v0.2.1 => ./host
+replace go.dokimi.dev/host v0.2.2 => ./host
