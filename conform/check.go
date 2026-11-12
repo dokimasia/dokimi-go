@@ -678,9 +678,10 @@ func entailsDefect[S any](o *Check[S], others []Check[S], defect uintptr) bool {
 // planted defect of c, because the two checks are equivalent otherwise. edges
 // fails tb with each edge that does not hold. It ends tb with a fault that
 // wraps [ErrConfig] for an edge to a check that others lack. env is the
-// environment of c on tb. edges sets the result not-deeper or equivalent of
-// the first edge that does not hold in v, with its shallower check, before it
-// fails tb.
+// environment of c on tb, and each run of c runs inside a renewal of env, so a
+// failure of the environment of the falsification does not decide an edge.
+// edges sets the result not-deeper or equivalent of the first edge that does
+// not hold in v, with its shallower check, before it fails tb.
 func (c Check[S]) edges(
 	tb assert.TB, cfg *config[S], others []Check[S], env *environment, v *verdict, kept *firsts,
 ) bool {
@@ -700,7 +701,7 @@ func (c Check[S]) edges(
 			return false
 		}
 		s := &others[at]
-		if _, fails := c.against(s.Defect, cfg, env); !fails {
+		if _, fails := c.against(s.Defect, cfg, env.renewed()); !fails {
 			fail(resultNotDeeper, s.ID, fmt.Sprintf("%s passes on the planted defect of %s, which it entails, so it "+
 				"is not deeper", c.ID, s.ID))
 		}
@@ -876,6 +877,15 @@ func (e *environment) inside(run func(*testing.T)) string {
 		return "the wrapper called run a second time"
 	}
 	return ""
+}
+
+// renewed returns a new environment of the same Around on the same test, which
+// has not failed, and nil for a nil environment.
+func (e *environment) renewed() *environment {
+	if e == nil {
+		return nil
+	}
+	return &environment{around: e.around, t: e.t}
 }
 
 // failure returns the message of the first failure of the environment, and

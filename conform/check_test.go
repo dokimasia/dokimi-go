@@ -1112,6 +1112,26 @@ func TestCheck(t *testing.T) {
 			bubbled(stranding(keepsEvery())).Falsify(t)
 		})
 
+		t.Run("judges an edge in a new environment after the environment of the falsification fails",
+			func(t *testing.T) {
+				t.Parallel()
+
+				c := bubbled(keeps())
+				apply := c.Apply
+				c.Apply = func(h *conform.Handle[Store]) {
+					if _, isForgetful := h.Subject().(forgetful); isForgetful {
+						strand()
+					}
+					apply(h)
+				}
+				c.Entails = []conform.ID[Store]{storeGet.Check("misses-unknown-keys")}
+				s := onTest(t)
+				c.Falsify(s, conform.With(misses()))
+				assert.Contains(t, s.Message(), "\n\tStore.Get/keeps-the-value passes on the planted defect of "+
+					"Store.Get/misses-unknown-keys, which it entails, so it is not deeper\n",
+					"the check passes on the defect of the shallower check in an environment that does not fail")
+			})
+
 		t.Run("fails when the environment fails before an assertion fails", func(t *testing.T) {
 			t.Parallel()
 
