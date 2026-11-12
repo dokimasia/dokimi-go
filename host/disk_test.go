@@ -90,6 +90,25 @@ func TestDisk(t *testing.T) {
 			assert.ErrorIs(t, closed, os.ErrClosed, "the close closes the file of the disk")
 		})
 
+		t.Run(
+			"keeps a write that a file of the view syncs at a power loss that keeps no pending call",
+			func(t *testing.T) {
+				t.Parallel()
+				var got string
+				inCase(t, targets, func(c *prop.Case, first bool) {
+					h, i, env := started(c)
+					write(c, env.Disk(), "a", "body")
+					assert.NoError(c, env.Disk().SyncDir("."), "the view syncs the entry of a")
+					i.Crash(host.PowerLoss)
+					if content := read(c, h.Disk(), "a"); first {
+						got = content
+					}
+				})
+
+				assert.Equal(t, got, "body", "the sync of the file of the view makes its write durable")
+			},
+		)
+
 		pauses := []struct {
 			name string
 			give func(f medium.File) error
