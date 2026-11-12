@@ -2126,6 +2126,24 @@ func TestRun(t *testing.T) {
 				assert.Equal(t, cs.received[0], tt.want, "the fault changes the datagrams that b receives")
 			})
 		}
+
+		t.Run("labels no drop of a component without a datagram in flight", func(t *testing.T) {
+			t.Parallel()
+
+			var cs cellSet
+			s := cs.simulation()
+			s.Actions = slices.DeleteFunc(
+				s.Actions,
+				func(a sim.Action[sim.None, sim.None]) bool { return a.Name == "send" },
+			)
+			s.Tolerate = map[sim.Fault]int{sim.FaultDrop: 1}
+			got := assert.Rejects(t, "no drop strikes a world without a datagram", func(tb assert.TB) {
+				prop.ForAll(tb, "the run drops datagrams", func(c *prop.Case) { sim.Run(c, s) },
+					prop.Around(s.Around), prop.Require(string(sim.FaultDrop), 0.01), prop.Cases(10), prop.Hermetic(),
+					prop.Seed(1), prop.Store(""))
+			})
+			expect.NotNil(t, got[0].Detail["coverage"], "a drop that finds no datagram gives its case no label")
+		})
 	})
 
 	t.Run("Test", func(t *testing.T) {
@@ -2394,6 +2412,75 @@ func TestRun(t *testing.T) {
 			}}
 			sim.Test(t, s)
 			assert.False(t, checkedInside.Load(), "the call of the component is part of the step of its action")
+		})
+	})
+
+	t.Run("TestShort", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("builds a world for each of 20 random runs and for the replay of the 16th", func(t *testing.T) {
+			t.Parallel()
+
+			var built atomic.Int32
+			s := simulation()
+			s.System = after(s.System, func(*sim.World[event, effect]) { built.Add(1) })
+			sim.TestShort(t, s)
+			assert.Equal(t, built.Load(), int32(21), "the short test builds the worlds of 20 runs and of one replay")
+		})
+
+		t.Run("passes a fault that strikes in fewer cases than the simulation requires", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Require = map[sim.Fault]float64{sim.FaultCrash: 0.5}
+			sim.TestShort(t, s)
+		})
+
+		t.Run("runs each scenario once without its crash points", func(t *testing.T) {
+			t.Parallel()
+
+			var runs atomic.Int32
+			s := simulation()
+			s.Scenarios = []sim.Scenario[event, effect]{{Name: "put", Run: func(w *sim.World[event, effect]) {
+				runs.Add(1)
+				putOnA(w)
+			}}}
+			sim.TestShort(t, s)
+			assert.Equal(t, runs.Load(), int32(1), "the short test runs the scenario once")
+		})
+
+		t.Run("fails a passing run whose replay observes another checksum", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Actions, s.Rules, s.Invariants, s.Converges, s.Scenarios = nil, nil, nil, nil, nil
+			s.Spec = history.Spec[int]{}
+			s.System = fixed(func(w *sim.World[event, effect]) { w.Spawn("a", newScattered) })
+			got := assert.Rejects(t, "the determinism check fails the short test",
+				func(tb assert.TB) { sim.TestShort(tb, s) })
+			expect.Equal(t, got[0].Detail["outcome"], any(prop.Flaky),
+				"a replay of a passing case makes other steps than the case")
+		})
+
+		t.Run("fails at a random run with the contract of the random runs of Test", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Invariants = []sim.Invariant[event, effect]{unstored()}
+			got := assert.Rejects(t, "the random run fails the short test", func(tb assert.TB) { sim.TestShort(tb, s) })
+			expect.Equal(t, got[0].Contract, "the simulation finds no failure",
+				"the random runs of the short test fail with the contract of the random runs of Test")
+		})
+
+		t.Run("fails at a scenario without a crash", func(t *testing.T) {
+			t.Parallel()
+
+			s := simulation()
+			s.Actions = nil
+			s.Invariants = []sim.Invariant[event, effect]{unstored()}
+			s.Scenarios = []sim.Scenario[event, effect]{{Name: "put", Run: putOnA}}
+			got := assert.Rejects(t, "the scenario fails the short test", func(tb assert.TB) { sim.TestShort(tb, s) })
+			expect.Equal(t, got[0].Contract, "the scenario put finds no failure", "the scenario fails without a crash")
 		})
 	})
 

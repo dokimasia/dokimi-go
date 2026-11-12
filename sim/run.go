@@ -238,6 +238,13 @@ func Run[E, F, S any](c *prop.Case, s Simulation[E, F, S]) {
 // replays a case to check that the run is deterministic.
 const confirmEvery = 16
 
+// shortCases is the number of the random runs of TestShort, a fifth of the 100
+// random runs of Test.
+const shortCases = 20
+
+// noFailure is the contract of the random runs of Test, TestShort and Fuzz.
+const noFailure = "the simulation finds no failure"
+
 // simplest is the replay token of a case without recorded choices, in the
 // format of the property engine of the assert library. A replay of the token
 // takes the simplest value of each draw.
@@ -255,13 +262,28 @@ func Test[E, F, S any](tb assert.TB, s Simulation[E, F, S]) {
 			opts = append(opts, prop.Require(string(kind), share))
 		}
 	}
-	prop.ForAll(tb, "the simulation finds no failure", func(c *prop.Case) { Run(c, s) }, opts...)
+	prop.ForAll(tb, noFailure, func(c *prop.Case) { Run(c, s) }, opts...)
 	for _, sc := range s.Scenarios {
 		steps := scenario(tb, s, sc, point{})
 		for step := 1; step <= steps; step++ {
 			scenario(tb, s, sc, point{step: step})
 			scenario(tb, s, sc, point{step: step, after: true})
 		}
+	}
+}
+
+// TestShort runs the short form of Test on tb for the short mode of go test:
+// 20 random runs of s without the shares of the faults that s requires, and
+// then each scenario of s once without its crash points. It replays the 16th
+// passing case from its choices, as Test does. Its random runs have the
+// contract of the random runs of Test, so in one test the two runs share the
+// stored cases.
+func TestShort[E, F, S any](tb assert.TB, s Simulation[E, F, S]) {
+	tb.Helper()
+	opts := append(s.options(), prop.Confirm(confirmEvery), prop.Cases(shortCases))
+	prop.ForAll(tb, noFailure, func(c *prop.Case) { Run(c, s) }, opts...)
+	for _, sc := range s.Scenarios {
+		scenario(tb, s, sc, point{})
 	}
 }
 
@@ -362,7 +384,7 @@ func (s Simulation[E, F, S]) Prove(tb assert.TB, check string) {
 // Fuzz registers the choices of a run of s as the input of the fuzz target f.
 func Fuzz[E, F, S any](f *testing.F, s Simulation[E, F, S]) {
 	f.Helper()
-	prop.Fuzz(f, "the simulation finds no failure", func(c *prop.Case) { Run(c, s) }, s.options()...)
+	prop.Fuzz(f, noFailure, func(c *prop.Case) { Run(c, s) }, s.options()...)
 }
 
 // options returns the options of each property of s: the most choices of a
