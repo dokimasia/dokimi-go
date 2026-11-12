@@ -444,7 +444,9 @@ func (w *World[E, F]) callers() []int {
 // error after the step, and takes the next event of each wait after the step. An
 // effect that ends a wait cancels the wait of the process with its token,
 // after the world has performed the effect, and the world takes the events of
-// the wait until its Next reports its end.
+// the wait until its Next reports its end. The effect of the process with
+// that token that a slow dependency keeps in flight fails with
+// context.Canceled.
 func (w *World[E, F]) Step(name string) bool {
 	p := w.Process(name)
 	if p == nil || !p.runs() {
@@ -554,11 +556,22 @@ func (w *World[E, F]) ends(f F) (uint64, bool) {
 }
 
 // cancelWait cancels the wait of the process p whose effect has the token.
-// The wait remains until its Next reports its end.
+// The wait remains until its Next reports its end. An effect of p with the
+// token that a slow dependency keeps in flight does not run, and p takes the
+// event of its failure with context.Canceled, as a runtime ends a call whose
+// context it cancels.
 func (w *World[E, F]) cancelWait(p *Process[E, F], token uint64) {
 	for _, wt := range w.waits {
 		if wt.process == p && wt.token == token {
 			wt.cancelOnce()
+		}
+	}
+	for _, d := range w.deps {
+		for _, s := range d.stalls {
+			if t, ok := w.a.Token(s.f); ok && t == token && s.process == p && !s.done {
+				s.done = true
+				w.lose(p, s.f, context.Canceled)
+			}
 		}
 	}
 }

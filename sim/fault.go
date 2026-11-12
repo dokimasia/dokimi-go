@@ -305,8 +305,9 @@ func (w *World[E, F]) endEvent(f F, err error) (E, bool) {
 
 // Slow keeps each effect of the instance of a dependency named dependency in
 // flight until Restore. An effect with a timeout fails with context.DeadlineExceeded once
-// its timeout has passed on the clock of its process. It fails the case for a
-// slow dependency.
+// its timeout has passed on the clock of its process, and an effect whose
+// token a later effect of its process ends fails with context.Canceled. It
+// fails the case for a slow dependency.
 func (w *World[E, F]) Slow(dependency string) {
 	d := w.dependency(dependency)
 	if d.slow {

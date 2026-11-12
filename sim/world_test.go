@@ -341,6 +341,103 @@ func TestWorld(t *testing.T) {
 			})
 		})
 
+		t.Run(
+			"fails the effect whose token an effect ends while a slow dependency keeps it in flight",
+			func(t *testing.T) {
+				t.Parallel()
+
+				inCase(t, func(c *prop.Case) {
+					w := sim.New(c, ending())
+					w.Spawn("store", newStore)
+					f := &feed{}
+					w.Slow("feed")
+					w.Deliver("store", subscribe{feed: f, token: 5})
+					w.Deliver("store", unsubscribe{token: 5})
+					drain(w)
+					w.Restore("feed")
+					f.items = []event{fed{item: "late", token: 5}}
+					w.Deliver("store", ticked{token: 1})
+					drain(w)
+					expect.Equal(
+						c,
+						events(w, "store")[3:],
+						[]event{fed{err: context.Canceled, token: 5}, ticked{token: 1}},
+						"the unwatch fails the watch in flight, and the restore does not perform it",
+					)
+					expect.Equal(c, f.cancels, 0, "the watch in flight has no outcome to cancel")
+				})
+			},
+		)
+
+		t.Run("fails no effect that the restore of its dependency performed", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("store", newStore)
+				f := &feed{}
+				w.Slow("feed")
+				w.Deliver("store", subscribe{feed: f, token: 5})
+				drain(w)
+				w.Restore("feed")
+				w.Deliver("store", unsubscribe{token: 5})
+				drain(w)
+				expect.Equal(c, f.cancels, 1, "the unwatch cancels the wait of the performed watch")
+				expect.Empty(c, events(w, "store")[3:], "the watch takes no failure")
+			})
+		})
+
+		t.Run("fails no effect in flight without a token", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				a := ending()
+				a.Token = func(f effect) (uint64, bool) {
+					if _, ok := f.(commit); ok {
+						return 0, false
+					}
+					return anatomy.Token(f)
+				}
+				w := sim.New(c, a)
+				w.Spawn("store", newStore)
+				d := disk{}
+				w.Slow("disk")
+				w.Deliver("store", put{disk: d, key: "k", value: "v", reply: 9})
+				w.Deliver("store", unsubscribe{})
+				drain(w)
+				w.Restore("disk")
+				expect.Equal(
+					c,
+					d,
+					disk{"k": "v"},
+					"the unwatch of the token 0 leaves the commit without a token in flight",
+				)
+			})
+		})
+
+		t.Run("fails no effect in flight of another process or of another token", func(t *testing.T) {
+			t.Parallel()
+
+			inCase(t, func(c *prop.Case) {
+				w := sim.New(c, ending())
+				w.Spawn("a", newStore)
+				w.Spawn("b", newStore)
+				f, other := &feed{}, &feed{}
+				w.Slow("feed")
+				w.Deliver("a", subscribe{feed: f, token: 5})
+				w.Deliver("b", subscribe{feed: other, token: 6})
+				w.Deliver("b", unsubscribe{token: 5})
+				drain(w)
+				w.Restore("feed")
+				f.items, other.items = []event{fed{item: "x", token: 5}}, []event{fed{item: "y", token: 6}}
+				w.Deliver("b", ticked{token: 1})
+				drain(w)
+				expect.Equal(c, events(w, "a")[2:], []event{fed{item: "x", token: 5}}, "the watch of a goes on")
+				expect.Equal(c, events(w, "b")[3:], []event{ticked{token: 1}, fed{item: "y", token: 6}},
+					"the watch of b with another token goes on")
+			})
+		})
+
 		t.Run("starts the machine of a launch on the host of its process with its call", func(t *testing.T) {
 			t.Parallel()
 
