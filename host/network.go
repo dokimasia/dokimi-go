@@ -173,9 +173,11 @@ func pairOf(a, b string) [2]string {
 // Partition cuts every link between two sides until Repair. Two hosts exchange
 // bytes and datagrams while one side contains both, so the sides of
 // majorities-ring and bridge overlap, as the partitions of sim do. Each host
-// exchanges bytes and datagrams with itself across every partition.
+// exchanges bytes and datagrams with itself across every partition. Each
+// datagram that arrived before the cut reaches its connection.
 func (n *Network) Partition(sides ...[]string) {
 	n.mu.Lock()
+	n.arrive()
 	n.sides = sides
 	if !n.blocking {
 		n.streams = slices.DeleteFunc(n.streams, func(s *stream) bool {
@@ -191,9 +193,11 @@ func (n *Network) Partition(sides ...[]string) {
 	n.w.notify()
 }
 
-// Repair ends the partition.
+// Repair ends the partition. Each datagram that arrived across a cut of the
+// partition is lost.
 func (n *Network) Repair() {
 	n.mu.Lock()
+	n.arrive()
 	n.sides = nil
 	n.mu.Unlock()
 	n.w.notify()
@@ -386,7 +390,7 @@ func (n *Network) dial(ctx context.Context, i *Incarnation, text string) (net.Co
 }
 
 // listenPacket returns a connection of datagrams of the incarnation i on the
-// port.
+// port. Each datagram that arrived at the port before the connection is lost.
 func (n *Network) listenPacket(i *Incarnation, port int) (net.PacketConn, error) {
 	a := addr{host: i.h.name, port: port, network: udp}
 	if n == nil {
@@ -400,6 +404,7 @@ func (n *Network) listenPacket(i *Incarnation, port int) (net.PacketConn, error)
 	if _, taken := n.packets[a]; taken {
 		return nil, opError("listen", a, nil, syscall.EADDRINUSE)
 	}
+	n.arrive()
 	p := &packetConn{n: n, inc: i, addr: a}
 	n.packets[a] = p
 	return p, nil

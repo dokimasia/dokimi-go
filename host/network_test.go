@@ -353,6 +353,22 @@ func TestNetwork(t *testing.T) {
 			assert.Equal(t, during, 0, "the dial waits during the cut")
 		})
 
+		t.Run("delivers a datagram that arrived before the cut", func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			bubbled(t, targets, func(c *prop.Case, _ bool) {
+				p := pairOf(c, true)
+				a, b := datagrams(c, p)
+				_, err := a.WriteTo([]byte("ab"), hostAddr("node-2:9001"))
+				assert.NoError(c, err, "node-1 sends before the cut")
+				p.n.Partition([]string{"node-1"}, []string{"node-2"})
+				got = received(b)
+				p.end()
+			})
+
+			assert.Equal(t, got, []string{"ab"}, "the datagram arrived before the cut")
+		})
+
 		t.Run("keeps the bytes of a host to itself across every cut", func(t *testing.T) {
 			t.Parallel()
 			var got string
@@ -375,6 +391,27 @@ func TestNetwork(t *testing.T) {
 			})
 
 			assert.Equal(t, got, "ab", "the loopback crosses no cut")
+		})
+	})
+
+	t.Run("Repair", func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("loses a datagram that arrived during the cut", func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			bubbled(t, targets, func(c *prop.Case, _ bool) {
+				p := pairOf(c, true)
+				a, b := datagrams(c, p)
+				p.n.Partition([]string{"node-1"}, []string{"node-2"})
+				_, err := a.WriteTo([]byte("lost"), hostAddr("node-2:9001"))
+				assert.NoError(c, err, "node-1 sends across the cut")
+				p.n.Repair()
+				got = received(b)
+				p.end()
+			})
+
+			assert.Empty(t, got, "the repair does not deliver the datagram")
 		})
 	})
 

@@ -304,6 +304,24 @@ func TestDatagram(t *testing.T) {
 	t.Run("ListenPacket", func(t *testing.T) {
 		t.Parallel()
 
+		t.Run("loses a datagram that arrived at the port before the connection", func(t *testing.T) {
+			t.Parallel()
+			var got []string
+			bubbled(t, targets, func(c *prop.Case, _ bool) {
+				p := pairOf(c, true)
+				a, err := p.e1.ListenPacket(9000)
+				assert.NoError(c, err, "node-1 listens for datagrams")
+				_, err = a.WriteTo([]byte("early"), hostAddr("node-2:9001"))
+				assert.NoError(c, err, "node-1 sends to a port without a connection")
+				b, err := p.e2.ListenPacket(9001)
+				assert.NoError(c, err, "node-2 listens for datagrams")
+				got = received(b)
+				p.end()
+			})
+
+			assert.Empty(t, got, "no connection was at the port at the arrival")
+		})
+
 		t.Run("refuses a port that a connection takes", func(t *testing.T) {
 			t.Parallel()
 			var err error
