@@ -1,5 +1,11 @@
 # go.dokimi.dev/host
 
+## 0.2.2
+
+### Patch Changes
+
+- a8e96ef: Fix `host.Network` to lose a datagram that arrives during a partition or before a connection listens at its port.
+
 ## 0.2.1
 
 ### Patch Changes

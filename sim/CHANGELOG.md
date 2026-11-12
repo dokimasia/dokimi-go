@@ -1,5 +1,19 @@
 # go.dokimi.dev/sim
 
+## 0.14.0
+
+### Minor Changes
+
+- cbe42e4: Add `sim.Scope` and `Anatomy.Scope` to give each host of a world an instance of a dependency of the scope `sim.ScopeHost`.
+- cbe42e4: **Breaking:** Restart each host that exits in the active phase of `sim.Run`, with the delays of the restarts of the final phase.
+
+### Patch Changes
+
+- 3d647f4: Fix `sim.World` to fail an effect that a slow dependency keeps in flight with `context.Canceled` once an effect of its process ends its token.
+- Updated dependencies [a8e96ef, f34b053]
+  - go.dokimi.dev/host@0.2.2
+  - go.dokimi.dev/conform@0.17.1
+
 ## 0.13.1
 
 ### Patch Changes
