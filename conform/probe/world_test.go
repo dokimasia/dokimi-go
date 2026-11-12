@@ -379,6 +379,15 @@ func openParked(h *conform.Handle[*kv], m medium.FS) *kv {
 	return s
 }
 
+// openLocked opens a store over the medium m after it creates the empty file
+// LOCK, whose name sorts before the name of each key.
+func openLocked(h *conform.Handle[*kv], m medium.FS) *kv {
+	f, err := m.OpenFile("LOCK", os.O_CREATE|os.O_WRONLY, 0o644)
+	assert.NoError(h, err, "the store creates its lock file")
+	assert.NoError(h, f.Close(), "the lock file closes")
+	return openStore(h, m)
+}
+
 // sleepy returns the door of a store over the environment of an incarnation
 // whose open sleeps for d of the clock of the host.
 func sleepy(d time.Duration) func(h *conform.Handle[*kv], env *host.Env) *kv {
@@ -811,6 +820,20 @@ func TestWorld(t *testing.T) {
 				{op: "Put", kind: history.OK},
 				{op: "Get", kind: history.Unknown, cause: errCorrupt},
 			}, "the Get reads the flipped byte of the value")
+		})
+
+		t.Run("flips a bit of a file with data and not of an empty file before it", func(t *testing.T) {
+			t.Parallel()
+
+			events := runCase(t, spec.FaultyWorldHistory, linearizableOver(sealedWorld), script(
+				worldOpening(sealedFaults, "flip"), put(0, "x"),
+				disk("flip", drawn("disk.file", 0.0), drawn("disk.offset", 0.93)), get(0),
+			), conform.Durable(openLocked))
+
+			assert.Equal(t, outcomesOf(events), []outcome{
+				{op: "Put", kind: history.OK},
+				{op: "Get", kind: history.Unknown, cause: errCorrupt},
+			}, "the flip passes over the empty lock file, and the Get reads the flipped byte of the value")
 		})
 
 		t.Run("holds each call of the disk until the end of the hold", func(t *testing.T) {
