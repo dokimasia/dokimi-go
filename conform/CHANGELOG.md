@@ -1,5 +1,11 @@
 # go.dokimi.dev/conform
 
+## 0.18.0
+
+### Minor Changes
+
+- d351561: Run each input of `conform.Fuzz` under `conform.Hosted` in `conform.Bubble`, with the subject of the door Host.
+
 ## 0.17.1
 
 ### Patch Changes

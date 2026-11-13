@@ -4,8 +4,8 @@ github.com/google/jsonschema-go v0.4.3 h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+
 github.com/google/jsonschema-go v0.4.3/go.mod h1:r5quNTdLOYEz95Ru18zA0ydNbBuYoo9tgaYcxEYhJVE=
 go.dokimi.dev/assert v0.20.0 h1:WFs1vRQIMrPUKiP24YuuAmzkgh5X4DzG82ICRjCR2K0=
 go.dokimi.dev/assert v0.20.0/go.mod h1:NeZvtoRhjUZSooEp8kN1mMakVUowb+EDKFR/YOUey2w=
-go.dokimi.dev/conform v0.17.1 h1:Ld5+wVugolE1cNhTFiq/GobgvXQGBqgM1LVkIV+EQrA=
-go.dokimi.dev/conform v0.17.1/go.mod h1:fjJuiPMZKuZt8YFRcYi8XAwncmOKmdnmRuew25UW3UU=
+go.dokimi.dev/conform v0.18.0 h1:1s86RUIIDxxTKpVf3f3lznOPvm8ZjdYIzFIWvJM/hjM=
+go.dokimi.dev/conform v0.18.0/go.mod h1:fjJuiPMZKuZt8YFRcYi8XAwncmOKmdnmRuew25UW3UU=
 go.dokimi.dev/fault v0.2.4 h1:hRkaErC5Xvh5KzfGmlvgi4Q+MNjJjwi4X74VCzW27h8=
 go.dokimi.dev/fault v0.2.4/go.mod h1:zkcOL86Tvajz0wfldiSMSjYrLPel9ERWfTt0daX1s4Y=
 go.dokimi.dev/host v0.2.2 h1:CLA9ytd8UEiLQtiLzMiYZe3h5IB+LEyCF/XnYEKstgM=

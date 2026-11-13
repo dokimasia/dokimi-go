@@ -1,5 +1,16 @@
 # go.dokimi.dev/sim
 
+## 0.15.0
+
+### Minor Changes
+
+- 7d48eb9: Add `sim.TestShort` to run 20 random runs and each scenario once in the short mode of `go test`.
+
+### Patch Changes
+
+- Updated dependencies [d351561]
+  - go.dokimi.dev/conform@0.18.0
+
 ## 0.14.0
 
 ### Minor Changes
