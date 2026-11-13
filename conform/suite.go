@@ -278,11 +278,12 @@ func Durable[S any](open func(h *Handle[S], m medium.FS) S) Option[S] {
 // doors Restart and Crash of Durable, and the end of the case ends the
 // lifetime of the incarnation. Each check of the application runs in [Bubble]
 // unless it has an Around, and a check with Apply runs in one case of the
-// property engine, the replay of its simplest case. [Fuzz], [RunBudgets],
-// [FalsifyAllocs] and [Bench] build their subjects through the factory. An
-// application with the option [Tasks] keeps the factory for each check, because
-// a subject of Tasks waits through the task scheduler that only the world of a
-// check runs.
+// property engine, the replay of its simplest case. [Fuzz] opens the subject
+// of each input through the door in Bubble too. [RunBudgets], [FalsifyAllocs]
+// and [Bench] build their subjects through the factory. An application with the
+// option [Tasks] keeps the factory for each check and each input of Fuzz,
+// because a subject of Tasks waits through the task scheduler that only the
+// world of a check runs.
 func Hosted[S any](open func(h *Handle[S], env *host.Env) S) Option[S] {
 	return Option[S]{set: func(c *config[S]) { c.doors.Host, c.host = open, open }}
 }

@@ -24,6 +24,10 @@ import (
 // [Using]. A failing input shrinks and reports as a failing case of
 // [prop.Fuzz] does. go test without -fuzz runs the seed corpus of f alone.
 //
+// Under the option [Hosted] without the option [Tasks], each input runs in
+// [Bubble], and its handle opens the subject through the door Host on a host
+// that the case of the input starts, as [Run] opens the subject of a check.
+//
 // Fuzz reports every problem of the checks and the options on f, and stops f
 // when it finds one. It skips f when the callable has no property check to
 // fuzz. Fuzz runs no ceiling of a budget and no check that counts
@@ -36,7 +40,7 @@ func Fuzz[S any](
 	f.Helper()
 	cfg := configure(suite.overrides(f), suite.Checks, opts)
 	stopAt(f, validate("Fuzz"+suite.Declaration+"Suite", suite, cfg))
-	newSubject = cfg.factory(newSubject)
+	newSubject = cfg.subjects(newSubject)
 	var ids []ID[S]
 	checks := make(map[ID[S]]*Check[S])
 	for _, c := range append(slices.Clip(suite.Checks), cfg.checks...) {
@@ -50,8 +54,12 @@ func Fuzz[S any](
 	if len(ids) == 0 {
 		f.Skipf("%s has no property check that the application fuzzes", callable)
 	}
+	fuzzOpts := cfg.using
+	if cfg.hosts() {
+		fuzzOpts = append(slices.Clip(cfg.using), prop.Around(Bubble))
+	}
 	prop.Fuzz(f, fmt.Sprintf("%s passes each of its property checks", callable), func(pc *prop.Case) {
 		c := checks[pc.Draw(prop.SampledFrom(ids...), "check")]
 		c.Property(newHandle(pc, c, newSubject, cfg, new(firsts)), pc)
-	}, cfg.using...)
+	}, fuzzOpts...)
 }

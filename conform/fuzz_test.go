@@ -7,11 +7,15 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
+	"go.dokimi.dev/assert"
 	"go.dokimi.dev/assert/expect"
 	"go.dokimi.dev/assert/prop"
 
 	"go.dokimi.dev/conform"
+	"go.dokimi.dev/host"
 	"go.dokimi.dev/medium"
 )
 
@@ -54,6 +58,20 @@ func TestFuzzProcess(t *testing.T) {
 			expect.Contains(t, out, "--- PASS: FuzzChild/seed#1", "the target runs the second input")
 			expect.Contains(t, out, "the door opened 2 subjects", "the door opens one subject for each input")
 		})
+
+		t.Run("opens the subject of each input through the door Host in a bubble under the option Hosted",
+			func(t *testing.T) {
+				out := childRun(t, "FuzzChild", fuzzMode+"=hosted")
+				expect.Contains(t, out, "--- PASS: FuzzChild/seed#1", "each input sleeps and waits in a bubble")
+				expect.Contains(t, out, "the door opened 2 subjects", "the door opens one subject for each input")
+			})
+
+		t.Run("builds the subject of each input outside a bubble under the options Hosted and Tasks",
+			func(t *testing.T) {
+				out := childRun(t, "FuzzChild", fuzzMode+"=tasks")
+				expect.Contains(t, out, "--- PASS: FuzzChild/seed#1", "each input runs outside a bubble")
+				expect.Contains(t, out, "the factory built 2 subjects", "the factory builds one subject for each input")
+			})
 
 		t.Run("passes the overrides of the suite to each input", func(t *testing.T) {
 			out := childRun(t, "FuzzChild", fuzzMode+"=using")
@@ -170,6 +188,42 @@ var fuzzModes = map[string]func(f *testing.F){
 		}))
 		f.Logf("the door opened %d subjects", opened.Load())
 	},
+	// hosted fuzzes sleepsEvery from two seeds without a factory, on stores in
+	// memory that the door Host of the option Hosted opens, and logs the number
+	// of subjects that the door opens.
+	"hosted": func(f *testing.F) {
+		f.Helper()
+		f.Add([]byte{})
+		f.Add([]byte{1})
+		var opened atomic.Int32
+		suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{sleepsEvery()}}
+		conform.Fuzz(f, suite, storeGet, nil, conform.Hosted(func(*conform.Handle[Store], *host.Env) Store {
+			opened.Add(1)
+			return newMemory()
+		}))
+		f.Logf("the door opened %d subjects", opened.Load())
+	},
+	// tasks fuzzes keepsEvery from two seeds under the options Hosted and Tasks,
+	// with a property that fails inside a bubble, and logs the number of
+	// subjects that the factory builds.
+	"tasks": func(f *testing.F) {
+		f.Helper()
+		f.Add([]byte{})
+		f.Add([]byte{1})
+		c := keepsEvery()
+		property := c.Property
+		c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+			assert.Panics(h, synctest.Wait, "the input runs outside a bubble")
+			property(h, pc)
+		}
+		var built atomic.Int32
+		suite := conform.Suite[Store]{Declaration: "Store", Checks: []conform.Check[Store]{c}}
+		conform.Fuzz(f, suite, storeGet, func(*conform.Handle[Store]) Store {
+			built.Add(1)
+			return newMemory()
+		}, conform.Hosted(openHost), conform.Tasks[Store]())
+		f.Logf("the factory built %d subjects", built.Load())
+	},
 	// using fuzzes the property check of declaredKinds from one seed. The check
 	// fails for a kind that the override of the suite does not declare.
 	"using": func(f *testing.F) {
@@ -242,4 +296,18 @@ var fuzzModes = map[string]func(f *testing.F){
 		conform.Fuzz(f, everySuite(), storeGet, newStore,
 			conform.Excuse(storePut.Check("keeps-the-value"), "the store keeps no values"))
 	},
+}
+
+// sleepsEvery returns keepsEvery with a property that sleeps for a second and
+// waits until every other goroutine of its bubble blocks before it stores the
+// value. Outside a bubble the property fails at the wait.
+func sleepsEvery() conform.Check[Store] {
+	c := keepsEvery()
+	property := c.Property
+	c.Property = func(h *conform.Handle[Store], pc *prop.Case) {
+		time.Sleep(time.Second)
+		synctest.Wait()
+		property(h, pc)
+	}
+	return c
 }
