@@ -268,7 +268,8 @@ func added(sum, more map[string]int) map[string]int {
 // its run from a handle of its own on tb, after the options of the
 // application. A check with Around runs inside its
 // environment, and a failure of the environment fails tb. A check with Apply
-// builds its handle on the test that Around hands run.
+// builds its handle on the test that Around hands run, and a skip of that
+// test skips the test of tb.
 //
 // A check that passes without engaging its claim is vacuous, and run fails tb
 // with the vacuous condition of the check and both remedies. run sets the
@@ -298,12 +299,21 @@ func (c Check[S]) run(tb assert.TB, source func(h *Handle[S]) S, cfg *config[S],
 	}()
 	if env == nil || c.Property != nil {
 		c.exercise(tb, source, cfg, opts, kept, c.survive)
-	} else if misuse := env.inside(func(t *testing.T) {
-		t.Helper()
-		c.exercise(t, source, cfg, opts, kept, c.survive)
-	}); misuse != "" {
-		assert.Fault(tb, c.misused(misuse))
-		return
+	} else {
+		var skipped bool
+		misuse := env.inside(func(t *testing.T) {
+			t.Helper()
+			defer func() { skipped = t.Skipped() }()
+			c.exercise(t, source, cfg, opts, kept, c.survive)
+		})
+		switch {
+		case misuse != "":
+			assert.Fault(tb, c.misused(misuse))
+			return
+		case skipped:
+			env.t.SkipNow()
+			return
+		}
 	}
 	if failure, failed := env.failure(); failed {
 		tb.Errorf("the environment of %s fails: %s", c.ID, failure)

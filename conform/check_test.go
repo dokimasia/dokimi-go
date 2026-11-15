@@ -686,6 +686,18 @@ func TestCheck(t *testing.T) {
 			skipping().Run(t, newStore)
 			t.Fatal("the check skips the test")
 		})
+
+		t.Run("skips the seat when the factory skips inside the environment of the check", func(t *testing.T) {
+			t.Parallel()
+
+			c := keeps()
+			c.Around = synctest.Test
+			c.Run(t, func(h *conform.Handle[Store]) Store {
+				h.Skipf("the store needs %s", "a disk")
+				return newMemory()
+			})
+			t.Fatal("the check skips the test")
+		})
 	})
 
 	t.Run("Falsify", func(t *testing.T) {
