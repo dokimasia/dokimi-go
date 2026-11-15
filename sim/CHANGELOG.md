@@ -1,5 +1,12 @@
 # go.dokimi.dev/sim
 
+## 0.15.1
+
+### Patch Changes
+
+- Updated dependencies [782e19b]
+  - go.dokimi.dev/conform@0.18.1
+
 ## 0.15.0
 
 ### Minor Changes
