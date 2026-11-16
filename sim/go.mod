@@ -6,7 +6,7 @@ module go.dokimi.dev/sim
 go 1.27.2
 
 require (
-	go.dokimi.dev/assert v0.20.0
+	go.dokimi.dev/assert v0.22.0
 	go.dokimi.dev/conform v0.18.1
 	go.dokimi.dev/host v0.2.2
 	go.dokimi.dev/medium v0.2.1
