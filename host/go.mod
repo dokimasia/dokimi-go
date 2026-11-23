@@ -6,7 +6,7 @@ module go.dokimi.dev/host
 go 1.27.2
 
 require (
-	go.dokimi.dev/assert v0.20.0
+	go.dokimi.dev/assert v0.23.0
 	go.dokimi.dev/fault v0.2.4
 	go.dokimi.dev/medium v0.2.1
 )
